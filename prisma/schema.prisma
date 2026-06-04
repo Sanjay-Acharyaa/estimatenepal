@@ -192,6 +192,7 @@ model Drawing {
   folder          DrawingFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   thumbnailUrl    String?
   sortOrder       Int           @default(0)
+  status          DrawingStatus @default(PENDING)
   pages           DrawingPage[]
   createdAt       DateTime      @default(now())
 
@@ -539,6 +540,12 @@ model SubcontractorQuote {
 }
 
 // Enums
+enum DrawingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETE
+}
+
 enum QuoteStatus {
   RECEIVED
   UNDER_REVIEW

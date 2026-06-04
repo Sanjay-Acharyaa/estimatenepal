@@ -1094,8 +1094,20 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     const { imgPos, snapped } = r;
 
     if (mode === "calibrate" && calibPanelMode === "manual" && calibStep === "draw") {
-      calibAnchor.current = snapped;
-      setCalibLine({ x1: snapped.x, y1: snapped.y, x2: snapped.x, y2: snapped.y });
+      if (!calibAnchor.current) {
+        // First click — set anchor, begin preview
+        calibAnchor.current = snapped;
+        setCalibLine({ x1: snapped.x, y1: snapped.y, x2: snapped.x, y2: snapped.y });
+      } else {
+        // Second click — finalise line
+        const end = isShiftHeld.current ? angleSnap(calibAnchor.current, snapped) : snapped;
+        const dx = end.x - calibAnchor.current.x;
+        const dy = end.y - calibAnchor.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 10) {
+          setCalibLine({ x1: calibAnchor.current.x, y1: calibAnchor.current.y, x2: end.x, y2: end.y });
+          setCalibStep("input");
+        }
+      }
       return;
     }
 
@@ -1293,7 +1305,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
 
     if (mode === "calibrate" && calibPanelMode === "manual" && calibStep === "draw" && calibAnchor.current) {
-      setCalibLine({ x1: calibAnchor.current.x, y1: calibAnchor.current.y, x2: imgPos.x, y2: imgPos.y });
+      const end = isShiftHeld.current ? angleSnap(calibAnchor.current, imgPos) : imgPos;
+      setCalibLine({ x1: calibAnchor.current.x, y1: calibAnchor.current.y, x2: end.x, y2: end.y });
     }
 
     if (mode === "zone" && zoneDragStart.current) {
@@ -1363,12 +1376,6 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   }
 
   function handleStageMouseUp(e: Konva.KonvaEventObject<MouseEvent>) {
-    if (mode === "calibrate" && calibPanelMode === "manual" && calibStep === "draw" && calibLine) {
-      const dx = calibLine.x2 - calibLine.x1;
-      const dy = calibLine.y2 - calibLine.y1;
-      if (Math.sqrt(dx * dx + dy * dy) > 10) setCalibStep("input");
-    }
-
     if (mode === "zone" && zoneDragStart.current) {
       if (zoneRect && zoneRect.width > 10 && zoneRect.height > 10) setShowZonePanel(true);
       else setZoneRect(null);
@@ -2776,7 +2783,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
           )}
           {mode === "calibrate" && calibStep === "draw" && calibLine === null && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-orange-900/90 text-orange-200 text-xs px-4 py-2 rounded-lg pointer-events-none">
-              Manual mode: drag a reference line on the drawing
+              Click first point, then click second point (hold Shift to snap to 0°/45°/90°)
             </div>
           )}
           {mode === "zone" && !showZonePanel && (

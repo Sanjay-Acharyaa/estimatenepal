@@ -108,7 +108,7 @@ export function DrawingScalePanel({
         <div className="ml-5 mb-3 space-y-2">
           {pixelLength === null ? (
             <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 p-2 rounded-lg">
-              Click and drag a reference line of known length on the drawing below
+              Click two points on a known-length line below. Hold Shift to snap to 0°/45°/90°.
             </p>
           ) : (
             <>

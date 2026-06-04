@@ -16,6 +16,7 @@ const updateSchema = z.object({
   folderId: z.string().nullable().optional(),
   sortOrder: z.number().int().optional(),
   thumbnailUrl: z.string().nullable().optional(),
+  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETE"]).optional(),
 });
 
 async function resolveDrawing(projectId: string, drawingId: string) {
