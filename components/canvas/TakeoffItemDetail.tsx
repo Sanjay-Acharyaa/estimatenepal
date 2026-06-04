@@ -1,0 +1,178 @@
+"use client";
+
+import { useState } from "react";
+import type { TakeoffItem } from "./types";
+
+type Props = {
+  item: TakeoffItem;
+  projectId: string;
+  drawingId: string;
+  pageId: string;
+  onClose: () => void;
+  onUpdated: (item: TakeoffItem) => void;
+};
+
+export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose, onUpdated }: Props) {
+  const [label, setLabel] = useState(item.label);
+  const [wastagePct, setWastagePct] = useState(String(item.wastagePct ?? 0));
+  const [siteLocation, setSiteLocation] = useState(item.siteLocation ?? "");
+  const [measuredDate, setMeasuredDate] = useState(
+    item.measuredDate ? item.measuredDate.slice(0, 10) : ""
+  );
+  const [notes, setNotes] = useState(item.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const qtyDisplay = item.unit === "each"
+    ? `${Math.round(item.quantity)} ${item.unit}`
+    : `${item.quantity.toFixed(2)} ${item.unit}`;
+
+  async function handleSave() {
+    const pct = parseFloat(wastagePct);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      setError("Wastage % must be between 0 and 100.");
+      return;
+    }
+    if (!label.trim()) { setError("Label cannot be empty."); return; }
+    setError("");
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/drawings/${drawingId}/pages/${pageId}/takeoff-items/${item.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            label: label.trim(),
+            wastagePct: pct,
+            siteLocation: siteLocation.trim() || null,
+            measuredDate: measuredDate ? new Date(measuredDate).toISOString() : null,
+            notes: notes.trim() || null,
+          }),
+        }
+      );
+      if (res.ok) {
+        onUpdated(await res.json());
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setError(d?.error?.message ?? "Failed to save.");
+      }
+    } catch {
+      setError("Network error.");
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="absolute right-0 top-0 bottom-0 w-72 bg-white shadow-2xl border-l border-gray-200 z-40 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="min-w-0">
+          <p className="text-xs text-gray-400 uppercase font-semibold mb-0.5">Shape detail</p>
+          <p className="text-sm font-semibold text-gray-800 truncate">{item.label}</p>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-2 flex-shrink-0">×</button>
+      </div>
+
+      {/* Quantity badge */}
+      <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
+        <p className="text-xs text-gray-500 mb-0.5">BOQ quantity (net measured)</p>
+        <p className="text-lg font-bold text-gray-800">{qtyDisplay}</p>
+        {item.wastagePct > 0 && (
+          <div className="mt-1.5 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+            <p className="text-xs text-amber-700 font-medium">
+              Material to order: {(item.unit === "each"
+                ? Math.round(item.quantity * (1 + item.wastagePct / 100))
+                : (item.quantity * (1 + item.wastagePct / 100)).toFixed(2)
+              )} {item.unit}
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              {qtyDisplay} + {item.wastagePct}% wastage — for procurement only, not billed
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+        {error && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{error}</p>
+        )}
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Label</label>
+          <input
+            value={label} onChange={e => setLabel(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">
+            Wastage %
+            <span className="text-gray-400 font-normal ml-1">(added on top of quantity)</span>
+          </label>
+          <input
+            type="number" min="0" max="100" step="0.5"
+            value={wastagePct} onChange={e => setWastagePct(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Site location</label>
+          <input
+            value={siteLocation} onChange={e => setSiteLocation(e.target.value)}
+            placeholder="e.g. Block A, Ground Floor"
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Date measured</label>
+          <input
+            type="date"
+            value={measuredDate} onChange={e => setMeasuredDate(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Notes</label>
+          <textarea
+            value={notes} onChange={e => setNotes(e.target.value)}
+            rows={4} placeholder="Any remarks about this measurement…"
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        </div>
+
+        {/* Read-only info */}
+        <div className="border-t border-gray-100 pt-3 space-y-1.5">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Tool</span>
+            <span className="text-gray-600 font-medium">{item.toolType}{item.shapeType ? ` · ${item.shapeType}` : ""}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Scale used</span>
+            <span className="text-gray-600 font-medium">{item.scaleUsed.toFixed(5)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-200">
+        <button
+          onClick={handleSave} disabled={saving}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded-lg transition disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          onClick={onClose}
+          className="px-3 py-2 text-xs text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}

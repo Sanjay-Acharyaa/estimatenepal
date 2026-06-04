@@ -1,0 +1,83 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { getToken } from "next-auth/jwt";
+import { prisma } from "@/lib/prisma";
+import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
+import { withTenantGuard } from "@/lib/auth";
+import { appendAuditLog } from "@/lib/audit";
+import { checkApiRateLimit } from "@/lib/security";
+import { getOrCreateDisciplines } from "@/lib/disciplines";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (!token) throw unauthorized();
+
+    const project = await prisma.project.findUnique({ where: { id: params.id } });
+    if (!project) throw notFound("Project");
+    await withTenantGuard(token.id as string, project.orgId);
+
+    const disciplines = await getOrCreateDisciplines(params.id);
+    return NextResponse.json(disciplines);
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
+const createSchema = z.object({
+  name: z.string().min(1).max(100).trim(),
+});
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (!token) throw unauthorized();
+
+    const project = await prisma.project.findUnique({ where: { id: params.id } });
+    if (!project) throw notFound("Project");
+    await withTenantGuard(token.id as string, project.orgId);
+
+    const body = await req.json();
+    const parsed = createSchema.safeParse(body);
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+
+    const last = await prisma.discipline.findFirst({
+      where: { projectId: params.id },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true },
+    });
+
+    const discipline = await prisma.discipline.create({
+      data: {
+        projectId: params.id,
+        name: parsed.data.name,
+        sortOrder: (last?.sortOrder ?? 0) + 1,
+        isPrimary: false,
+      },
+      include: { _count: { select: { groups: true } } },
+    });
+
+    await appendAuditLog({
+      orgId: project.orgId,
+      userId: token.id as string,
+      event: "discipline.created",
+      resourceId: discipline.id,
+      meta: { name: parsed.data.name } as any,
+      ipAddress: ip,
+    });
+
+    return NextResponse.json(discipline, { status: 201 });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}

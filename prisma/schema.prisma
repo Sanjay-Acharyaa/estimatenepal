@@ -1,0 +1,613 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Auth & Organisation
+model User {
+  id             String          @id @default(cuid())
+  name           String
+  email          String          @unique
+  passwordHash   String
+  emailVerified  Boolean         @default(false)
+  role           UserRole        @default(MEMBER)
+  isSuperAdmin   Boolean         @default(false)
+  orgId          String?
+  org            Org?            @relation(fields: [orgId], references: [id])
+  projectMembers ProjectMember[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  failedLogins   FailedLogin[]
+  authoredNotes  ProjectNote[]  @relation("AuthoredNotes")
+  assignedTasks  ProjectTask[]  @relation("AssignedTasks")
+  createdTasks   ProjectTask[]  @relation("CreatedTasks")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([orgId])
+  @@index([email])
+}
+
+model Org {
+  id          String      @id @default(cuid())
+  name        String
+  plan        PlanType    @default(FREE)
+  trialEndsAt DateTime?
+  panNumber   String?
+  logoUrl     String?
+  address     String?
+  phone       String?
+  users       User[]
+  projects    Project[]
+  invites     OrgInvite[]
+  rateBatches RateBatch[]
+  assemblies  Assembly[]
+  createdAt   DateTime    @default(now())
+}
+
+// A named collection of rates uploaded together (one per import)
+model RateBatch {
+  id          String     @id @default(cuid())
+  orgId       String
+  org         Org        @relation(fields: [orgId], references: [id])
+  name        String
+  type        String     @default("CUSTOM")  // CUSTOM | DISTRICT
+  itemCount   Int        @default(0)
+  fiscalYear  String     @default("")
+  createdAt   DateTime   @default(now())
+  items       RateItem[]
+
+  @@index([orgId])
+  @@index([orgId, type])
+}
+
+model OrgInvite {
+  id         String    @id @default(cuid())
+  orgId      String
+  org        Org       @relation(fields: [orgId], references: [id])
+  email      String
+  role       UserRole  @default(MEMBER)
+  token      String    @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([orgId])
+  @@index([email])
+}
+
+model FailedLogin {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  email     String
+  ipAddress String
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([ipAddress])
+  @@index([createdAt(sort: Desc)])
+}
+
+// Projects
+model Project {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?        @db.Text
+  clientName     String?
+  clientCompany  String?
+  bidDueDate     DateTime?
+  estimatedValue Float?
+  district       String?
+  seismicZone    String?
+  unitSystem     UnitSystem      @default(METRIC)
+  dateFormat     String          @default("AD")
+  contingencyPct Float?
+  provisionalSum Float?
+  vatEnabled     Boolean         @default(true)
+  vatRate        Float           @default(13)
+  tdsRate        Float           @default(1.5)
+  tdsEnabled     Boolean         @default(false)
+  status          ProjectStatus   @default(ESTIMATING)
+  priority        Priority        @default(MEDIUM)
+  squareFootage   Float?
+  office          String?
+  isPricingLocked Boolean         @default(false)
+  dueTime         DateTime?
+  projectNumber   String?
+  scopeOfWork     String?   @db.Text
+  ocrRegions      Json?
+  orgId           String
+  org             Org             @relation(fields: [orgId], references: [id])
+  members         ProjectMember[]
+  drawings        Drawing[]
+  folders         DrawingFolder[]
+  disciplines     Discipline[]
+  takeoffGroups   TakeoffGroup[]  @relation("ProjectTakeoffGroups")
+  boqOverrides    BOQOverride[]
+  rateAnalyses    RateAnalysis[]
+  shareLinks      ShareLink[]
+  notes           ProjectNote[]
+  tasks           ProjectTask[]
+  quotes          SubcontractorQuote[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([orgId])
+  @@index([status])
+  @@index([orgId, status])
+  @@index([orgId, priority])
+  @@index([createdAt(sort: Desc)])
+}
+
+model ProjectMember {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  projectRole ProjectRole @default(ESTIMATOR)
+  assignedBy  String?
+  assignedAt  DateTime    @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+model ShareLink {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id])
+  token     String    @unique
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+  createdBy String
+  viewCount Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([isActive])
+}
+
+// Drawings
+model Drawing {
+  id              String        @id @default(cuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id])
+  fileName        String
+  fileUrl         String
+  pageCount       Int
+  revisionNumber  String?
+  parentDrawingId String?
+  parentDrawing   Drawing?      @relation("revisions", fields: [parentDrawingId], references: [id])
+  revisions       Drawing[]     @relation("revisions")
+  isLatest        Boolean       @default(true)
+  folderId        String?
+  folder          DrawingFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  thumbnailUrl    String?
+  sortOrder       Int           @default(0)
+  pages           DrawingPage[]
+  createdAt       DateTime      @default(now())
+
+  @@index([projectId])
+  @@index([projectId, isLatest])
+  @@index([folderId])
+  @@index([folderId, sortOrder])
+}
+
+model DrawingPage {
+  id              String        @id @default(cuid())
+  drawingId       String
+  drawing         Drawing       @relation(fields: [drawingId], references: [id])
+  pageNumber      Int
+  label           String?
+  scale           Float?
+  scaleUnit       String        @default("m")
+  canvasJson      Json?
+  annotationsJson Json?
+  scaleZones      ScaleZone[]
+  takeoffItems    TakeoffItem[]
+
+  @@index([drawingId])
+}
+
+model ScaleZone {
+  id        String      @id @default(cuid())
+  pageId    String
+  page      DrawingPage @relation(fields: [pageId], references: [id])
+  label     String?
+  scale     Float
+  scaleUnit String
+  x         Float
+  y         Float
+  width     Float
+  height    Float
+
+  @@index([pageId])
+}
+
+// Disciplines & Groups
+model Discipline {
+  id        String         @id @default(cuid())
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id])
+  name      String
+  sortOrder Int            @default(0)
+  isPrimary Boolean        @default(false)
+  groups    TakeoffGroup[]
+
+  @@index([projectId])
+}
+
+model TakeoffGroup {
+  id               String        @id @default(cuid())
+  projectId        String
+  project          Project       @relation("ProjectTakeoffGroups", fields: [projectId], references: [id])
+  parentId         String?
+  parent           TakeoffGroup?  @relation("TakeoffGroupChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children         TakeoffGroup[] @relation("TakeoffGroupChildren")
+  disciplineId     String?
+  discipline       Discipline?   @relation(fields: [disciplineId], references: [id])
+  name             String
+  type             TakeoffTool   @default(LINEAR)
+  colour           String        @default("#3B82F6")
+  lineWidth        Int           @default(2)
+  isLocked         Boolean       @default(false)
+  isVisible        Boolean       @default(true)
+  tag              String?
+  multiplier       Float         @default(1)
+  additionalParams Json?
+  preamble         String?        @db.Text
+  sortOrder        Int           @default(0)
+  rateItemId       String?
+  rateItem         RateItem?     @relation("GroupRateItem", fields: [rateItemId], references: [id], onDelete: SetNull)
+  assemblyId       String?
+  items            TakeoffItem[]
+
+  @@index([projectId])
+  @@index([parentId])
+  @@index([disciplineId])
+  @@index([rateItemId])
+  @@index([assemblyId])
+}
+
+// Takeoff Items
+model TakeoffItem {
+  id           String        @id @default(cuid())
+  pageId       String
+  page         DrawingPage   @relation(fields: [pageId], references: [id])
+  groupId      String?
+  group        TakeoffGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  label        String
+  toolType     TakeoffTool
+  shapeType    ShapeType?
+  isNegative   Boolean       @default(false)
+  multiplier   Float         @default(1)
+  length       Float?
+  breadth      Float?
+  height       Float?
+  wastagePct   Float         @default(0)
+  siteLocation String?
+  measuredDate DateTime?
+  notes        String?       @db.Text
+  rawQuantity  Float         @default(0)
+  quantity     Float
+  unit         String
+  scaleUsed    Float
+  version      Int           @default(1)
+  sortOrder    Int           @default(0)
+  toolData     Json
+  isLocked     Boolean       @default(false)
+  rateItemId   String?
+  createdAt    DateTime      @default(now())
+
+  @@index([pageId])
+  @@index([groupId])
+  @@index([pageId, sortOrder])
+}
+
+// Drawing Folders (Documents tab)
+// Default folders seeded on project creation: General, Architectural, Structural, Civil, MEP
+model DrawingFolder {
+  id        String          @id @default(cuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int             @default(0)
+  parentId  String?
+  parent    DrawingFolder?  @relation("FolderChildren", fields: [parentId], references: [id])
+  children  DrawingFolder[] @relation("FolderChildren")
+  drawings  Drawing[]
+  createdAt DateTime        @default(now())
+
+  @@index([projectId])
+  @@index([projectId, sortOrder])
+  @@index([parentId])
+}
+
+// Project Notes — visible to all org members with project access
+model ProjectNote {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("AuthoredNotes", fields: [userId], references: [id])
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([projectId, createdAt(sort: Desc)])
+}
+
+// Project Tasks — optionally assigned to a team member
+model ProjectTask {
+  id           String    @id @default(cuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?   @db.Text
+  assignedToId String?
+  assignedTo   User?     @relation("AssignedTasks", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdById  String
+  createdBy    User      @relation("CreatedTasks", fields: [createdById], references: [id])
+  dueDate      DateTime?
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([assignedToId])
+  @@index([projectId, isCompleted])
+  @@index([projectId, createdAt(sort: Desc)])
+}
+
+// Rates
+model RateItem {
+  id            String         @id @default(cuid())
+  code          String
+  description   String         @db.Text
+  unit          String
+  baseRate      Float
+  fiscalYear    String
+  source        RateSource
+  isPublished   Boolean        @default(false)
+  orgId         String?
+  batchId       String?
+  batch         RateBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  districtRates  DistrictRate[]
+  analyses       RateAnalysis[]
+  overrides      BOQOverride[]
+  takeoffGroups  TakeoffGroup[] @relation("GroupRateItem")
+
+  @@index([source])
+  @@index([orgId])
+  @@index([fiscalYear])
+  @@index([batchId])
+  @@index([source, fiscalYear])
+  @@index([source, isPublished])
+  @@index([source, fiscalYear, isPublished])
+}
+
+model DistrictRate {
+  id         String   @id @default(cuid())
+  rateItemId String
+  rateItem   RateItem @relation(fields: [rateItemId], references: [id])
+  district   String
+  rate       Float
+
+  @@unique([rateItemId, district])
+  @@index([rateItemId])
+  @@index([district])
+}
+
+model RateAnalysis {
+  id                String   @id @default(cuid())
+  rateItemId        String
+  rateItem          RateItem @relation(fields: [rateItemId], references: [id])
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id])
+  materialCost      Float    @default(0)
+  skilledLabour     Float    @default(0)
+  semiSkilledLabour Float    @default(0)
+  unskilledLabour   Float    @default(0)
+  equipmentCost     Float    @default(0)
+  overheadPct       Float    @default(0)
+  profitPct         Float    @default(0)
+  wastagePct        Float    @default(0)
+  computedRate      Float
+  useComputedRate   Boolean  @default(false)
+
+  @@index([projectId])
+  @@index([rateItemId])
+}
+
+// BOQ Overrides
+model BOQOverride {
+  id            String         @id @default(cuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id])
+  rateItemId    String
+  rateItem      RateItem       @relation(fields: [rateItemId], references: [id])
+  field         String
+  originalValue String
+  proposedValue String
+  approvedValue String?
+  status        OverrideStatus @default(PENDING)
+  submittedBy   String
+  reviewedBy    String?
+  createdAt     DateTime       @default(now())
+  resolvedAt    DateTime?
+
+  @@index([projectId])
+  @@index([projectId, status])
+}
+
+// Notifications & Audit
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt(sort: Desc)])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  orgId      String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  event      String
+  resourceId String?
+  meta       Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([orgId, createdAt(sort: Desc)])
+}
+
+// Assembly Library
+model Assembly {
+  id          String          @id @default(cuid())
+  name        String
+  description String?         @db.Text
+  category    String?         // Structural, Civil, MEP, Architectural, Road, Irrigation
+  orgId       String?         // null = platform template (visible to all orgs)
+  org         Org?            @relation(fields: [orgId], references: [id])
+  isPublic    Boolean         @default(false)
+  createdById String?
+  groups      AssemblyGroup[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([orgId])
+  @@index([isPublic])
+  @@index([category])
+}
+
+model AssemblyGroup {
+  id               String          @id @default(cuid())
+  assemblyId       String
+  assembly         Assembly        @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+  parentId         String?
+  parent           AssemblyGroup?  @relation("AssemblyGroupChildren", fields: [parentId], references: [id])
+  children         AssemblyGroup[] @relation("AssemblyGroupChildren")
+  name             String
+  type             TakeoffTool     @default(LINEAR)
+  colour           String          @default("#3B82F6")
+  lineWidth        Int             @default(2)
+  additionalParams Json?
+  rateCode         String?         // DUDBC rate code — resolved to rateItemId at apply-time
+  sortOrder        Int             @default(0)
+
+  @@index([assemblyId])
+  @@index([parentId])
+}
+
+// Subcontractor Quotes (quote comparison table)
+model SubcontractorQuote {
+  id         String      @id @default(cuid())
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor     String
+  amount     Float
+  discipline String?
+  notes      String?     @db.Text
+  status     QuoteStatus @default(RECEIVED)
+  validUntil DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([projectId])
+  @@index([projectId, status])
+}
+
+// Enums
+enum QuoteStatus {
+  RECEIVED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum ProjectStatus {
+  ESTIMATING
+  BID_SUBMITTED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETE
+  LOST
+  ARCHIVED
+}
+
+enum ProjectRole {
+  LEAD
+  ESTIMATOR
+  VIEWER
+}
+
+enum UnitSystem {
+  METRIC
+  IMPERIAL
+}
+
+enum TakeoffTool {
+  COUNT
+  LINEAR
+  COUNT_BY_DISTANCE
+  AREA
+  VOLUME
+  VERTICAL_WALL_AREA
+}
+
+enum ShapeType {
+  RECTANGLE
+  POLYLINE
+  CIRCLE
+  ARC
+}
+
+enum RateSource {
+  DUDBC
+  DISTRICT
+  CUSTOM
+}
+
+enum OverrideStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
