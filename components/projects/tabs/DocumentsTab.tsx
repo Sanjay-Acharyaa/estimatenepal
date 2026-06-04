@@ -434,37 +434,18 @@ export function DocumentsTab({ project, isAdmin }: Props) {
         </div>
       </div>
 
-      {/* Upload modal */}
+      {/* Upload modal — DrawingUpload renders its own modal, no wrapper needed */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="font-bold text-gray-900">Upload Drawing</h3>
-              <button onClick={() => setShowUpload(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-            {/* Folder selector */}
-            <div className="px-5 pt-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Upload to folder</label>
-              <select
-                value={uploadFolderId ?? ""}
-                onChange={e => setUploadFolderId(e.target.value || null)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-              >
-                <option value="">No folder (uncategorized)</option>
-                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </div>
-            <DrawingUpload
-              projectId={project.id}
-              folderId={uploadFolderId}
-              onUploaded={(drawing) => {
-                setDrawings(prev => [drawing as any, ...prev]);
-                setShowUpload(false);
-              }}
-              onCancel={() => setShowUpload(false)}
-            />
-          </div>
-        </div>
+        <DrawingUpload
+          projectId={project.id}
+          folderId={uploadFolderId}
+          folders={folders.map(f => ({ id: f.id, name: f.name }))}
+          onUploaded={(drawing) => {
+            setDrawings(prev => [drawing as any, ...prev]);
+            setShowUpload(false);
+          }}
+          onClose={() => setShowUpload(false)}
+        />
       )}
     </div>
   );

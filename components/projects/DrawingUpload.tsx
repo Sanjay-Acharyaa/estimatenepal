@@ -11,20 +11,25 @@ if (typeof window !== "undefined") {
 const MAX_SIZE = 50 * 1024 * 1024;
 const MAX_PAGES = 100;
 
+type FolderOption = { id: string; name: string };
+
 type Props = {
   projectId: string;
   parentDrawingId?: string;
   folderId?: string | null;
+  folders?: FolderOption[];
   onClose?: () => void;
   onCancel?: () => void;
   onUploaded?: (drawing: unknown) => void;
 };
 
-export function DrawingUpload({ projectId, parentDrawingId, folderId, onClose, onCancel, onUploaded }: Props) {
+export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFolderId, folders, onClose, onCancel, onUploaded }: Props) {
+  const dismiss = onClose ?? onCancel;
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [revisionNumber, setRevisionNumber] = useState("");
+  const [folderId, setFolderId] = useState<string | null>(initialFolderId ?? null);
   const [status, setStatus] = useState<"idle" | "validating" | "uploading" | "registering" | "thumbnail" | "done" | "error">("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
@@ -171,8 +176,22 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId, onClose, o
           <h2 className="text-lg font-bold text-gray-900">
             {parentDrawingId ? "Upload Revision" : "Upload Drawing"}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <button onClick={dismiss} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
+
+        {folders && folders.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Upload to folder</label>
+            <select
+              value={folderId ?? ""}
+              onChange={e => setFolderId(e.target.value || null)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">No folder (uncategorized)</option>
+              {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>
@@ -240,7 +259,7 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId, onClose, o
               >
                 {status === "validating" ? "Validating…" : status === "idle" ? "Upload" : status === "thumbnail" ? "Finishing…" : "…"}
               </button>
-              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <button onClick={dismiss} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                 Cancel
               </button>
             </div>
