@@ -112,6 +112,13 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   const zoneDragStart = useRef<Point | null>(null);
 
   // Disciplines (tabs)
+  // Persist last-visited drawing so TakeoffTabRedirect can restore it
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`lastDrawing:${projectId}`, drawing.id);
+    }
+  }, [projectId, drawing.id]);
+
   const [disciplines, setDisciplines] = useState<Discipline[]>(initialDisciplines);
   const [activeDisciplineId, setActiveDisciplineId] = useState<string | null>(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(`active-discipline-${projectId}`) : null;

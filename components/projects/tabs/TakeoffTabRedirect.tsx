@@ -19,11 +19,19 @@ export function TakeoffTabRedirect({ projectId }: { projectId: string }) {
       .finally(() => setLoading(false));
   }, [projectId]);
 
-  // Auto-redirect to first drawing if exactly one exists
   useEffect(() => {
-    if (!loading && drawings.length === 1) {
-      router.replace(`/dashboard/projects/${projectId}/drawings/${drawings[0].id}`);
-    }
+    if (loading || drawings.length === 0) return;
+
+    // Restore last-visited drawing, fall back to first
+    const lastId = typeof window !== "undefined"
+      ? localStorage.getItem(`lastDrawing:${projectId}`)
+      : null;
+
+    const target = (lastId && drawings.find(d => d.id === lastId))
+      ? lastId
+      : drawings[0].id;
+
+    router.replace(`/dashboard/projects/${projectId}/drawings/${target}`);
   }, [loading, drawings, projectId, router]);
 
   if (loading) {
@@ -52,31 +60,10 @@ export function TakeoffTabRedirect({ projectId }: { projectId: string }) {
     );
   }
 
-  // Multiple drawings — show a picker
+  // Redirecting — show a brief loading state while router.replace fires
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-6">
-      <div className="text-5xl">📐</div>
-      <h2 className="text-lg font-semibold text-gray-700">Select a drawing to start takeoff</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-2xl">
-        {drawings.slice(0, 12).map(d => (
-          <Link
-            key={d.id}
-            href={`/dashboard/projects/${projectId}/drawings/${d.id}`}
-            className="flex items-center gap-2.5 px-4 py-3 border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition text-left"
-          >
-            <span className="text-2xl">📄</span>
-            <span className="text-sm font-medium text-gray-700 truncate">{d.fileName}</span>
-          </Link>
-        ))}
-      </div>
-      {drawings.length > 12 && (
-        <p className="text-xs text-gray-400">
-          Showing 12 of {drawings.length} drawings.{" "}
-          <Link href={`/dashboard/projects/${projectId}?tab=documents`} className="text-blue-600 hover:underline">
-            See all in Documents →
-          </Link>
-        </p>
-      )}
+    <div className="flex items-center justify-center h-full">
+      <p className="text-gray-400 text-sm">Opening drawing…</p>
     </div>
   );
 }
