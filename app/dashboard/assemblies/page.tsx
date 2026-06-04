@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 
 type AssemblyGroup = {
   id: string;
@@ -42,6 +44,7 @@ const toolBadge = (type: string) => {
 };
 
 export default function AssembliesPage() {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [assemblies, setAssemblies] = useState<Assembly[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -81,12 +84,13 @@ export default function AssembliesPage() {
     setDuplicating(id);
     const res = await fetch(`/api/assemblies/${id}/duplicate`, { method: "POST" });
     setDuplicating(null);
-    if (res.ok) { alert("Assembly duplicated to your organisation."); load(); }
-    else { const d = await res.json(); alert(d?.error?.message ?? "Failed."); }
+    if (res.ok) { toast.success("Assembly duplicated to your organisation."); load(); }
+    else { const d = await res.json(); toast.error(d?.error?.message ?? "Failed."); }
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete assembly "${name}"? This cannot be undone.`)) return;
+    const ok = await confirm({ title: "Delete Assembly", message: `Delete "${name}"? This cannot be undone.`, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     setDeleting(id);
     await fetch(`/api/assemblies/${id}`, { method: "DELETE" });
     setDeleting(null);
@@ -96,6 +100,7 @@ export default function AssembliesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {confirmDialog}
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div>

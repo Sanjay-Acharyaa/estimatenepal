@@ -43,11 +43,19 @@ export async function POST(req: NextRequest) {
     await redis.set(`verify:${verifyToken}`, user.id, "EX", 86400);
 
     const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${verifyToken}`;
-    await sendEmail({
-      to: email,
-      subject: "Verify your NepaliEstimate account",
-      html: verificationEmailHtml(verifyUrl, name),
-    });
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Verify your NepaliEstimate account",
+        html: verificationEmailHtml(verifyUrl, name),
+      });
+    } catch (emailErr) {
+      // Roll back — user is stuck if email fails and DB record stays
+      await redis.del(`verify:${verifyToken}`);
+      await prisma.user.delete({ where: { id: user.id } });
+      await prisma.org.delete({ where: { id: org.id } });
+      throw emailErr;
+    }
 
     return NextResponse.json(
       { message: "Registration successful. Check your email to verify your account." },

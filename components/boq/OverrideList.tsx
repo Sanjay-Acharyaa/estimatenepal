@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 
 interface Override {
   id: string;
@@ -78,7 +79,7 @@ export function OverrideList({ projectId, isAdmin }: Props) {
       }
       load();
     } catch (e: any) {
-      alert(e.message);
+      toast.error(e.message);
     } finally {
       setActing(null);
     }

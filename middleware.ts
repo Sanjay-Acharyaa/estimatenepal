@@ -36,9 +36,10 @@ export async function middleware(req: NextRequest) {
         : "next-auth.session-token",
   });
 
-  if (!token) {
+  if (!token || (token as any).invalidated) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
+    if ((token as any)?.invalidated) loginUrl.searchParams.set("reason", "session_expired");
     return NextResponse.redirect(loginUrl);
   }
 

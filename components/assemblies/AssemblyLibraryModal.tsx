@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 type AssemblyGroup = {
   id: string;
@@ -94,8 +95,8 @@ export function AssemblyLibraryModal({ projectId, disciplines, onClose, onApplie
     setDuplicating(id);
     const res = await fetch(`/api/assemblies/${id}/duplicate`, { method: "POST" });
     setDuplicating(null);
-    if (res.ok) { alert("Assembly duplicated to your organisation. You can now edit it."); load(); }
-    else { const d = await res.json(); alert(d?.error?.message ?? "Failed."); }
+    if (res.ok) { toast.success("Assembly duplicated to your organisation. You can now edit it."); load(); }
+    else { const d = await res.json(); toast.error(d?.error?.message ?? "Failed."); }
   }
 
   const toolBadge = (type: string) => {

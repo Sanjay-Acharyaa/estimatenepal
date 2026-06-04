@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { TakeoffGroupDialog, TOOL_TYPES, COUNT_SHAPES } from "./TakeoffGroupDialog";
 import { TakeoffGroupDetail } from "./TakeoffGroupDetail";
 import { CopyGroupDialog } from "./CopyGroupDialog";
+import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { CatalogBrowser } from "@/components/rates/CatalogBrowser";
 import { AssemblyLibraryModal } from "@/components/assemblies/AssemblyLibraryModal";
 import type { Discipline } from "./DrawingCanvas";
@@ -133,6 +135,7 @@ export function TakeoffPanel({
   const [panelError, setPanelError] = useState("");
   const [copyTarget, setCopyTarget] = useState<{ group: TakeoffGroup; isCategory: boolean; childLayerCount: number } | null>(null);
   const [changeCatalogId, setChangeCatalogId] = useState<string | null>(null);
+  const { confirm: confirmDialog_, dialog: confirmDialogEl } = useConfirm();
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
   const [showSaveAssembly, setShowSaveAssembly] = useState(false);
   const [saveAssemblyForm, setSaveAssemblyForm] = useState({ name: "", description: "", category: "" });
@@ -285,7 +288,8 @@ export function TakeoffPanel({
     const msg = childLayers.length > 0
       ? `Delete group "${g.name}"? Its ${childLayers.length} layer(s) and all ${totalItems} shape(s) will be removed.`
       : `Delete "${g.name}"? All ${g._count.items} shape(s) will be removed.`;
-    if (!confirm(msg)) return;
+    const ok = await confirmDialog_({ title: "Delete Group", message: msg, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     await apiCall(
       () => fetch(`/api/projects/${projectId}/takeoff-groups/${g.id}`, { method: "DELETE" }),
       async () => {
@@ -400,6 +404,7 @@ export function TakeoffPanel({
 
   return (
     <div className="flex flex-col h-full text-sm relative">
+      {confirmDialogEl}
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
         <span className="text-xs font-semibold text-gray-400 uppercase">Takeoffs ({categories.length})</span>
@@ -763,8 +768,8 @@ export function TakeoffPanel({
                       body: JSON.stringify({ ...saveAssemblyForm, groupIds: Array.from(selectedForSave) }),
                     });
                     setSaveAssemblySaving(false);
-                    if (res.ok) { alert("Assembly saved to your organisation library."); setShowSaveAssembly(false); setSaveAssemblyForm({ name: "", description: "", category: "" }); setSelectedForSave(new Set()); }
-                    else { const d = await res.json(); alert(d?.error?.message ?? "Failed to save."); }
+                    if (res.ok) { toast.success("Assembly saved to your organisation library."); setShowSaveAssembly(false); setSaveAssemblyForm({ name: "", description: "", category: "" }); setSelectedForSave(new Set()); }
+                    else { const d = await res.json(); toast.error(d?.error?.message ?? "Failed to save."); }
                   }}
                   className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                   {saveAssemblySaving ? "Saving…" : "Save Assembly"}

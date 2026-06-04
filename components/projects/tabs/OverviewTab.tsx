@@ -31,6 +31,7 @@ type Project = {
   isPricingLocked: boolean;
   dueTime: string | null;
   projectNumber: string | null;
+  scopeOfWork: string | null;
   members: { userId: string; user: { id: string; name: string; email: string } }[];
 };
 
@@ -96,7 +97,7 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
   const [vatRate,         setVatRate]         = useState(project.vatRate.toString());
   const [tdsEnabled,      setTdsEnabled]      = useState(project.tdsEnabled);
   const [tdsRate,         setTdsRate]         = useState(project.tdsRate.toString());
-  const [scopeOfWork,     setScopeOfWork]     = useState((project as any).scopeOfWork ?? "");
+  const [scopeOfWork,     setScopeOfWork]     = useState(project.scopeOfWork ?? "");
 
   async function handleSave() {
     setSaving(true); setError(""); setSaved(false);

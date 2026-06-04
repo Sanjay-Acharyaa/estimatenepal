@@ -71,7 +71,7 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.isSuperAdmin = (user as any).isSuperAdmin;
         token.orgId = (user as any).orgId;
-        // Fetch org trial expiry at login time and store in token
+        token.passwordChangedAt = (user as any).passwordChangedAt?.toISOString() ?? null;
         if ((user as any).orgId) {
           const org = await prisma.org.findUnique({
             where: { id: (user as any).orgId },
@@ -79,10 +79,28 @@ export const authOptions: NextAuthOptions = {
           });
           token.trialEndsAt = org?.trialEndsAt?.toISOString() ?? null;
         }
+      } else if (token.id) {
+        // On every request after login: check if password was changed after token issued
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { passwordChangedAt: true },
+        });
+        if (dbUser?.passwordChangedAt) {
+          const changedAt = dbUser.passwordChangedAt.getTime();
+          const issuedAt = ((token.iat as number) ?? 0) * 1000;
+          if (changedAt > issuedAt) {
+            // Password was changed after this token was issued — invalidate
+            return { ...token, invalidated: true };
+          }
+        }
       }
       return token;
     },
     async session({ session, token }) {
+      if (token?.invalidated) {
+        // Token was invalidated due to password change — return empty session
+        return { ...session, user: undefined as any, expires: new Date(0).toISOString() };
+      }
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;

@@ -36,7 +36,10 @@ export async function POST(req: NextRequest) {
     if (!valid) return apiError("UNAUTHORIZED", "Current password is incorrect.", 401);
 
     const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: newHash, passwordChangedAt: new Date() },
+    });
 
     await appendAuditLog({
       orgId: user.orgId ?? "SYSTEM",

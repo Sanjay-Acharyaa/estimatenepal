@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { DrawingUpload } from "./DrawingUpload";
 
 type DrawingPage = {
@@ -25,6 +27,7 @@ type Pagination = { page: number; limit: number; total: number; totalPages: numb
 const PAGE_SIZE = 10;
 
 export function DrawingList({ projectId }: { projectId: string }) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [page, setPage] = useState(1);
@@ -51,10 +54,12 @@ export function DrawingList({ projectId }: { projectId: string }) {
   useEffect(() => { fetchDrawings(page); }, [page, fetchDrawings]);
 
   async function handleDelete(drawingId: string, fileName: string) {
-    if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+    const ok = await confirm({ title: "Delete Drawing", message: `Delete "${fileName}"? This cannot be undone.`, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     setDeleting(drawingId);
     await fetch(`/api/projects/${projectId}/drawings/${drawingId}`, { method: "DELETE" });
     setDeleting(null);
+    toast.success("Drawing deleted.");
     fetchDrawings(page);
   }
 
@@ -68,6 +73,7 @@ export function DrawingList({ projectId }: { projectId: string }) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
+      {confirmDialog}
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-gray-800">
           Drawings

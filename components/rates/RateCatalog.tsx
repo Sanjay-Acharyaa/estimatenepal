@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { RateForm } from "./RateForm";
 import { RateAnalysisBuilder } from "./RateAnalysisBuilder";
 
@@ -49,6 +51,7 @@ const SOURCE_BADGE: Record<string, string> = {
 };
 
 export function RateCatalog({ isAdmin, projectId }: Props) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [batches, setBatches] = useState<RateBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string | "all">("all");
   const [rates, setRates] = useState<RateItem[]>([]);
@@ -148,26 +151,35 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   };
 
   const deleteAll = async (batchId: string | "all" | "none", label: string, count: number) => {
-    if (!confirm(`Delete all ${count} rate${count !== 1 ? "s" : ""} in "${label}"?\n\nTakeoff groups linked to these rates will be unlinked automatically.\n\nThis cannot be undone.`)) return;
+    const ok = await confirm({
+      title: "Delete All Rates",
+      message: `Delete all ${count} rate${count !== 1 ? "s" : ""} in "${label}"? Takeoff groups linked to these rates will be unlinked. This cannot be undone.`,
+      variant: "danger", confirmLabel: "Delete All",
+    });
+    if (!ok) return;
     setDeletingBatch(batchId);
     try {
       const param = batchId === "all" ? "" : batchId === "none" ? "?batchId=none" : `?batchId=${batchId}`;
       await fetch(`/api/rates/delete-all${param}`, { method: "DELETE" });
       if (selectedBatchId === batchId) setSelectedBatchId("all");
-      loadBatches();
-      loadUnbatchedCount();
-      loadRates();
+      loadBatches(); loadUnbatchedCount(); loadRates();
+      toast.success("Rates deleted.");
     } finally { setDeletingBatch(null); }
   };
 
   const deleteBatch = async (batch: RateBatch) => {
-    if (!confirm(`Delete rate book "${batch.name}"?\n\nThis will remove all ${batch.itemCount} rates. Takeoff groups linked to these rates will be unlinked.\n\nThis cannot be undone.`)) return;
+    const ok = await confirm({
+      title: "Delete Rate Book",
+      message: `Delete rate book "${batch.name}"? This will remove all ${batch.itemCount} rates. Takeoff groups linked to these rates will be unlinked. This cannot be undone.`,
+      variant: "danger", confirmLabel: "Delete",
+    });
+    if (!ok) return;
     setDeletingBatch(batch.id);
     try {
       await fetch(`/api/rate-batches/${batch.id}`, { method: "DELETE" });
       if (selectedBatchId === batch.id) setSelectedBatchId("all");
-      loadBatches();
-      loadRates();
+      loadBatches(); loadRates();
+      toast.success("Rate book deleted.");
     } finally { setDeletingBatch(null); }
   };
 
@@ -210,9 +222,10 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   };
 
   const deleteRate = async (rate: RateItem) => {
-    if (!confirm(`Delete "${rate.code} — ${rate.description.slice(0, 60)}"?`)) return;
+    const ok = await confirm({ title: "Delete Rate", message: `Delete "${rate.code} — ${rate.description.slice(0, 60)}"?`, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     setDeleting(rate.id);
-    try { await fetch(`/api/rates/${rate.id}`, { method: "DELETE" }); loadRates(); loadBatches(); }
+    try { await fetch(`/api/rates/${rate.id}`, { method: "DELETE" }); loadRates(); loadBatches(); toast.success("Rate deleted."); }
     finally { setDeleting(null); }
   };
 
@@ -223,6 +236,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
 
   return (
     <div className="flex gap-5 min-h-96">
+      {confirmDialog}
 
       {/* ── Left: Rate Books sidebar ── */}
       <div className="w-64 flex-shrink-0 space-y-2">

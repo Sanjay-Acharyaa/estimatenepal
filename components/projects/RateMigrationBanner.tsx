@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/hooks/useConfirm";
 
 type Props = { projectId: string };
 
 type Status = { needsMigration: boolean; latestFY: string | null; projectFY: string | null };
 
 export function RateMigrationBanner({ projectId }: Props) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [status, setStatus] = useState<Status | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [result, setResult] = useState<{ migrated: number; unmatched: number; targetFY: string } | null>(null);
@@ -21,7 +23,8 @@ export function RateMigrationBanner({ projectId }: Props) {
   }, [projectId]);
 
   async function handleMigrate() {
-    if (!confirm(`Migrate all DUDBC-linked layers to FY ${status?.latestFY}? This updates rate links but keeps all quantities unchanged.`)) return;
+    const ok = await confirm({ title: "Update Rates", message: `Migrate all DUDBC-linked layers to FY ${status?.latestFY}? This updates rate links but keeps all quantities unchanged.`, confirmLabel: "Update Rates", variant: "warning" });
+    if (!ok) return;
     setMigrating(true);
     setMigrateError("");
     const res = await fetch(`/api/projects/${projectId}/rate-migration`, { method: "POST" });
@@ -39,6 +42,7 @@ export function RateMigrationBanner({ projectId }: Props) {
 
   return (
     <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-3">
+      {confirmDialog}
       <span className="text-amber-500 text-lg mt-0.5">⚠</span>
       <div className="flex-1 min-w-0">
         {migrateError && (

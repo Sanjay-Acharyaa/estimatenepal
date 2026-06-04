@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { DrawingUpload } from "@/components/projects/DrawingUpload";
 
 type Folder = {
@@ -39,6 +41,7 @@ function timeAgo(dateStr: string) {
 }
 
 export function DocumentsTab({ project, isAdmin }: Props) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const router = useRouter();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
@@ -111,10 +114,11 @@ export function DocumentsTab({ project, isAdmin }: Props) {
   async function deleteFolder(id: string) {
     const f = folders.find(x => x.id === id);
     if (!f) return;
-    if (f._count.drawings > 0) { alert("Move all drawings out of this folder first."); return; }
-    if (!confirm(`Delete folder "${f.name}"?`)) return;
+    if (f._count.drawings > 0) { toast.error("Move all drawings out of this folder first."); return; }
+    const ok = await confirm({ title: "Delete Folder", message: `Delete folder "${f.name}"?`, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     const res = await fetch(`/api/projects/${project.id}/folders/${id}`, { method: "DELETE" });
-    if (res.ok) setFolders(prev => prev.filter(x => x.id !== id));
+    if (res.ok) { setFolders(prev => prev.filter(x => x.id !== id)); toast.success("Folder deleted."); }
     setFolderMenuId(null);
   }
 
@@ -140,9 +144,10 @@ export function DocumentsTab({ project, isAdmin }: Props) {
   async function deleteDrawing(id: string) {
     const d = drawings.find(x => x.id === id);
     if (!d) return;
-    if (!confirm(`Delete "${d.fileName}"? This will remove all takeoff shapes on this drawing.`)) return;
+    const ok = await confirm({ title: "Delete Drawing", message: `Delete "${d.fileName}"? This will remove all takeoff shapes on this drawing.`, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     const res = await fetch(`/api/projects/${project.id}/drawings/${id}`, { method: "DELETE" });
-    if (res.ok) setDrawings(prev => prev.filter(x => x.id !== id));
+    if (res.ok) { setDrawings(prev => prev.filter(x => x.id !== id)); toast.success("Drawing deleted."); }
     setDrawingMenuId(null);
   }
 
@@ -175,6 +180,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
 
   return (
     <div className="flex h-full overflow-hidden">
+      {confirmDialog}
       {/* ── Folder sidebar ── */}
       <aside className="w-56 border-r border-gray-200 bg-gray-50 flex flex-col flex-shrink-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">

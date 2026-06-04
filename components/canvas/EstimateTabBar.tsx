@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useConfirm } from "@/hooks/useConfirm";
 import type { Discipline } from "./DrawingCanvas";
 
 type Props = {
@@ -23,6 +24,7 @@ export function EstimateTabBar({
   projectId, disciplines, activeDisciplineId, disciplineTotals = {},
   onSwitch, onCreated, onUpdated, onDeleted, onGroupsRefreshNeeded,
 }: Props) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -95,7 +97,8 @@ export function EstimateTabBar({
     const msg = groupCount > 0
       ? `Delete tab "${name}"? Its ${groupCount} layer(s) and all shapes will be permanently removed.`
       : `Delete tab "${name}"?`;
-    if (!confirm(msg)) return;
+    const ok = await confirm({ title: "Delete Tab", message: msg, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     const result = await apiCall(`/api/projects/${projectId}/disciplines/${id}`, "DELETE");
     if (result) {
       onDeleted(id);
@@ -108,6 +111,7 @@ export function EstimateTabBar({
 
   return (
     <div className="flex items-stretch bg-gray-900 border-t border-gray-700 flex-shrink-0 h-[52px]">
+      {confirmDialog}
       {error && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-red-900 text-red-200 text-xs px-3 py-1.5 rounded shadow-lg z-50 whitespace-nowrap">
           {error}

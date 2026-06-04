@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 
 type Quote = {
   id: string;
@@ -31,6 +33,7 @@ const NRS = (n: number) => n.toLocaleString("en-NP", { minimumFractionDigits: 2 
 const inputCls = "w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 export function ProposalTab({ projectId, userRole }: Props) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [estimateTotal, setEstimateTotal] = useState(0);
@@ -70,7 +73,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
     };
     try {
       const res = await fetch(urls[type]);
-      if (!res.ok) { alert("Export failed. Please try again."); setDownloading(null); return; }
+      if (!res.ok) { toast.error("Export failed. Please try again."); setDownloading(null); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -79,7 +82,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
         ?? `export.${["excel","mb","procurement"].includes(type) ? "xlsx" : "pdf"}`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { alert("Download failed."); }
+    } catch { toast.error("Download failed. Please try again."); }
     setDownloading(null);
   }
 
@@ -106,8 +109,10 @@ export function ProposalTab({ projectId, userRole }: Props) {
   }
 
   async function handleDeleteQuote(id: string, vendor: string) {
-    if (!confirm(`Delete quote from "${vendor}"?`)) return;
+    const ok = await confirm({ title: "Delete Quote", message: `Delete quote from "${vendor}"?`, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     await fetch(`/api/projects/${projectId}/quotes/${id}`, { method: "DELETE" });
+    toast.success("Quote deleted.");
     loadQuotes();
   }
 
@@ -124,6 +129,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
 
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
+      {confirmDialog}
 
       {/* Export Documents */}
       <section>

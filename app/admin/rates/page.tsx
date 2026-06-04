@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 
 type RateItem = {
   id: string;
@@ -20,6 +22,7 @@ type Page = { data: RateItem[]; pagination: { page: number; limit: number; total
 const EMPTY_FORM = { code: "", description: "", unit: "", baseRate: "", fiscalYear: "" };
 
 export default function AdminRatesPage() {
+  const { confirm: confirmAction, dialog: confirmDialog } = useConfirm();
   const [page, setPage] = useState(1);
   const [fiscalYear, setFiscalYear] = useState("");
   const [search, setSearch] = useState("");
@@ -98,9 +101,11 @@ export default function AdminRatesPage() {
   }
 
   async function handleDelete(id: string, code: string) {
-    if (!confirm(`Delete rate "${code}"?`)) return;
+    const ok = await confirmAction({ title: "Delete Rate", message: `Delete rate "${code}"?`, variant: "danger", confirmLabel: "Delete" });
+    if (!ok) return;
     const res = await fetch(`/api/admin/rates/${id}`, { method: "DELETE" });
-    if (!res.ok) { const d = await res.json(); alert(d?.error?.message ?? "Failed."); return; }
+    if (!res.ok) { const d = await res.json(); toast.error(d?.error?.message ?? "Failed."); return; }
+    toast.success("Rate deleted.");
     load();
   }
 
@@ -154,19 +159,21 @@ export default function AdminRatesPage() {
 
   async function handleDeleteFY() {
     if (deleteConfirm !== deleteFY) return;
-    if (!confirm(`Delete ALL DUDBC rates for FY ${deleteFY}? This includes district rates, analyses and BOQ overrides.`)) return;
+    const ok2 = await confirmAction({ title: `Delete FY ${deleteFY}`, message: `Delete ALL DUDBC rates for FY ${deleteFY}? This includes district rates, analyses and BOQ overrides.`, variant: "danger", confirmLabel: "Delete All" });
+    if (!ok2) return;
     setDeleting(true);
     const res = await fetch(`/api/admin/rates?fiscalYear=${encodeURIComponent(deleteFY)}`, { method: "DELETE" });
     const d = await res.json();
     setDeleting(false);
-    if (!res.ok) { alert(d?.error?.message ?? "Failed."); return; }
-    alert(`Deleted ${d.deleted} rates for FY ${deleteFY}.`);
+    if (!res.ok) { toast.error(d?.error?.message ?? "Failed."); return; }
+    toast.success(`Deleted ${d.deleted} rates for FY ${deleteFY}.`);
     setDeleteFY(""); setDeleteConfirm(""); load();
   }
 
   async function handlePublish() {
     if (!publishFY) return;
-    if (!confirm(`Publish all DUDBC rates for FY ${publishFY}? This is IRREVERSIBLE.`)) return;
+    const ok3 = await confirmAction({ title: "Publish Rates", message: `Publish all DUDBC rates for FY ${publishFY}? This is irreversible — published rates cannot be edited or deleted.`, variant: "warning", confirmLabel: "Publish All" });
+    if (!ok3) return;
     setPublishing(true);
     const res = await fetch("/api/admin/rates/publish", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -174,8 +181,8 @@ export default function AdminRatesPage() {
     });
     const d = await res.json();
     setPublishing(false);
-    if (!res.ok) { alert(d?.error?.message ?? "Failed."); return; }
-    alert(`Published ${d.published} rates for FY ${publishFY}.`);
+    if (!res.ok) { toast.error(d?.error?.message ?? "Failed."); return; }
+    toast.success(`Published ${d.published} rates for FY ${publishFY}.`);
     load();
   }
 
@@ -183,6 +190,7 @@ export default function AdminRatesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {confirmDialog}
       {/* Header */}
       <div className="bg-red-600 text-white px-8 py-4 flex items-center gap-4">
         <Link href="/admin" className="text-red-200 hover:text-white text-sm">← Super Admin</Link>

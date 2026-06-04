@@ -13,8 +13,9 @@ model User {
   name           String
   email          String          @unique
   passwordHash   String
-  emailVerified  Boolean         @default(false)
-  role           UserRole        @default(MEMBER)
+  emailVerified      Boolean         @default(false)
+  passwordChangedAt  DateTime?
+  role               UserRole        @default(MEMBER)
   isSuperAdmin   Boolean         @default(false)
   orgId          String?
   org            Org?            @relation(fields: [orgId], references: [id])

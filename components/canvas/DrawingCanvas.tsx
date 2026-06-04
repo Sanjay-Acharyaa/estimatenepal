@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Stage, Layer, Image as KonvaImage, Rect, Line, Text, Group, Circle, Path, Arrow, RegularPolygon, Star } from "react-konva";
 import Konva from "konva";
 import * as pdfjsLib from "pdfjs-dist";
@@ -894,8 +895,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   // ─── Save takeoff item to server ──────────────────────────────────────
   async function saveItem(toolType: string, shapeType: string, points: Point[]): Promise<boolean> {
     const group = takeoffGroups.find((g) => g.id === selectedGroupId);
-    if (!group) { alert("No takeoff layer selected. Select a layer in the Takeoff panel first."); return false; }
-    if (group.isLocked) { alert(`Layer "${group.name}" is locked. Unlock it first to draw shapes.`); return false; }
+    if (!group) { toast.warning("No takeoff layer selected. Select a layer in the Takeoff panel first."); return false; }
+    if (group.isLocked) { toast.warning(`Layer "${group.name}" is locked. Unlock it first to draw shapes.`); return false; }
     const label = `${group.name} #${(takeoffItems.filter((i) => i.groupId === group.id).length) + 1}`;
     try {
       const res = await fetch(
@@ -924,11 +925,11 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
         return true;
       } else {
         const d = await res.json().catch(() => ({}));
-        alert(d?.error?.message ?? "Failed to save measurement.");
+        toast.error(d?.error?.message ?? "Failed to save measurement.");
         return false;
       }
     } catch {
-      alert("Network error — could not save measurement.");
+      toast.error("Network error — could not save measurement.");
       return false;
     }
   }
@@ -972,7 +973,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       } else if (res.status === 409) {
         // Another user saved a newer version — reload the page's items so we're back in sync
         refreshItems();
-        alert("Someone else just edited this shape — it has been refreshed.");
+        toast.info("Someone else just edited this shape — it has been refreshed.");
       }
     } catch {
     } finally {
@@ -989,7 +990,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     );
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
-      alert(d?.error?.message ?? "Failed to delete takeoff item.");
+      toast.error(d?.error?.message ?? "Failed to delete takeoff item.");
       return;
     }
     pushHistory(takeoffItems.filter((i) => i.id !== itemId));
@@ -1008,7 +1009,15 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     if (!grp || grp.type === "AREA" || grp.type === "VOLUME") return;
 
     const segCount = pts.length - 1;
-    if (!window.confirm(`Explode into ${segCount} independent segments?\n\nEach segment will be a separate takeoff line with the same group settings. You can then delete any unwanted segments.`)) return;
+    const explodeOk = await new Promise<boolean>(res => {
+      toast(`Explode into ${segCount} segments?`, {
+        description: "Each segment will be a separate takeoff line. You can then delete unwanted segments.",
+        action: { label: "Explode", onClick: () => res(true) },
+        cancel: { label: "Cancel", onClick: () => res(false) },
+        duration: 10000,
+      });
+    });
+    if (!explodeOk) return;
 
     // Create one takeoff item per segment
     const created: TakeoffItem[] = [];
@@ -1515,10 +1524,11 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
           const ids = Array.from(selectedItemIdsRef.current);
           const n = ids.length;
           const msg = n === 1 ? "Delete this shape?" : `Delete ${n} shapes?`;
-          if (window.confirm(msg)) {
-            setSelectedItemIds(new Set());
-            void deleteMultiple(ids);
-          }
+          toast(msg, {
+            action: { label: "Delete", onClick: () => { setSelectedItemIds(new Set()); void deleteMultiple(ids); } },
+            cancel: { label: "Cancel", onClick: () => {} },
+            duration: 5000,
+          });
         }
       }
     }
@@ -1566,7 +1576,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
         body: JSON.stringify({ ...zoneRect, scale: zoneScale, scaleUnit: unit, label: label || undefined }),
       }
     );
-    if (!res.ok) { const d = await res.json(); alert(d.error?.message ?? "Failed to save zone."); return; }
+    if (!res.ok) { const d = await res.json(); toast.error(d.error?.message ?? "Failed to save zone."); return; }
     const newZone = await res.json();
     setPages((prev) => prev.map((p) => p.id === currentPage.id ? { ...p, scaleZones: [...p.scaleZones, newZone] } : p));
     setZoneRect(null);
@@ -2194,22 +2204,22 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                       <Group key={item.id} onClick={handleItemClick} opacity={remoteLock && remoteLock.userId !== currentUser.id ? 0.4 : 1}>
                         {pts.map((p, i) => {
                           if (markerShape === "square")
-                            return <Rect key={i} x={p.x - r} y={p.y - r} width={r * 2} height={r * 2} {...commonProps} />;
+                            return <Rect key={`sq-${i}-${p.x}-${p.y}`} x={p.x - r} y={p.y - r} width={r * 2} height={r * 2} {...commonProps} />;
                           if (markerShape === "triangle")
-                            return <RegularPolygon key={i} x={p.x} y={p.y} sides={3} radius={r} rotation={0} {...commonProps} />;
+                            return <RegularPolygon key={`tri-${i}-${p.x}-${p.y}`} x={p.x} y={p.y} sides={3} radius={r} rotation={0} {...commonProps} />;
                           if (markerShape === "diamond")
-                            return <RegularPolygon key={i} x={p.x} y={p.y} sides={4} radius={r} rotation={45} {...commonProps} />;
+                            return <RegularPolygon key={`dia-${i}-${p.x}-${p.y}`} x={p.x} y={p.y} sides={4} radius={r} rotation={45} {...commonProps} />;
                           if (markerShape === "cross")
                             return (
-                              <Group key={i} x={p.x} y={p.y}>
+                              <Group key={`cross-${i}-${p.x}-${p.y}`} x={p.x} y={p.y}>
                                 <Line points={[-r, 0, r, 0]} stroke={fill} strokeWidth={sw * 3} lineCap="round" />
                                 <Line points={[0, -r, 0, r]} stroke={fill} strokeWidth={sw * 3} lineCap="round" />
                               </Group>
                             );
                           if (markerShape === "star")
-                            return <Star key={i} x={p.x} y={p.y} numPoints={5} innerRadius={r * 0.45} outerRadius={r} rotation={-18} {...commonProps} />;
+                            return <Star key={`star-${i}-${p.x}-${p.y}`} x={p.x} y={p.y} numPoints={5} innerRadius={r * 0.45} outerRadius={r} rotation={-18} {...commonProps} />;
                           // default: circle
-                          return <Circle key={i} x={p.x} y={p.y} radius={r} {...commonProps} />;
+                          return <Circle key={`dot-${i}-${p.x}-${p.y}`} x={p.x} y={p.y} radius={r} {...commonProps} />;
                         })}
                         {draggableNodes}
                         {lockOverlay}
@@ -2429,7 +2439,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                         points={[...linearPoints.flatMap(p => [p.x, p.y]), ...(mousePos ? [mousePos.x, mousePos.y] : [])]}
                         stroke={col} strokeWidth={2 / scale} dash={[6 / scale, 3 / scale]} lineJoin="round"
                       />
-                      {linearPoints.map((p, i) => <Circle key={i} x={p.x} y={p.y} radius={4 / scale} fill={col} />)}
+                      {linearPoints.map((p, i) => <Circle key={`lp-${i}-${p.x}-${p.y}`} x={p.x} y={p.y} radius={4 / scale} fill={col} />)}
                       {linearPoints.length >= 1 && mousePos && (
                         <Text
                           x={(mousePos.x + linearPoints[linearPoints.length - 1].x) / 2 + 4 / scale}
@@ -2476,7 +2486,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                   const col = takeoffGroups.find(g => g.id === selectedGroupId)?.colour ?? "#3B82F6";
                   return (
                     <Group>
-                      {arcPoints.map((p, i) => <Circle key={i} x={p.x} y={p.y} radius={5 / scale} fill={col} />)}
+                      {arcPoints.map((p, i) => <Circle key={`ap-${i}-${p.x}-${p.y}`} x={p.x} y={p.y} radius={5 / scale} fill={col} />)}
                       {arcPoints.length === 1 && mousePos && (
                         <Line points={[arcPoints[0].x, arcPoints[0].y, mousePos.x, mousePos.y]}
                           stroke={col} strokeWidth={1.5 / scale} dash={[6 / scale, 3 / scale]} />
