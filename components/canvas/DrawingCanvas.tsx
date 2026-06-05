@@ -1775,7 +1775,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             liveItemCounts={liveItemCounts}
             allPageGroupTotals={allPageGroupTotals}
             sidebarWidth={sidebarWidth}
-            onRefreshItems={() => { refreshAllPageTotals(); refreshDisciplineTotals(); }}
+            onRefreshItems={() => { refreshItems(); refreshAllPageTotals(); refreshDisciplineTotals(); }}
             onItemsAppended={appendCopiedItems}
           />
       </aside>

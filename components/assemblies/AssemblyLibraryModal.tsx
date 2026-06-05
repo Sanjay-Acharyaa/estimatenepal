@@ -27,6 +27,7 @@ type Discipline = { id: string; name: string };
 type Props = {
   projectId: string;
   disciplines: Discipline[];
+  activeDisciplineId?: string | null;
   onClose: () => void;
   onApplied: () => void;
 };
@@ -38,7 +39,7 @@ const SOURCES = [
   { value: "org", label: "My Organisation" },
 ];
 
-export function AssemblyLibraryModal({ projectId, disciplines, onClose, onApplied }: Props) {
+export function AssemblyLibraryModal({ projectId, disciplines, activeDisciplineId, onClose, onApplied }: Props) {
   const [assemblies, setAssemblies] = useState<Assembly[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -49,7 +50,9 @@ export function AssemblyLibraryModal({ projectId, disciplines, onClose, onApplie
 
   const [preview, setPreview] = useState<Assembly | null>(null);
   const [applying, setApplying] = useState(false);
-  const [selectedDiscipline, setSelectedDiscipline] = useState(disciplines[0]?.id ?? "");
+  const [selectedDiscipline, setSelectedDiscipline] = useState(
+    activeDisciplineId ?? disciplines[0]?.id ?? ""
+  );
   const [applyError, setApplyError] = useState("");
   const [applySuccess, setApplySuccess] = useState("");
   const [duplicating, setDuplicating] = useState<string | null>(null);

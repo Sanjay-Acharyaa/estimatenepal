@@ -711,14 +711,17 @@ export function TakeoffPanel({
         <AssemblyLibraryModal
           projectId={projectId}
           disciplines={disciplines}
+          activeDisciplineId={activeDisciplineId}
           onClose={() => setShowAssemblyModal(false)}
           onApplied={() => {
             setShowAssemblyModal(false);
-            onRefreshItems?.();
+            // Reload all groups for this discipline so canvas sees new layers instantly
             fetch(`/api/projects/${projectId}/takeoff-groups?disciplineId=${activeDisciplineId}&limit=200`)
               .then(r => r.json())
-              .then(d => { if (d.data) { setGroups(prev => { const ids = new Set(prev.map((g: TakeoffGroup) => g.id)); const fresh = d.data.filter((g: TakeoffGroup) => !ids.has(g.id)); return [...prev, ...fresh]; }); } })
+              .then(d => { if (d.data) updateGroups(d.data); })
               .catch(() => {});
+            // Reload canvas shapes + totals
+            onRefreshItems?.();
           }}
         />
       )}
