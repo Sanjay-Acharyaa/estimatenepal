@@ -92,6 +92,69 @@ function RateCodePicker({ value, onChange }: { value: string; onChange: (code: s
   );
 }
 
+type ScopeCtx = { assemblyId: string; groupId: string; data: Record<string, unknown>; before: Record<string, unknown> };
+
+// ── Scope dialog (future only vs this + future) ───────────────────────────────
+function ScopeDialog({ ctx, onDone }: { ctx: ScopeCtx; onDone: (updated: AssemblyGroup) => void }) {
+  const [saving, setSaving] = useState(false);
+
+  async function submit(scope: "template" | "all_projects") {
+    setSaving(true);
+    const res = await fetch(`/api/assemblies/${ctx.assemblyId}/groups/${ctx.groupId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...ctx.data, scope }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      const updated = await res.json();
+      const msg = scope === "all_projects"
+        ? `Layer updated — applied to ${updated.updatedProjects ?? 0} existing project layer${updated.updatedProjects !== 1 ? "s" : ""} too.`
+        : "Layer updated — future projects will use the new values.";
+      toast.success(msg);
+      onDone(updated);
+    } else { toast.error("Failed to save."); }
+  }
+
+  const before = ctx.before as { name?: string; type?: string; colour?: string; rateCode?: string | null };
+  const after  = ctx.data  as { name?: string; type?: string; colour?: string; rateCode?: string | null };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+        <h3 className="font-semibold text-gray-800 mb-1">Apply change to which projects?</h3>
+
+        {/* Before / after diff */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-xs space-y-1">
+          {before.name !== after.name && <p><span className="text-red-500 line-through">{before.name}</span> → <span className="text-green-600 font-medium">{after.name}</span></p>}
+          {before.type !== after.type && <p>Type: <span className="text-red-500 line-through">{before.type}</span> → <span className="text-green-600 font-medium">{after.type}</span></p>}
+          {before.colour !== after.colour && (
+            <p className="flex items-center gap-1.5">Colour:
+              <span className="inline-block w-3 h-3 rounded-full border" style={{ background: before.colour }} />
+              → <span className="inline-block w-3 h-3 rounded-full border" style={{ background: after.colour }} />
+            </p>
+          )}
+          {before.rateCode !== after.rateCode && <p>Rate: <span className="text-red-500 line-through">{before.rateCode ?? "none"}</span> → <span className="text-green-600 font-medium">{after.rateCode ?? "none"}</span></p>}
+        </div>
+
+        <div className="space-y-2 mb-4">
+          <button onClick={() => submit("template")} disabled={saving}
+            className="w-full text-left px-4 py-3 border-2 border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition disabled:opacity-50">
+            <p className="text-sm font-semibold text-gray-800">Future projects only</p>
+            <p className="text-xs text-gray-500 mt-0.5">Template updated. Existing project layers stay as they are.</p>
+          </button>
+          <button onClick={() => submit("all_projects")} disabled={saving}
+            className="w-full text-left px-4 py-3 border-2 border-gray-200 rounded-lg hover:border-orange-400 hover:bg-orange-50 transition disabled:opacity-50">
+            <p className="text-sm font-semibold text-gray-800">This + all future projects</p>
+            <p className="text-xs text-gray-500 mt-0.5">Updates template and patches all existing projects that used this assembly.</p>
+          </button>
+        </div>
+        {saving && <p className="text-xs text-center text-gray-400">Saving…</p>}
+      </div>
+    </div>
+  );
+}
+
 // ── Layer row (editable) ─────────────────────────────────────────────────────
 function LayerRow({ layer, assemblyId, categoryId, isOrg, onUpdate, onDelete }: {
   layer: AssemblyGroup; assemblyId: string; categoryId: string;
@@ -102,24 +165,20 @@ function LayerRow({ layer, assemblyId, categoryId, isOrg, onUpdate, onDelete }: 
   const [type, setType] = useState(layer.type);
   const [colour, setColour] = useState(layer.colour);
   const [rateCode, setRateCode] = useState(layer.rateCode ?? "");
-  const [saving, setSaving] = useState(false);
+  const [scopeCtx, setScopeCtx] = useState<ScopeCtx | null>(null);
 
-  async function save() {
-    setSaving(true);
-    const res = await fetch(`/api/assemblies/${assemblyId}/groups/${layer.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type, colour, rateCode: rateCode || null }),
+  function openScope() {
+    setScopeCtx({
+      assemblyId,
+      groupId: layer.id,
+      data: { name, type, colour, rateCode: rateCode || null },
+      before: { name: layer.name, type: layer.type, colour: layer.colour, rateCode: layer.rateCode },
     });
-    setSaving(false);
-    if (res.ok) {
-      const updated = await res.json();
-      onUpdate({ ...layer, ...updated });
-      setEditing(false);
-      toast.success("Layer updated.");
-    } else {
-      toast.error("Failed to save layer.");
-    }
+    setEditing(false);
+  }
+
+  if (scopeCtx) {
+    return <ScopeDialog ctx={scopeCtx} onDone={updated => { onUpdate({ ...layer, ...updated }); setScopeCtx(null); }} />;
   }
 
   if (editing) {
@@ -139,8 +198,8 @@ function LayerRow({ layer, assemblyId, categoryId, isOrg, onUpdate, onDelete }: 
         <RateCodePicker value={rateCode} onChange={setRateCode} />
         <div className="flex gap-2 justify-end">
           <button onClick={() => setEditing(false)} className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
-            {saving ? "Saving…" : "Save"}
+          <button onClick={openScope} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Save
           </button>
         </div>
       </div>

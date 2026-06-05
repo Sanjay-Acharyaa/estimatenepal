@@ -138,7 +138,6 @@ export function TakeoffPanel({
   const [copyTarget, setCopyTarget] = useState<{ group: TakeoffGroup; isCategory: boolean; childLayerCount: number } | null>(null);
   const [changeCatalogId, setChangeCatalogId] = useState<string | null>(null);
   const { confirm: confirmDialog_, dialog: confirmDialogEl } = useConfirm();
-  const [saveToTemplateCtx, setSaveToTemplateCtx] = useState<{ assemblyId: string; assemblyName: string; data: Record<string, unknown> } | null>(null);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
   const [showSaveAssembly, setShowSaveAssembly] = useState(false);
   const [saveAssemblyForm, setSaveAssemblyForm] = useState({ name: "", description: "", category: "" });
@@ -240,10 +239,6 @@ export function TakeoffPanel({
         const u = await res.json();
         updateGroups(groups.map(g => g.id === u.id ? { ...g, ...u } : g));
         setEditingGroup(null);
-        // If this group came from an assembly, offer to update the template too
-        if (editingGroup.assemblyId) {
-          setSaveToTemplateCtx({ assemblyId: editingGroup.assemblyId, assemblyName: editingGroup.assembly?.name ?? "assembly", data });
-        }
       }
     );
   }
@@ -715,49 +710,6 @@ export function TakeoffPanel({
           onSelect={item => { handleChangeCatalog(changeCatalogId, item.id, { code: item.code, source: item.source }); setChangeCatalogId(null); }}
           onClose={() => setChangeCatalogId(null)}
         />
-      )}
-
-      {/* Save-to-template prompt */}
-      {saveToTemplateCtx && (
-        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="font-semibold text-gray-800 mb-1">Save scope</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              This layer came from the <span className="font-medium text-gray-700">{saveToTemplateCtx.assemblyName}</span> assembly template.
-              Where should the change apply?
-            </p>
-            <div className="space-y-2 mb-5">
-              <button onClick={() => setSaveToTemplateCtx(null)}
-                className="w-full text-left px-4 py-3 border-2 border-blue-500 bg-blue-50 rounded-lg">
-                <p className="text-sm font-semibold text-blue-700">This project only</p>
-                <p className="text-xs text-blue-500 mt-0.5">Change stays here. Template and other projects are not affected.</p>
-              </button>
-              <button onClick={async () => {
-                const { assemblyId, data } = saveToTemplateCtx;
-                setSaveToTemplateCtx(null);
-                // Fetch assembly groups, find matching one by name+type and update it
-                const res = await fetch(`/api/assemblies/${assemblyId}`);
-                if (!res.ok) { toast.error("Could not load assembly template."); return; }
-                const asm = await res.json();
-                const allGroups = [...(asm.groups ?? []), ...(asm.groups ?? []).flatMap((g: { children?: unknown[] }) => g.children ?? [])];
-                const match = allGroups.find((g: { name: string }) => g.name === data.name)
-                  ?? allGroups[0];
-                if (!match) { toast.error("Could not find matching layer in template."); return; }
-                const upd = await fetch(`/api/assemblies/${assemblyId}/groups/${(match as { id: string }).id}`, {
-                  method: "PUT", headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ name: data.name, type: data.type, colour: data.colour }),
-                });
-                if (upd.ok) toast.success("Assembly template updated — future projects will use the new values.");
-                else toast.error("Failed to update template.");
-              }}
-                className="w-full text-left px-4 py-3 border-2 border-gray-200 rounded-lg hover:border-orange-400 hover:bg-orange-50 transition">
-                <p className="text-sm font-semibold text-gray-700">All future projects</p>
-                <p className="text-xs text-gray-500 mt-0.5">Update the assembly template. Projects applied after this will get the change.</p>
-              </button>
-            </div>
-            <button onClick={() => setSaveToTemplateCtx(null)} className="text-xs text-gray-400 hover:text-gray-600 w-full text-center">Cancel</button>
-          </div>
-        </div>
       )}
 
       {/* Assembly Library Modal */}

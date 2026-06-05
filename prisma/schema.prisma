@@ -459,6 +459,7 @@ model Notification {
   type      String
   message   String
   link      String?
+  meta      Json?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
