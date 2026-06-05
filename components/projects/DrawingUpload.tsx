@@ -50,7 +50,7 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
   async function generateThumbnail(pdf: pdfjsLib.PDFDocumentProxy): Promise<Blob | null> {
     try {
       const page = await pdf.getPage(1);
-      const THUMB_WIDTH = 240;
+      const THUMB_WIDTH = 800;
       const vp0 = page.getViewport({ scale: 1 });
       const scale = THUMB_WIDTH / vp0.width;
       const vp = page.getViewport({ scale });
@@ -59,7 +59,7 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
       canvas.height = Math.round(vp.height);
       const ctx = canvas.getContext("2d")!;
       await page.render({ canvasContext: ctx as any, viewport: vp } as any).promise;
-      return await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/webp", 0.85));
+      return await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/webp", 0.92));
     } catch {
       return null;
     }

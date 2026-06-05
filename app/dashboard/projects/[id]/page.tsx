@@ -88,16 +88,6 @@ export default async function ProjectDetailPage({
           {/* Right actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <Link
-              href={`/dashboard/projects/${project.id}?tab=documents`}
-              className={`text-sm px-3 py-1.5 rounded-lg border transition ${
-                activeTab === "documents"
-                  ? "border-blue-300 bg-blue-50 text-blue-700"
-                  : "border-gray-300 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              ⬆ Upload
-            </Link>
-            <Link
               href={`/dashboard/projects/${project.id}/boq`}
               className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
             >

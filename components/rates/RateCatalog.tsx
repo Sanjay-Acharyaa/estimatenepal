@@ -68,6 +68,12 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [renamingBatchId, setRenamingBatchId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  // Save as Assembly state
+  const [selectedRateIds, setSelectedRateIds] = useState<Set<string>>(new Set());
+  const [showSaveAsAssembly, setShowSaveAsAssembly] = useState(false);
+  const [assemblyForm, setAssemblyForm] = useState({ name: "", description: "", category: "" });
+  const [savingAssembly, setSavingAssembly] = useState(false);
+
   // Import state
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importBatchName, setImportBatchName] = useState("");
@@ -229,6 +235,42 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     finally { setDeleting(null); }
   };
 
+  function unitToGroupType(unit: string): string {
+    const u = unit.toLowerCase().replace(/[\s.]/g, "");
+    if (/^(sqft|sqm|sq|m2|ft2|sf|sft)/.test(u)) return "AREA";
+    if (/^(cum|cft|m3|ft3|ccm)/.test(u)) return "VOLUME";
+    if (/^(each|no|nos|ea|pcs|piece|nr|item|set|unit|lump)/.test(u)) return "COUNT";
+    if (/^(rft|rm|lft|lm|ml|km|lin|meter|metre)/.test(u) || u === "m" || u === "ft") return "LINEAR";
+    return "LINEAR";
+  }
+
+  async function handleSaveAsAssembly() {
+    const selectedRates = rates.filter(r => selectedRateIds.has(r.id));
+    if (!selectedRates.length || !assemblyForm.name.trim()) return;
+    setSavingAssembly(true);
+    const groups = selectedRates.map((r, i) => ({
+      name: r.description.slice(0, 100),
+      type: unitToGroupType(r.unit),
+      colour: "#3B82F6",
+      lineWidth: 2,
+      rateCode: r.code,
+      sortOrder: i,
+      children: [],
+    }));
+    const res = await fetch("/api/assemblies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: assemblyForm.name.trim(), description: assemblyForm.description || undefined, category: assemblyForm.category || undefined, groups }),
+    });
+    setSavingAssembly(false);
+    if (res.ok) {
+      toast.success(`Assembly "${assemblyForm.name}" saved to your library.`);
+      setShowSaveAsAssembly(false);
+      setSelectedRateIds(new Set());
+      setAssemblyForm({ name: "", description: "", category: "" });
+    } else { toast.error("Failed to save assembly."); }
+  }
+
   // Use live pagination total when on "All Rates" so unbatched legacy rates are counted
   const totalRates = selectedBatchId === "all"
     ? (pagination?.total ?? batches.reduce((s, b) => s + b.itemCount, 0))
@@ -237,6 +279,59 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   return (
     <div className="flex gap-5 min-h-96">
       {confirmDialog}
+
+      {/* Floating selection bar */}
+      {selectedRateIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl">
+          <span className="text-sm font-medium">{selectedRateIds.size} rate{selectedRateIds.size !== 1 ? "s" : ""} selected</span>
+          <button onClick={() => setShowSaveAsAssembly(true)}
+            className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition">
+            Save as Assembly
+          </button>
+          <button onClick={() => setSelectedRateIds(new Set())} className="text-gray-400 hover:text-white text-sm">✕ Clear</button>
+        </div>
+      )}
+
+      {/* Save as Assembly modal */}
+      {showSaveAsAssembly && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="font-semibold text-gray-800 mb-1">Save as Assembly</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {selectedRateIds.size} rate item{selectedRateIds.size !== 1 ? "s" : ""} will be saved as layers. Units are auto-mapped to measurement types.
+            </p>
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Assembly name <span className="text-red-500">*</span></label>
+                <input value={assemblyForm.name} onChange={e => setAssemblyForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Standard Road Subbase" autoFocus
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                <select value={assemblyForm.category} onChange={e => setAssemblyForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  <option value="">— None —</option>
+                  {["Structural","Civil","MEP","Architectural","Road","Irrigation"].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Description (optional)</label>
+                <input value={assemblyForm.description} onChange={e => setAssemblyForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Brief description…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={handleSaveAsAssembly} disabled={savingAssembly || !assemblyForm.name.trim()}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-lg text-sm transition disabled:opacity-50">
+                {savingAssembly ? "Saving…" : "Save Assembly"}
+              </button>
+              <button onClick={() => setShowSaveAsAssembly(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Left: Rate Books sidebar ── */}
       <div className="w-64 flex-shrink-0 space-y-2">
@@ -437,6 +532,11 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-16">Code</th>
+                  <th className="px-3 py-3 w-8">
+                    <input type="checkbox" className="rounded"
+                      checked={rates.length > 0 && rates.every(r => selectedRateIds.has(r.id))}
+                      onChange={e => setSelectedRateIds(e.target.checked ? new Set(rates.map(r => r.id)) : new Set())} />
+                  </th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Description</th>
                   <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-16">Unit</th>
                   <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase w-32">Rate (NRS)</th>
@@ -446,7 +546,11 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {rates.map(rate => (
-                  <tr key={rate.id} className="hover:bg-gray-50">
+                  <tr key={rate.id} className={`hover:bg-gray-50 ${selectedRateIds.has(rate.id) ? "bg-blue-50" : ""}`}>
+                    <td className="px-3 py-2.5">
+                      <input type="checkbox" className="rounded" checked={selectedRateIds.has(rate.id)}
+                        onChange={e => setSelectedRateIds(prev => { const s = new Set(prev); e.target.checked ? s.add(rate.id) : s.delete(rate.id); return s; })} />
+                    </td>
                     <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{rate.code}</td>
                     <td className="px-3 py-2.5 text-gray-800 text-xs leading-relaxed">{rate.description}</td>
                     <td className="px-3 py-2.5 text-center text-gray-600 text-xs">{rate.unit}</td>

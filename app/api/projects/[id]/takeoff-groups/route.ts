@@ -40,6 +40,7 @@ export async function GET(
         discipline: { select: { id: true, name: true } },
         _count: { select: { items: true } },
         rateItem: { select: { code: true, source: true } },
+        assembly: { select: { id: true, name: true } },
       },
       orderBy: { sortOrder: "asc" },
     });
