@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatBS } from "@/lib/bs-date";
 import { NotesPanel } from "@/components/projects/NotesPanel";
 import { TasksPanel } from "@/components/projects/TasksPanel";
 import { RateMigrationBanner } from "@/components/projects/RateMigrationBanner";
@@ -161,6 +162,20 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
               {saved && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
               {error && <span className="text-xs text-red-600">{error}</span>}
               {isAdmin && (
+                <button onClick={async () => {
+                  const name = window.prompt("Template name:");
+                  if (!name?.trim()) return;
+                  const res = await fetch("/api/project-templates", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: name.trim(), sourceProjectId: project.id }),
+                  });
+                  if (res.ok) { const { toast } = await import("sonner"); toast.success(`Template "${name}" saved.`); }
+                }}
+                  className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition">
+                  Save as Template
+                </button>
+              )}
+              {isAdmin && (
                 <button
                   onClick={handleSave}
                   disabled={saving}
@@ -237,6 +252,11 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
             <Field label="Due Date">
               <input type="date" value={bidDueDate} onChange={e => setBidDueDate(e.target.value)}
                 disabled={!isAdmin} className={inputCls(!isAdmin)} />
+              {bidDueDate && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  BS: {formatBS(new Date(bidDueDate))}
+                </p>
+              )}
             </Field>
             <Field label="Due Time (optional)">
               <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)}

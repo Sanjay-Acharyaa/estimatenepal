@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -21,6 +21,12 @@ export default function NewProjectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [templates, setTemplates] = useState<{ id: string; name: string; description: string | null }[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+
+  useEffect(() => {
+    fetch("/api/project-templates").then(r => r.ok ? r.json() : []).then(setTemplates).catch(() => {});
+  }, []);
   const [form, setForm] = useState({
     name: "", description: "",
     clientName: "", clientCompany: "", bidDueDate: "", estimatedValue: "",
@@ -63,6 +69,13 @@ export default function NewProjectPage() {
     if (!res.ok) {
       setError(data.error?.message ?? "Failed to create project.");
     } else {
+      // Apply project template if selected
+      if (selectedTemplate) {
+        await fetch(`/api/project-templates/${selectedTemplate}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: data.id }),
+        });
+      }
       router.push(`/dashboard/projects/${data.id}`);
     }
   }
@@ -193,6 +206,18 @@ export default function NewProjectPage() {
             </div>
           </div>
         </div>
+
+        {templates.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Apply Project Template (optional)</label>
+            <select value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">— No template —</option>
+              {templates.map(t => <option key={t.id} value={t.id}>{t.name}{t.description ? ` — ${t.description}` : ""}</option>)}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Applies disciplines and takeoff groups from the selected template.</p>
+          </div>
+        )}
 
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={loading}

@@ -88,6 +88,18 @@ export default async function ProjectDetailPage({
           {/* Right actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <Link
+              href={`/dashboard/projects/${project.id}/change-orders`}
+              className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
+            >
+              Changes
+            </Link>
+            <Link
+              href={`/dashboard/projects/${project.id}/progress`}
+              className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
+            >
+              Progress
+            </Link>
+            <Link
               href={`/dashboard/projects/${project.id}/boq`}
               className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
             >

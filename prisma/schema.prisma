@@ -135,6 +135,7 @@ model Project {
   notes           ProjectNote[]
   tasks           ProjectTask[]
   quotes          SubcontractorQuote[]
+  changeOrders    ChangeOrder[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -161,15 +162,20 @@ model ProjectMember {
 }
 
 model ShareLink {
-  id        String    @id @default(cuid())
-  projectId String
-  project   Project   @relation(fields: [projectId], references: [id])
-  token     String    @unique
-  expiresAt DateTime?
-  isActive  Boolean   @default(true)
-  createdBy String
-  viewCount Int       @default(0)
-  createdAt DateTime  @default(now())
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id])
+  token          String    @unique
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdBy      String
+  viewCount      Int       @default(0)
+  clientEmail    String?
+  clientName     String?
+  approvalStatus String?   // PENDING | APPROVED | REJECTED
+  approvalNote   String?   @db.Text
+  approvedAt     DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([projectId])
   @@index([isActive])
@@ -235,13 +241,15 @@ model ScaleZone {
 
 // Disciplines & Groups
 model Discipline {
-  id        String         @id @default(cuid())
-  projectId String
-  project   Project        @relation(fields: [projectId], references: [id])
-  name      String
-  sortOrder Int            @default(0)
-  isPrimary Boolean        @default(false)
-  groups    TakeoffGroup[]
+  id            String         @id @default(cuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id])
+  name          String
+  sortOrder     Int            @default(0)
+  isPrimary     Boolean        @default(false)
+  progressPct   Float          @default(0)  // 0–100
+  groups        TakeoffGroup[]
+  createdAt     DateTime       @default(now())
 
   @@index([projectId])
 }
@@ -547,6 +555,35 @@ enum DrawingStatus {
   COMPLETE
 }
 
+enum ChangeOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model ChangeOrder {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id])
+  number      Int
+  title       String
+  description String?           @db.Text
+  reason      String?           @db.Text
+  amount      Float             @default(0)
+  status      ChangeOrderStatus @default(DRAFT)
+  requestedBy String
+  approvedBy  String?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  rejectionNote String?         @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([projectId])
+  @@index([projectId, status])
+}
+
 enum QuoteStatus {
   RECEIVED
   UNDER_REVIEW
@@ -619,4 +656,17 @@ enum Priority {
   HIGH
   MEDIUM
   LOW
+}
+
+model ProjectTemplate {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  category    String?  // Road, Building, Irrigation, etc.
+  structure   Json     // { disciplines: [{name, groups:[{name,type,colour,rateCode}]}] }
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([orgId])
 }

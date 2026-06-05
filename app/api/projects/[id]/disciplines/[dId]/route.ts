@@ -10,7 +10,8 @@ import { checkApiRateLimit } from "@/lib/security";
 const updateSchema = z.object({
   name: z.string().min(1).max(100).trim().optional(),
   isPrimary: z.boolean().optional(),
-  copy: z.boolean().optional(),   // true = copy this discipline
+  copy: z.boolean().optional(),
+  progressPct: z.number().min(0).max(100).optional(),
 });
 
 export async function PUT(

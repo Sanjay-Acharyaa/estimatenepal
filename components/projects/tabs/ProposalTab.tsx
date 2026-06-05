@@ -32,6 +32,8 @@ const STATUS_COLORS: Record<string, string> = {
 const NRS = (n: number) => n.toLocaleString("en-NP", { minimumFractionDigits: 2 });
 const inputCls = "w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+type ShareLink = { id: string; token: string; viewCount: number; clientEmail: string | null; approvalStatus: string | null; approvalNote: string | null; clientName: string | null; approvedAt: string | null; createdAt: string };
+
 export function ProposalTab({ projectId, userRole }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -43,6 +45,11 @@ export function ProposalTab({ projectId, userRole }: Props) {
   const [formError, setFormError] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [clientEmailInput, setClientEmailInput] = useState("");
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [sendEmailInput, setSendEmailInput] = useState<Record<string, string>>({});
 
   const canEdit = ["OWNER", "ADMIN"].includes(userRole);
 
@@ -53,8 +60,26 @@ export function ProposalTab({ projectId, userRole }: Props) {
     setLoading(false);
   }
 
+  async function loadShareLinks() {
+    const res = await fetch(`/api/projects/${projectId}/share-links`);
+    if (res.ok) { const d = await res.json(); setShareLinks(d.data ?? d ?? []); }
+  }
+
+  async function createShareLink() {
+    setCreatingLink(true);
+    const res = await fetch(`/api/projects/${projectId}/share-links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expiresInDays: 30, clientEmail: clientEmailInput || undefined }),
+    });
+    setCreatingLink(false);
+    if (res.ok) { toast.success("Share link created."); setClientEmailInput(""); loadShareLinks(); }
+    else { toast.error("Failed to create link."); }
+  }
+
   useEffect(() => {
     loadQuotes();
+    loadShareLinks();
     // Fetch actual BOQ total (not the manual estimatedValue field)
     fetch(`/api/projects/${projectId}/boq`)
       .then(r => r.ok ? r.json() : null)
@@ -152,6 +177,70 @@ export function ProposalTab({ projectId, userRole }: Props) {
               </div>
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* Client Approval */}
+      <section>
+        <h2 className="text-base font-semibold text-gray-800 mb-4">Client Approval</h2>
+        <div className="space-y-3">
+          {shareLinks.map(link => {
+            const url = `${typeof window !== "undefined" ? window.location.origin : ""}/share/${link.token}`;
+            const statusColor = link.approvalStatus === "APPROVED" ? "bg-green-50 border-green-200" : link.approvalStatus === "REJECTED" ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200";
+            return (
+              <div key={link.id} className={`border rounded-xl p-4 ${statusColor}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      {link.approvalStatus === "APPROVED" && <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✓ Approved by {link.clientName}</span>}
+                      {link.approvalStatus === "REJECTED" && <span className="text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">✕ Rejected by {link.clientName}</span>}
+                      {!link.approvalStatus && <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">Awaiting response · {link.viewCount} view{link.viewCount !== 1 ? "s" : ""}</span>}
+                    </div>
+                    {link.approvalNote && <p className="text-xs text-gray-600 italic mb-1">"{link.approvalNote}"</p>}
+                    {link.approvedAt && <p className="text-xs text-gray-400">{new Date(link.approvedAt).toLocaleString()}</p>}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input readOnly value={url} className="flex-1 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600 min-w-0" />
+                      <button onClick={() => { navigator.clipboard.writeText(url); toast.success("Link copied!"); }}
+                        className="text-xs px-2.5 py-1 border border-gray-300 rounded hover:bg-gray-50 flex-shrink-0">Copy</button>
+                    </div>
+                    {canEdit && !link.approvalStatus && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input value={sendEmailInput[link.id] ?? link.clientEmail ?? ""}
+                          onChange={e => setSendEmailInput(prev => ({ ...prev, [link.id]: e.target.value }))}
+                          placeholder="Client email address"
+                          className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <button disabled={sendingEmail === link.id} onClick={async () => {
+                          const email = sendEmailInput[link.id] ?? link.clientEmail ?? "";
+                          if (!email) { toast.error("Enter client email."); return; }
+                          setSendingEmail(link.id);
+                          const res = await fetch(`/api/projects/${projectId}/share-links/send`, {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ to: email, linkId: link.id }),
+                          });
+                          setSendingEmail(null);
+                          if (res.ok) toast.success("Proposal emailed to client.");
+                          else toast.error("Failed to send email.");
+                        }} className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex-shrink-0 disabled:opacity-50">
+                          {sendingEmail === link.id ? "Sending…" : "Send Email"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {canEdit && (
+            <div className="flex gap-2">
+              <input value={clientEmailInput} onChange={e => setClientEmailInput(e.target.value)}
+                placeholder="Client email (optional)"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              <button onClick={createShareLink} disabled={creatingLink}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50 flex-shrink-0">
+                {creatingLink ? "Creating…" : "Generate Share Link"}
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -270,6 +359,75 @@ export function ProposalTab({ projectId, userRole }: Props) {
           </div>
         )}
       </section>
+
+      {/* Bid Comparison Matrix */}
+      {quotes.length >= 2 && (
+        <section>
+          <h2 className="text-base font-semibold text-gray-800 mb-4">Bid Comparison Matrix</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium border-b border-gray-200">Criterion</th>
+                  {quotes.map(q => (
+                    <th key={q.id} className={`text-center px-4 py-3 font-medium border-b border-gray-200 ${q.status === "ACCEPTED" ? "bg-green-50 text-green-700" : "text-gray-600"}`}>
+                      {q.vendor}
+                      {q.status === "ACCEPTED" && <span className="block text-xs font-normal mt-0.5">✓ Accepted</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                <tr className="bg-white">
+                  <td className="px-4 py-3 text-gray-600 font-medium">Amount (NRS)</td>
+                  {quotes.map(q => {
+                    const lowest = Math.min(...quotes.map(x => x.amount));
+                    return (
+                      <td key={q.id} className={`px-4 py-3 text-center font-mono font-semibold ${q.amount === lowest ? "text-green-600" : "text-gray-800"}`}>
+                        {NRS(q.amount)}
+                        {q.amount === lowest && quotes.length > 1 && <span className="block text-xs font-normal text-green-500">Lowest</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+                {estimateTotal > 0 && (
+                  <tr className="bg-gray-50">
+                    <td className="px-4 py-3 text-gray-600 font-medium">vs Your Estimate</td>
+                    {quotes.map(q => {
+                      const diff = ((q.amount - estimateTotal) / estimateTotal) * 100;
+                      return (
+                        <td key={q.id} className={`px-4 py-3 text-center font-semibold ${diff <= 0 ? "text-green-600" : "text-red-500"}`}>
+                          {diff <= 0 ? "▼" : "▲"} {Math.abs(diff).toFixed(1)}%
+                        </td>
+                      );
+                    })}
+                  </tr>
+                )}
+                <tr className="bg-white">
+                  <td className="px-4 py-3 text-gray-600 font-medium">Discipline</td>
+                  {quotes.map(q => <td key={q.id} className="px-4 py-3 text-center text-gray-500">{q.discipline ?? "—"}</td>)}
+                </tr>
+                <tr className="bg-gray-50">
+                  <td className="px-4 py-3 text-gray-600 font-medium">Valid Until</td>
+                  {quotes.map(q => (
+                    <td key={q.id} className="px-4 py-3 text-center text-gray-500">
+                      {q.validUntil ? new Date(q.validUntil).toLocaleDateString() : "—"}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="bg-white">
+                  <td className="px-4 py-3 text-gray-600 font-medium">Status</td>
+                  {quotes.map(q => (
+                    <td key={q.id} className="px-4 py-3 text-center">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[q.status]}`}>{STATUS_LABELS[q.status]}</span>
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* Add/Edit Quote Modal */}
       {showAddQuote && (
