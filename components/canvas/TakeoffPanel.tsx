@@ -718,7 +718,7 @@ export function TakeoffPanel({
             // Reload all groups for this discipline so canvas sees new layers instantly
             fetch(`/api/projects/${projectId}/takeoff-groups?disciplineId=${activeDisciplineId}&limit=200`)
               .then(r => r.json())
-              .then(d => { if (d.data) updateGroups(d.data); })
+              .then(d => { if (Array.isArray(d)) updateGroups(d); })
               .catch(() => {});
             // Reload canvas shapes + totals
             onRefreshItems?.();
