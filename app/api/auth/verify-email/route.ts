@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     await prisma.user.update({ where: { id: userId }, data: { emailVerified: true } });
     await redis.del(`verify:${token}`);
 
-    return NextResponse.redirect(new URL("/login?verified=1", req.url));
+    return NextResponse.redirect(new URL("/login?verified=1", process.env.NEXTAUTH_URL));
   } catch (err) {
     return handleApiError(err);
   }
