@@ -12,7 +12,7 @@ export const redis =
     maxRetriesPerRequest: 3,
     lazyConnect: true,
     // Fail fast so a slow Redis doesn't cascade into request timeouts
-    commandTimeout: 500,
+    commandTimeout: 3000,
     connectTimeout: 3000,
     retryStrategy: (times) => {
       if (times > 5) return null; // stop retrying after 5 attempts
