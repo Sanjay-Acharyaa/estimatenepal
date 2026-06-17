@@ -88,7 +88,7 @@ export function BidBoardClient({ grouped, isAdmin }: { grouped: Column[]; isAdmi
           <div className="flex items-center gap-2 mb-3 px-1">
             <div className={`w-3 h-3 rounded-full ${col.color}`} />
             <span className="text-sm font-semibold text-gray-700">{col.label}</span>
-            <span className="ml-auto text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
+            <span className="ml-auto text-xs text-gray-600 bg-gray-100 rounded-full px-2 py-0.5">
               {col.projects.length}
             </span>
           </div>
@@ -132,7 +132,7 @@ export function BidBoardClient({ grouped, isAdmin }: { grouped: Column[]; isAdmi
                     <h3 className="text-sm font-semibold text-gray-800 mb-0.5 line-clamp-2">{p.name}</h3>
 
                     {p.district && (
-                      <p className="text-xs text-gray-400 mb-1.5">{p.district}</p>
+                      <p className="text-xs text-gray-600 mb-1.5">{p.district}</p>
                     )}
 
                     {/* Estimated value */}

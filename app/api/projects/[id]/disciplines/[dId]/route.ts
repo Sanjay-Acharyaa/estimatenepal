@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).trim().optional(),
@@ -19,7 +19,7 @@ export async function PUT(
   { params }: { params: { id: string; dId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -51,96 +51,101 @@ export async function PUT(
         select: { sortOrder: true },
       });
 
-      const copy = await prisma.discipline.create({
-        data: {
-          projectId: params.id,
-          name: `${discipline.name} (Copy)`,
-          sortOrder: (last?.sortOrder ?? 0) + 1,
-          isPrimary: false,
-        },
-      });
-
-      // Step 1: copy categories (parentId=null) first and build oldId→newId map
-      const categories = groups.filter(g => !g.parentId);
-      const idMap = new Map<string, string>();
-      for (const cat of categories) {
-        const newCat = await prisma.takeoffGroup.create({
+      // Wrap the entire copy in a transaction so a mid-copy failure leaves no orphaned discipline.
+      const copy = await prisma.$transaction(async (tx) => {
+        const copyDisc = await tx.discipline.create({
           data: {
             projectId: params.id,
-            disciplineId: copy.id,
-            parentId: null,
-            name: cat.name,
-            type: cat.type,
-            colour: cat.colour,
-            lineWidth: cat.lineWidth,
-            isLocked: false,
-            isVisible: true,
-            tag: cat.tag,
-            preamble: cat.preamble,
-            multiplier: cat.multiplier,
-            additionalParams: cat.additionalParams ?? undefined,
-            rateItemId: cat.rateItemId,
-            sortOrder: cat.sortOrder,
+            name: `${discipline.name} (Copy)`,
+            sortOrder: (last?.sortOrder ?? 0) + 1,
+            isPrimary: false,
           },
         });
-        idMap.set(cat.id, newCat.id);
-      }
 
-      // Step 2: copy layers (parentId=categoryId) using the id map; copy their items
-      const layers = groups.filter(g => !!g.parentId);
-      for (const layer of layers) {
-        const newParentId = layer.parentId ? (idMap.get(layer.parentId) ?? null) : null;
-        const newLayer = await prisma.takeoffGroup.create({
-          data: {
-            projectId: params.id,
-            disciplineId: copy.id,
-            parentId: newParentId,
-            name: layer.name,
-            type: layer.type,
-            colour: layer.colour,
-            lineWidth: layer.lineWidth,
-            isLocked: false,
-            isVisible: true,
-            tag: layer.tag,
-            preamble: layer.preamble,
-            multiplier: layer.multiplier,
-            additionalParams: layer.additionalParams ?? undefined,
-            rateItemId: layer.rateItemId,
-            sortOrder: layer.sortOrder,
-          },
-        });
-        idMap.set(layer.id, newLayer.id);
-
-        // Copy all items for this layer to the new layer (same pages)
-        if (layer.items.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (prisma.takeoffItem.createMany as any)({
-            data: layer.items.map(item => ({
-              pageId: item.pageId,
-              groupId: newLayer.id,
-              label: item.label,
-              toolType: item.toolType,
-              shapeType: item.shapeType,
-              isNegative: item.isNegative,
+        // Step 1: copy categories (parentId=null) first and build oldId→newId map
+        const categories = groups.filter(g => !g.parentId);
+        const idMap = new Map<string, string>();
+        for (const cat of categories) {
+          const newCat = await tx.takeoffGroup.create({
+            data: {
+              projectId: params.id,
+              disciplineId: copyDisc.id,
+              parentId: null,
+              name: cat.name,
+              type: cat.type,
+              colour: cat.colour,
+              lineWidth: cat.lineWidth,
               isLocked: false,
-              multiplier: item.multiplier,
-              length: item.length,
-              breadth: item.breadth,
-              height: item.height,
-              wastagePct: item.wastagePct,
-              siteLocation: item.siteLocation,
-              measuredDate: item.measuredDate,
-              notes: item.notes,
-              rawQuantity: item.rawQuantity,
-              quantity: item.quantity,
-              unit: item.unit,
-              scaleUsed: item.scaleUsed,
-              sortOrder: item.sortOrder,
-              toolData: item.toolData,
-            })),
+              isVisible: true,
+              tag: cat.tag,
+              preamble: cat.preamble,
+              multiplier: cat.multiplier,
+              additionalParams: cat.additionalParams ?? undefined,
+              rateItemId: cat.rateItemId,
+              sortOrder: cat.sortOrder,
+            },
           });
+          idMap.set(cat.id, newCat.id);
         }
-      }
+
+        // Step 2: copy layers (parentId=categoryId) using the id map; copy their items
+        const layers = groups.filter(g => !!g.parentId);
+        for (const layer of layers) {
+          const newParentId = layer.parentId ? (idMap.get(layer.parentId) ?? null) : null;
+          const newLayer = await tx.takeoffGroup.create({
+            data: {
+              projectId: params.id,
+              disciplineId: copyDisc.id,
+              parentId: newParentId,
+              name: layer.name,
+              type: layer.type,
+              colour: layer.colour,
+              lineWidth: layer.lineWidth,
+              isLocked: false,
+              isVisible: true,
+              tag: layer.tag,
+              preamble: layer.preamble,
+              multiplier: layer.multiplier,
+              additionalParams: layer.additionalParams ?? undefined,
+              rateItemId: layer.rateItemId,
+              sortOrder: layer.sortOrder,
+            },
+          });
+          idMap.set(layer.id, newLayer.id);
+
+          // Copy all items for this layer to the new layer (same pages)
+          if (layer.items.length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (tx.takeoffItem.createMany as any)({
+              data: layer.items.map(item => ({
+                pageId: item.pageId,
+                groupId: newLayer.id,
+                label: item.label,
+                toolType: item.toolType,
+                shapeType: item.shapeType,
+                isNegative: item.isNegative,
+                isLocked: false,
+                multiplier: item.multiplier,
+                length: item.length,
+                breadth: item.breadth,
+                height: item.height,
+                wastagePct: item.wastagePct,
+                siteLocation: item.siteLocation,
+                measuredDate: item.measuredDate,
+                notes: item.notes,
+                rawQuantity: item.rawQuantity,
+                quantity: item.quantity,
+                unit: item.unit,
+                scaleUsed: item.scaleUsed,
+                sortOrder: item.sortOrder,
+                toolData: item.toolData,
+              })),
+            });
+          }
+        }
+
+        return copyDisc;
+      });
 
       const result = await prisma.discipline.findUnique({
         where: { id: copy.id },
@@ -153,7 +158,7 @@ export async function PUT(
         event: "discipline.copied",
         resourceId: copy.id,
         meta: { sourceDisciplineId: params.dId, name: copy.name } as any,
-        ipAddress: req.headers.get("x-forwarded-for") ?? "unknown",
+        ipAddress: getClientIp(req),
       });
 
       return NextResponse.json(result, { status: 201 });
@@ -182,7 +187,7 @@ export async function PUT(
       event: "discipline.updated",
       resourceId: params.dId,
       meta: { name: parsed.data.name, isPrimary: parsed.data.isPrimary } as any,
-      ipAddress: req.headers.get("x-forwarded-for") ?? "unknown",
+      ipAddress: getClientIp(req),
     });
 
     return NextResponse.json(updated);
@@ -196,7 +201,7 @@ export async function DELETE(
   { params }: { params: { id: string; dId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

@@ -46,7 +46,7 @@ export function RateMigrationBanner({ projectId }: Props) {
       <span className="text-amber-500 text-lg mt-0.5">⚠</span>
       <div className="flex-1 min-w-0">
         {migrateError && (
-          <p className="text-sm text-red-700 font-medium">{migrateError}</p>
+          <p role="alert" className="text-sm text-red-700 font-medium">{migrateError}</p>
         )}
         {result ? (
           <p className="text-sm text-green-700 font-medium">

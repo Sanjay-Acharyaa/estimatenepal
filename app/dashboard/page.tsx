@@ -24,7 +24,7 @@ export default async function DashboardPage() {
       <div className="p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome, {session?.user.name}</h1>
         <p className="text-gray-500 text-sm mb-8">Super Admin — Platform management</p>
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-600 text-sm">
           Super admins do not belong to an organisation. Use the{" "}
           <a href="/admin" className="text-red-600 hover:underline font-medium">Admin Panel</a>{" "}
           to manage organisations and users.
@@ -91,9 +91,9 @@ export default async function DashboardPage() {
 
   const activeCount = allProjects.filter(p => !["COMPLETE", "LOST", "ARCHIVED"].includes(p.status)).length;
 
-  function daysUntil(dateStr: string | null) {
-    if (!dateStr) return null;
-    return Math.ceil((new Date(dateStr).getTime() - now.getTime()) / 86400000);
+  function daysUntil(date: Date | string | null) {
+    if (!date) return null;
+    return Math.ceil((new Date(date).getTime() - now.getTime()) / 86400000);
   }
 
   return (
@@ -111,25 +111,25 @@ export default async function DashboardPage() {
         <Link href="/dashboard/projects" className="bg-white rounded-xl border border-gray-200 p-5 hover:border-blue-300 transition group">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Active Projects</p>
           <p className="text-3xl font-bold text-blue-600">{activeCount}</p>
-          <p className="text-xs text-gray-400 mt-1">{total} total</p>
+          <p className="text-xs text-gray-600 mt-1">{total} total</p>
         </Link>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Pipeline Value</p>
           <p className="text-2xl font-bold text-gray-800">{pipelineValue > 0 ? fmt(pipelineValue) : "—"}</p>
-          <p className="text-xs text-gray-400 mt-1">in estimating / submitted</p>
+          <p className="text-xs text-gray-600 mt-1">in estimating / submitted</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Won Value</p>
           <p className="text-2xl font-bold text-green-600">{wonValue > 0 ? fmt(wonValue) : "—"}</p>
-          <p className="text-xs text-gray-400 mt-1">accepted + in progress</p>
+          <p className="text-xs text-gray-600 mt-1">accepted + in progress</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Win Rate</p>
           <p className="text-3xl font-bold text-indigo-600">{winRate !== null ? `${winRate}%` : "—"}</p>
-          <p className="text-xs text-gray-400 mt-1">{won} won · {lost} lost</p>
+          <p className="text-xs text-gray-600 mt-1">{won} won · {lost} lost</p>
         </div>
       </div>
 
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-4">Projects by Status</h2>
           {Object.keys(statusGroups).length === 0 ? (
-            <p className="text-sm text-gray-400">No projects yet.</p>
+            <p className="text-sm text-gray-600">No projects yet.</p>
           ) : (
             <div className="space-y-2.5">
               {Object.entries(statusGroups)
@@ -164,7 +164,7 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-4">Due in Next 7 Days</h2>
           {dueSoon.length === 0 ? (
-            <p className="text-sm text-gray-400">No upcoming deadlines.</p>
+            <p className="text-sm text-gray-600">No upcoming deadlines.</p>
           ) : (
             <div className="space-y-2">
               {dueSoon.map(p => {
@@ -226,7 +226,7 @@ export default async function DashboardPage() {
           <Link href="/dashboard/projects" className="text-sm text-blue-600 hover:underline">View all →</Link>
         </div>
         {recentProjects.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-400 text-sm">
+          <div className="px-6 py-12 text-center text-gray-600 text-sm">
             No projects yet.{" "}
             <Link href="/dashboard/projects/new" className="text-blue-600 hover:underline">Create your first project</Link>
           </div>
@@ -237,13 +237,13 @@ export default async function DashboardPage() {
                 className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 transition">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
-                  {p.district && <p className="text-xs text-gray-400">{p.district}</p>}
+                  {p.district && <p className="text-xs text-gray-600">{p.district}</p>}
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0 ml-4">
                   {(p as any).estimatedValue > 0 && (
                     <span className="text-xs text-gray-500">{fmt((p as any).estimatedValue)}</span>
                   )}
-                  <span className="text-xs text-gray-400">{p._count.drawings} drawings</span>
+                  <span className="text-xs text-gray-600">{p._count.drawings} drawings</span>
                   <ProjectStatusBadge status={p.status} />
                 </div>
               </Link>
@@ -266,7 +266,7 @@ export default async function DashboardPage() {
                   <span className="font-medium text-gray-700">{log.user.name}</span>
                   {" "}{log.event.replace(/\./g, " → ")}
                 </p>
-                <span className="text-xs text-gray-400 flex-shrink-0">
+                <span className="text-xs text-gray-600 flex-shrink-0">
                   {new Date(log.createdAt).toLocaleDateString("en-NP")}
                 </span>
               </div>

@@ -27,7 +27,7 @@ function SortLink({
   const arrow = isActive ? (currentDir === "asc" ? " ↑" : " ↓") : "";
   return (
     <Link
-      href={`/dashboard/projects?sort=${col}&dir=${nextDir}&search=${search}&status=${status}`}
+      href={`/dashboard/projects?sort=${col}&dir=${nextDir}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`}
       className={`hover:text-blue-600 ${isActive ? "text-blue-600 font-semibold" : ""}`}
     >
       {label}{arrow}
@@ -53,7 +53,7 @@ export default async function ProjectsPage({
     return (
       <div className="p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Projects</h1>
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-600 text-sm">
           Super admins do not belong to an organisation. Use the{" "}
           <a href="/admin" className="text-red-600 hover:underline">Admin Panel</a> to manage organisations.
         </div>
@@ -120,14 +120,18 @@ export default async function ProjectsPage({
       </div>
 
       {/* Filters */}
-      <form method="GET" className="flex gap-3 mb-6">
+      <form method="GET" className="flex gap-3 mb-6" role="search" aria-label="Filter projects">
+        <label htmlFor="project-search" className="sr-only">Search projects</label>
         <input
+          id="project-search"
           name="search"
           defaultValue={search}
           placeholder="Search projects..."
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <label htmlFor="project-status" className="sr-only">Filter by status</label>
         <select
+          id="project-status"
           name="status"
           defaultValue={status}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -150,9 +154,9 @@ export default async function ProjectsPage({
         )}
       </form>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+      {/* Table — overflow-x-auto prevents content clipping on narrower viewports */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <table className="w-full text-sm" aria-label="Projects list">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 text-gray-600 font-medium">
@@ -178,13 +182,13 @@ export default async function ProjectsPage({
                   <Link href={`/dashboard/projects/${p.id}`} className="font-medium text-gray-900 hover:text-blue-600">
                     {p.name}
                   </Link>
-                  {p.district && <p className="text-gray-400 text-xs mt-0.5">{p.district}</p>}
+                  {p.district && <p className="text-gray-600 text-xs mt-0.5">{p.district}</p>}
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs">
                   {p.clientCompany || p.clientName ? (
                     <div>
                       <p className="font-medium text-gray-700">{p.clientCompany ?? "—"}</p>
-                      {p.clientName && <p className="text-gray-400">{p.clientName}</p>}
+                      {p.clientName && <p className="text-gray-600">{p.clientName}</p>}
                     </div>
                   ) : "—"}
                 </td>
@@ -208,16 +212,16 @@ export default async function ProjectsPage({
                     {p.members.map((m) => (
                       <div
                         key={m.userId}
-                        title={m.user.name}
-                        className="w-7 h-7 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center border-2 border-white font-medium"
+                        aria-label={m.user.name}
+                        className="w-7 h-7 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center border-2 border-white font-medium select-none"
                       >
-                        {m.user.name.charAt(0).toUpperCase()}
+                        <span aria-hidden>{m.user.name.charAt(0).toUpperCase()}</span>
                       </div>
                     ))}
-                    {p.members.length === 0 && <span className="text-gray-400 text-xs">—</span>}
+                    {p.members.length === 0 && <span className="text-gray-600 text-xs">—</span>}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-500">{p._count.drawings}</td>
+                <td className="px-4 py-3 text-gray-700">{p._count.drawings}</td>
                 <td className="px-4 py-3">
                   <Link href={`/dashboard/projects/${p.id}`} className="text-blue-600 hover:underline text-xs font-medium">
                     Open →
@@ -227,7 +231,7 @@ export default async function ProjectsPage({
             ))}
             {projects.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-12 text-center text-gray-600">
                   {search || status ? "No projects match your filters." : "No projects yet."}
                   {isAdmin && !search && !status && (
                     <>{" "}<Link href="/dashboard/projects/new" className="text-blue-600 hover:underline">Create one</Link></>
@@ -245,11 +249,11 @@ export default async function ProjectsPage({
           <p className="text-sm text-gray-500">Page {page} of {totalPages} — {total} total</p>
           <div className="flex gap-2">
             {page > 1 && (
-              <Link href={`/dashboard/projects?page=${page - 1}&search=${search}&status=${status}&sort=${sort}&dir=${dir}`}
+              <Link href={`/dashboard/projects?page=${page - 1}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&sort=${sort}&dir=${dir}`}
                 className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Previous</Link>
             )}
             {page < totalPages && (
-              <Link href={`/dashboard/projects?page=${page + 1}&search=${search}&status=${status}&sort=${sort}&dir=${dir}`}
+              <Link href={`/dashboard/projects?page=${page + 1}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&sort=${sort}&dir=${dir}`}
                 className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Next</Link>
             )}
           </div>

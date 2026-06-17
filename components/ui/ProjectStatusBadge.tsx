@@ -5,13 +5,13 @@ const statusColors: Record<string, string> = {
   IN_PROGRESS: "bg-indigo-100 text-indigo-700",
   COMPLETE: "bg-gray-100 text-gray-700",
   LOST: "bg-red-100 text-red-700",
-  ARCHIVED: "bg-gray-100 text-gray-400",
+  ARCHIVED: "bg-gray-100 text-gray-600",
 };
 
 export function ProjectStatusBadge({ status }: { status: string }) {
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[status] ?? "bg-gray-100 text-gray-600"}`}>
-      {status.replace("_", " ")}
+      {status.replaceAll("_", " ")}
     </span>
   );
 }

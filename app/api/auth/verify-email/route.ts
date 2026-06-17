@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { apiError, handleApiError } from "@/lib/errors";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = req.nextUrl.searchParams.get("token");
     if (!token) return apiError("VALIDATION_ERROR", "Missing token.", 400);
 

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { getLatestDudbcFY } from "@/lib/rates";
 
 // GET /api/projects/[id]/rate-migration
 // Returns { needsMigration, latestFY, projectFY } so the client can show a banner.
@@ -14,6 +16,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -21,14 +27,10 @@ export async function GET(
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
-    // Find the latest published DUDBC fiscal year
-    const latest = await prisma.rateItem.findFirst({
-      where: { source: "DUDBC", isPublished: true },
-      orderBy: { fiscalYear: "desc" },
-      select: { fiscalYear: true },
-    });
+    // Find the latest published DUDBC fiscal year (Redis-cached)
+    const latestFY = await getLatestDudbcFY();
 
-    if (!latest) return NextResponse.json({ needsMigration: false, latestFY: null, projectFY: null });
+    if (!latestFY) return NextResponse.json({ needsMigration: false, latestFY: null, projectFY: null });
 
     // Find DUDBC rates linked to this project's groups
     const linkedGroups = await prisma.takeoffGroup.findMany({
@@ -40,13 +42,13 @@ export async function GET(
       .filter(g => g.rateItem?.source === "DUDBC")
       .map(g => g.rateItem!.fiscalYear);
 
-    if (dudbcFYs.length === 0) return NextResponse.json({ needsMigration: false, latestFY: latest.fiscalYear, projectFY: null });
+    if (dudbcFYs.length === 0) return NextResponse.json({ needsMigration: false, latestFY, projectFY: null });
 
     // Use the oldest linked FY as the project's current FY
     const projectFY = dudbcFYs.sort()[0];
-    const needsMigration = projectFY < latest.fiscalYear;
+    const needsMigration = projectFY < latestFY;
 
-    return NextResponse.json({ needsMigration, latestFY: latest.fiscalYear, projectFY });
+    return NextResponse.json({ needsMigration, latestFY, projectFY });
   } catch (err) {
     return handleApiError(err);
   }
@@ -60,6 +62,10 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -70,17 +76,13 @@ export async function POST(
       return apiError("FORBIDDEN", "Only admins can migrate rates.", 403);
     }
 
-    // Get latest published FY
-    const latest = await prisma.rateItem.findFirst({
-      where: { source: "DUDBC", isPublished: true },
-      orderBy: { fiscalYear: "desc" },
-      select: { fiscalYear: true },
-    });
-    if (!latest) return NextResponse.json({ migrated: 0, unmatched: 0 });
+    // Get latest published FY (Redis-cached)
+    const latestFYPost = await getLatestDudbcFY();
+    if (!latestFYPost) return NextResponse.json({ migrated: 0, unmatched: 0 });
 
     // Get all new FY rates indexed by code
     const newRates = await prisma.rateItem.findMany({
-      where: { source: "DUDBC", fiscalYear: latest.fiscalYear, isPublished: true },
+      where: { source: "DUDBC", fiscalYear: latestFYPost, isPublished: true },
       select: { id: true, code: true },
     });
     const codeMap = new Map(newRates.map(r => [r.code, r.id]));
@@ -92,7 +94,7 @@ export async function POST(
     });
 
     const toMigrate = groups.filter(
-      g => g.rateItem?.source === "DUDBC" && g.rateItem.fiscalYear !== latest.fiscalYear
+      g => g.rateItem?.source === "DUDBC" && g.rateItem.fiscalYear !== latestFYPost
     );
 
     // Group by new rateItemId to batch into one updateMany per target rate
@@ -127,11 +129,11 @@ export async function POST(
       userId: token!.id as string,
       event: "project.rate_migration",
       resourceId: params.id,
-      meta: { migrated, unmatched, targetFY: latest.fiscalYear } as any,
-      ipAddress: req.headers.get("x-forwarded-for") ?? "unknown",
+      meta: { migrated, unmatched, targetFY: latestFYPost } as any,
+      ipAddress: getClientIp(req),
     });
 
-    return NextResponse.json({ migrated, unmatched, targetFY: latest.fiscalYear });
+    return NextResponse.json({ migrated, unmatched, targetFY: latestFYPost });
   } catch (err) {
     return handleApiError(err);
   }

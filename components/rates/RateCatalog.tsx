@@ -277,7 +277,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     : batches.reduce((s, b) => s + b.itemCount, 0);
 
   return (
-    <div className="flex gap-5 min-h-96">
+    <div className="flex flex-col sm:flex-row gap-5 min-h-96">
       {confirmDialog}
 
       {/* Floating selection bar */}
@@ -288,15 +288,21 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition">
             Save as Assembly
           </button>
-          <button onClick={() => setSelectedRateIds(new Set())} className="text-gray-400 hover:text-white text-sm">✕ Clear</button>
+          <button onClick={() => setSelectedRateIds(new Set())} className="text-gray-600 hover:text-white text-sm">✕ Clear</button>
         </div>
       )}
 
       {/* Save as Assembly modal */}
       {showSaveAsAssembly && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-assembly-title"
+          onKeyDown={e => { if (e.key === "Escape") setShowSaveAsAssembly(false); }}
+        >
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="font-semibold text-gray-800 mb-1">Save as Assembly</h3>
+            <h3 id="save-assembly-title" className="font-semibold text-gray-800 mb-1">Save as Assembly</h3>
             <p className="text-sm text-gray-500 mb-4">
               {selectedRateIds.size} rate item{selectedRateIds.size !== 1 ? "s" : ""} will be saved as layers. Units are auto-mapped to measurement types.
             </p>
@@ -334,7 +340,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       )}
 
       {/* ── Left: Rate Books sidebar ── */}
-      <div className="w-64 flex-shrink-0 space-y-2">
+      <div className="w-full sm:w-64 flex-shrink-0 space-y-2">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Rate Books</p>
           <a href="/api/rates/template" download
@@ -352,7 +358,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         >
           <div className="flex items-center justify-between">
             <span className="font-medium">All Rates</span>
-            <span className={`text-xs ${selectedBatchId === "all" ? "text-gray-300" : "text-gray-400"}`}>
+            <span className={`text-xs ${selectedBatchId === "all" ? "text-gray-300" : "text-gray-600"}`}>
               {totalRates}
             </span>
           </div>
@@ -375,7 +381,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 </span>
                 <span className="text-xs text-amber-600 font-bold">{unbatchedCount}</span>
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">Imported before Rate Books</p>
+              <p className="text-xs text-gray-600 mt-0.5">Imported before Rate Books</p>
             </button>
             {isAdmin && (
               <div className="border-t border-gray-100">
@@ -422,7 +428,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                   <span className={`text-sm font-medium truncate flex-1 ${selectedBatchId === batch.id ? "text-blue-800" : "text-gray-800"}`}>
                     {batch.name}
                   </span>
-                  <span className={`text-xs flex-shrink-0 ${selectedBatchId === batch.id ? "text-blue-600" : "text-gray-400"}`}>
+                  <span className={`text-xs flex-shrink-0 ${selectedBatchId === batch.id ? "text-blue-600" : "text-gray-600"}`}>
                     {batch.itemCount}
                   </span>
                 </div>
@@ -432,7 +438,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                   {batch.type}
                 </span>
                 {batch.fiscalYear && (
-                  <span className="text-xs text-gray-400">FY {batch.fiscalYear}</span>
+                  <span className="text-xs text-gray-600">FY {batch.fiscalYear}</span>
                 )}
               </div>
             </button>
@@ -482,11 +488,14 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       <div className="flex-1 min-w-0 space-y-3">
         {/* Search + info */}
         <div className="flex items-center gap-3">
+          <label htmlFor="rate-catalog-search" className="sr-only">Search rates by code or description</label>
           <input
+            id="rate-catalog-search"
             type="text"
             placeholder="Search code or description…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
+            aria-label="Search rates by code or description"
             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {selectedBatchId !== "all" && (
@@ -504,7 +513,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
           </div>
         )}
         {importError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 whitespace-pre-wrap">
+          <div role="alert" className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 whitespace-pre-wrap">
             <div className="flex items-start justify-between gap-3">
               <div>{importError}</div>
               <button onClick={() => setImportError("")} className="flex-shrink-0 text-red-400">✕</button>
@@ -517,9 +526,12 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
 
         {/* Table */}
         {loading ? (
-          <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>
+          <div className="flex items-center justify-center gap-2 py-12" aria-label="Loading rates">
+            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" aria-hidden />
+            <span className="text-gray-600 text-sm">Loading…</span>
+          </div>
         ) : rates.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-sm">
+          <div className="text-center py-12 text-gray-600 text-sm">
             {search
               ? `No rates matching "${search}".`
               : selectedBatchId !== "all"
@@ -533,9 +545,13 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 <tr>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-16">Code</th>
                   <th className="px-3 py-3 w-8">
-                    <input type="checkbox" className="rounded"
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      aria-label="Select all rates on this page"
                       checked={rates.length > 0 && rates.every(r => selectedRateIds.has(r.id))}
-                      onChange={e => setSelectedRateIds(e.target.checked ? new Set(rates.map(r => r.id)) : new Set())} />
+                      onChange={e => setSelectedRateIds(e.target.checked ? new Set(rates.map(r => r.id)) : new Set())}
+                    />
                   </th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Description</th>
                   <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-16">Unit</th>
@@ -548,8 +564,13 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 {rates.map(rate => (
                   <tr key={rate.id} className={`hover:bg-gray-50 ${selectedRateIds.has(rate.id) ? "bg-blue-50" : ""}`}>
                     <td className="px-3 py-2.5">
-                      <input type="checkbox" className="rounded" checked={selectedRateIds.has(rate.id)}
-                        onChange={e => setSelectedRateIds(prev => { const s = new Set(prev); e.target.checked ? s.add(rate.id) : s.delete(rate.id); return s; })} />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        aria-label={`Select rate ${rate.code} — ${rate.description.slice(0, 40)}`}
+                        checked={selectedRateIds.has(rate.id)}
+                        onChange={e => setSelectedRateIds(prev => { const s = new Set(prev); e.target.checked ? s.add(rate.id) : s.delete(rate.id); return s; })}
+                      />
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{rate.code}</td>
                     <td className="px-3 py-2.5 text-gray-800 text-xs leading-relaxed">{rate.description}</td>
@@ -603,9 +624,15 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
 
       {/* ── Import dialog ── */}
       {showImportDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="import-dialog-title"
+          onKeyDown={e => { if (e.key === "Escape") { setShowImportDialog(false); setImportFile(null); setImportError(""); } }}
+        >
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="font-semibold text-gray-900 mb-4">Create Rate Book</h2>
+            <h2 id="import-dialog-title" className="font-semibold text-gray-900 mb-4">Create Rate Book</h2>
 
             <div className="space-y-4">
               <div>
@@ -641,7 +668,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                   <span className="text-green-500">📎</span>
                   <span className="text-sm text-gray-700 flex-1 truncate">{importFile.name}</span>
-                  <button onClick={() => setImportFile(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+                  <button onClick={() => setImportFile(null)} className="text-gray-600 hover:text-gray-600">✕</button>
                 </div>
               )}
 

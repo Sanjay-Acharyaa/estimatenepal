@@ -173,7 +173,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
               <span className="text-3xl">{exp.icon}</span>
               <div>
                 <p className="text-sm font-medium text-gray-800">{downloading === exp.key ? "Generating…" : exp.label}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{exp.sub}</p>
+                <p className="text-xs text-gray-600 mt-0.5">{exp.sub}</p>
               </div>
             </button>
           ))}
@@ -197,7 +197,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
                       {!link.approvalStatus && <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">Awaiting response · {link.viewCount} view{link.viewCount !== 1 ? "s" : ""}</span>}
                     </div>
                     {link.approvalNote && <p className="text-xs text-gray-600 italic mb-1">"{link.approvalNote}"</p>}
-                    {link.approvedAt && <p className="text-xs text-gray-400">{new Date(link.approvedAt).toLocaleString()}</p>}
+                    {link.approvedAt && <p className="text-xs text-gray-600">{new Date(link.approvedAt).toLocaleString()}</p>}
                     <div className="flex items-center gap-2 mt-2">
                       <input readOnly value={url} className="flex-1 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600 min-w-0" />
                       <button onClick={() => { navigator.clipboard.writeText(url); toast.success("Link copied!"); }}
@@ -266,7 +266,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
               <p className="text-xl font-bold text-blue-700">NRS {NRS(estimateTotal)}</p>
             </div>
             <div className={`rounded-lg p-4 border ${acceptedQuote ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}`}>
-              <p className={`text-xs font-medium mb-1 ${acceptedQuote ? "text-green-600" : "text-gray-400"}`}>Accepted Quote</p>
+              <p className={`text-xs font-medium mb-1 ${acceptedQuote ? "text-green-600" : "text-gray-600"}`}>Accepted Quote</p>
               <p className={`text-xl font-bold ${acceptedQuote ? "text-green-700" : "text-gray-300"}`}>
                 {acceptedQuote ? `NRS ${NRS(acceptedQuote.amount)}` : "—"}
               </p>
@@ -283,11 +283,11 @@ export function ProposalTab({ projectId, userRole }: Props) {
         )}
 
         {loading ? (
-          <div className="text-center text-gray-400 py-8 text-sm">Loading…</div>
+          <div className="text-center text-gray-600 py-8 text-sm">Loading…</div>
         ) : quotes.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-            <p className="text-gray-400 text-sm">No quotes yet.</p>
-            {canEdit && <p className="text-gray-400 text-xs mt-1">Add subcontractor quotes to compare against your estimate.</p>}
+            <p className="text-gray-600 text-sm">No quotes yet.</p>
+            {canEdit && <p className="text-gray-600 text-xs mt-1">Add subcontractor quotes to compare against your estimate.</p>}
           </div>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -311,7 +311,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
                     <tr key={q.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-800">{q.vendor}</div>
-                        {q.notes && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{q.notes}</div>}
+                        {q.notes && <div className="text-xs text-gray-600 mt-0.5 truncate max-w-xs">{q.notes}</div>}
                       </td>
                       <td className="px-4 py-3 text-gray-500">{q.discipline ?? "—"}</td>
                       <td className="px-4 py-3 text-right font-mono font-medium text-gray-800">{NRS(q.amount)}</td>
@@ -435,7 +435,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
             <h3 className="font-semibold text-gray-800 mb-4">{editId ? "Edit Quote" : "Add Quote"}</h3>
             <form onSubmit={handleSaveQuote} className="space-y-3">
-              {formError && <p className="text-red-600 text-sm">{formError}</p>}
+              {formError && <p role="alert" className="text-red-600 text-sm">{formError}</p>}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Vendor / Contractor Name</label>
                 <input required value={form.vendor} onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))} className={inputCls} />

@@ -75,7 +75,7 @@ export function ExportButtons({ projectId }: Props) {
             disabled={!!downloading}
             className="flex flex-col items-center gap-2 p-6 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
           >
-            <span className="text-3xl">{icon}</span>
+            <span className="text-3xl" aria-hidden>{icon}</span>
             <span className="font-semibold text-gray-800 group-hover:text-blue-700">
               {downloading === type ? "Downloading…" : label}
             </span>
@@ -88,7 +88,7 @@ export function ExportButtons({ projectId }: Props) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">
+        <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">
           {error}
         </div>
       )}

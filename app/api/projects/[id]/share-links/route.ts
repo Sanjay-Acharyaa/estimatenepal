@@ -6,14 +6,18 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const createSchema = z.object({
   expiresInDays: z.number().min(1).max(365).optional(),
+  clientEmail: z.string().email().optional(),
 });
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -37,6 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         token: shareToken,
         expiresAt,
         createdBy: token.id as string,
+        clientEmail: parsed.data.clientEmail ?? null,
       },
     });
 

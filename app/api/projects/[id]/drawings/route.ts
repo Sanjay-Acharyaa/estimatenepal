@@ -6,7 +6,7 @@ import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { getDownloadUrl } from "@/lib/upload";
 
 const MAX_PAGES = 100;
@@ -22,7 +22,7 @@ const registerSchema = z.object({
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -84,6 +84,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const { fileName, fileKey, pageCount, revisionNumber, parentDrawingId, folderId } = parsed.data;
+
+    // Ensure fileKey belongs to this org/project to prevent cross-tenant file linking
+    const expectedPrefix = `drawings/${project.orgId}/${params.id}/`;
+    if (!fileKey.startsWith(expectedPrefix)) {
+      return apiError("VALIDATION_ERROR", "Invalid file key.", 400);
+    }
 
     // If this is a revision, validate the parent and mark it as superseded
     if (parentDrawingId) {

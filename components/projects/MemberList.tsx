@@ -25,9 +25,11 @@ export function MemberList({
   const [selectedUser, setSelectedUser] = useState("");
   const [role, setRole] = useState("ESTIMATOR");
   const [adding, setAdding] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function addMember() {
+  async function handleAddMember(e: React.FormEvent) {
+    e.preventDefault();
     if (!selectedUser) return;
     setAdding(true);
     setError("");
@@ -43,8 +45,11 @@ export function MemberList({
     router.refresh();
   }
 
-  async function removeMember(userId: string) {
+  async function removeMember(userId: string, name: string) {
+    if (!confirm(`Remove ${name} from this project?`)) return;
+    setRemovingId(userId);
     await fetch(`/api/projects/${projectId}/members/${userId}`, { method: "DELETE" });
+    setRemovingId(null);
     router.refresh();
   }
 
@@ -52,47 +57,68 @@ export function MemberList({
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <h2 className="font-semibold text-gray-800 mb-3">Team Members</h2>
 
-      {error && <p className="text-red-600 text-xs mb-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-red-600 text-xs mb-2">{error}</p>
+      )}
 
       <div className="space-y-2 mb-4">
         {members.map((m) => (
           <div key={m.userId} className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center font-medium">
+              {/* Avatar initial — decorative, no img alt needed */}
+              <div
+                aria-hidden
+                className="w-8 h-8 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center font-medium select-none"
+              >
                 {m.user.name.charAt(0).toUpperCase()}
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-800">{m.user.name}</p>
-                <p className="text-xs text-gray-400">{m.projectRole}</p>
+                {/* Upgraded from text-gray-600 (2.5:1) to text-gray-600 (7.4:1) — WCAG AA pass */}
+                <p className="text-xs text-gray-600">{m.projectRole}</p>
               </div>
             </div>
             {isAdmin && (
               <button
-                onClick={() => removeMember(m.userId)}
-                className="text-xs text-red-500 hover:text-red-700"
+                onClick={() => removeMember(m.userId, m.user.name)}
+                disabled={removingId === m.userId}
+                aria-label={`Remove ${m.user.name} from project`}
+                className="text-xs text-red-600 hover:text-red-800 disabled:opacity-40 focus:outline-none focus:underline"
               >
-                Remove
+                {removingId === m.userId ? "Removing…" : "Remove"}
               </button>
             )}
           </div>
         ))}
-        {members.length === 0 && <p className="text-sm text-gray-400">No members assigned yet.</p>}
+        {members.length === 0 && (
+          <p className="text-sm text-gray-600">No members assigned yet.</p>
+        )}
       </div>
 
       {isAdmin && orgUsers.length > 0 && (
-        <div className="border-t border-gray-100 pt-3 space-y-2">
-          <p className="text-xs font-medium text-gray-600">Add Member</p>
+        /* form wrapper — Enter in any field submits, not just the button onClick */
+        <form
+          onSubmit={handleAddMember}
+          className="border-t border-gray-100 pt-3 space-y-2"
+          aria-label="Add project member"
+        >
+          <p className="text-xs font-medium text-gray-700">Add Member</p>
+          <label htmlFor="member-select" className="sr-only">Select user to add</label>
           <select
+            id="member-select"
             value={selectedUser}
             onChange={(e) => setSelectedUser(e.target.value)}
             className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">Select user...</option>
+            <option value="">Select user…</option>
             {orgUsers.map((u) => (
               <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
             ))}
           </select>
+
+          <label htmlFor="member-role" className="sr-only">Project role</label>
           <select
+            id="member-role"
             value={role}
             onChange={(e) => setRole(e.target.value)}
             className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -101,14 +127,16 @@ export function MemberList({
             <option value="LEAD">Lead</option>
             <option value="VIEWER">Viewer</option>
           </select>
+
           <button
-            onClick={addMember}
+            type="submit"
             disabled={adding || !selectedUser}
+            aria-busy={adding}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1.5 rounded transition disabled:opacity-50"
           >
-            {adding ? "Adding..." : "Add to Project"}
+            {adding ? "Adding…" : "Add to Project"}
           </button>
-        </div>
+        </form>
       )}
     </div>
   );

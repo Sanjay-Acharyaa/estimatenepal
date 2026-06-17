@@ -75,7 +75,7 @@ export default function ChangeOrdersPage() {
           <p className="text-sm text-gray-500 mt-0.5">Manage scope changes with formal approval tracking</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href={`/dashboard/projects/${projectId}`} className="text-sm text-gray-400 hover:text-gray-600">← Back</Link>
+          <Link href={`/dashboard/projects/${projectId}`} className="text-sm text-gray-600 hover:text-gray-600">← Back</Link>
           <button onClick={() => setShowForm(true)} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">
             + New Change Order
           </button>
@@ -101,10 +101,10 @@ export default function ChangeOrdersPage() {
       )}
 
       {/* List */}
-      {loading ? <p className="text-center text-gray-400 py-8">Loading…</p> : (
+      {loading ? <p className="text-center text-gray-600 py-8">Loading…</p> : (
         orders.length === 0 ? (
           <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
-            <p className="text-gray-400">No change orders yet.</p>
+            <p className="text-gray-600">No change orders yet.</p>
             <button onClick={() => setShowForm(true)} className="mt-3 text-blue-600 text-sm hover:underline">Create the first one</button>
           </div>
         ) : (
@@ -114,17 +114,17 @@ export default function ChangeOrdersPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-xs font-mono text-gray-400">CO-{String(co.number).padStart(3, "0")}</span>
+                      <span className="text-xs font-mono text-gray-600">CO-{String(co.number).padStart(3, "0")}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[co.status]}`}>{co.status}</span>
                     </div>
                     <h3 className="text-sm font-semibold text-gray-800">{co.title}</h3>
                     {co.description && <p className="text-xs text-gray-500 mt-1">{co.description}</p>}
-                    {co.reason && <p className="text-xs text-gray-400 mt-1 italic">Reason: {co.reason}</p>}
+                    {co.reason && <p className="text-xs text-gray-600 mt-1 italic">Reason: {co.reason}</p>}
                     {co.rejectionNote && <p className="text-xs text-red-500 mt-1">Rejection note: {co.rejectionNote}</p>}
                   </div>
                   <div className="flex-shrink-0 text-right">
                     <p className="text-lg font-bold text-gray-800">NRS {NRS(co.amount)}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{new Date(co.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{new Date(co.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
                 {/* Actions */}

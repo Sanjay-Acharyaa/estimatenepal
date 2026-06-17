@@ -4,19 +4,26 @@ import { z } from "zod";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, verificationEmailHtml } from "@/lib/email";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { apiError, handleApiError, conflict } from "@/lib/errors";
 
 const schema = z.object({
-  name: z.string().min(2).max(100),
-  email: z.string().email(),
-  password: z.string().min(8).max(100),
-  orgName: z.string().min(2).max(100),
+  name: z.string().min(2).max(100).trim(),
+  email: z.string().email().toLowerCase().trim(),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .max(100)
+    .refine(
+      (p) => /[A-Z]/.test(p) && /[0-9]/.test(p),
+      "Password must contain at least one uppercase letter and one number."
+    ),
+  orgName: z.string().min(2).max(100).trim(),
 });
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -34,28 +41,28 @@ export async function POST(req: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 12);
     const verifyToken = crypto.randomBytes(32).toString("hex");
 
-    const org = await prisma.org.create({ data: { name: orgName } });
-    const user = await prisma.user.create({
-      data: { name, email, passwordHash, role: "OWNER", orgId: org.id },
+    const { org, user } = await prisma.$transaction(async (tx) => {
+      const org = await tx.org.create({ data: { name: orgName } });
+      const user = await tx.user.create({
+        data: { name, email, passwordHash, role: "OWNER", orgId: org.id },
+      });
+      return { org, user };
     });
 
     const { redis } = await import("@/lib/redis");
     await redis.set(`verify:${verifyToken}`, user.id, "EX", 86400);
 
     const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${verifyToken}`;
-    try {
-      await sendEmail({
-        to: email,
-        subject: "Verify your NepaliEstimate account",
-        html: verificationEmailHtml(verifyUrl, name),
-      });
-    } catch (emailErr) {
-      // Roll back — user is stuck if email fails and DB record stays
-      await redis.del(`verify:${verifyToken}`);
-      await prisma.user.delete({ where: { id: user.id } });
-      await prisma.org.delete({ where: { id: org.id } });
-      throw emailErr;
-    }
+
+    // Fire-and-forget — SMTP latency must not block the registration response.
+    // The verify token is already committed to Redis; the user can request a resend if email fails.
+    sendEmail({
+      to: email,
+      subject: "Verify your NepaliEstimate account",
+      html: verificationEmailHtml(verifyUrl, name),
+    }).catch((emailErr) => {
+      console.error("[register] Failed to send verification email:", { email, emailErr });
+    });
 
     return NextResponse.json(
       { message: "Registration successful. Check your email to verify your account." },

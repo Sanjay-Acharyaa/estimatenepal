@@ -79,6 +79,7 @@ model OrgInvite {
 
   @@index([orgId])
   @@index([email])
+  @@index([orgId, email])                  // pending-invite deleteMany: orgId + email + acceptedAt=null
 }
 
 model FailedLogin {
@@ -91,6 +92,7 @@ model FailedLogin {
 
   @@index([email])
   @@index([ipAddress])
+  @@index([userId, createdAt(sort: Desc)]) // security queries: failed attempts per user over time
   @@index([createdAt(sort: Desc)])
 }
 
@@ -179,6 +181,7 @@ model ShareLink {
 
   @@index([projectId])
   @@index([isActive])
+  @@index([projectId, isActive])           // project detail load: shareLinks where isActive=true
 }
 
 // Drawings
@@ -218,10 +221,12 @@ model DrawingPage {
   scaleUnit       String        @default("m")
   canvasJson      Json?
   annotationsJson Json?
+  hasAnnotations  Boolean       @default(false)
   scaleZones      ScaleZone[]
   takeoffItems    TakeoffItem[]
 
   @@index([drawingId])
+  @@index([drawingId, pageNumber])
 }
 
 model ScaleZone {
@@ -277,9 +282,12 @@ model TakeoffGroup {
   rateItemId       String?
   rateItem         RateItem?     @relation("GroupRateItem", fields: [rateItemId], references: [id], onDelete: SetNull)
   assemblyId       String?
+  assembly         Assembly?     @relation("TakeoffGroupAssembly", fields: [assemblyId], references: [id], onDelete: SetNull)
+  countShape       String?
   items            TakeoffItem[]
 
   @@index([projectId])
+  @@index([projectId, disciplineId])
   @@index([parentId])
   @@index([disciplineId])
   @@index([rateItemId])
@@ -318,6 +326,7 @@ model TakeoffItem {
 
   @@index([pageId])
   @@index([groupId])
+  @@index([rateItemId])
   @@index([pageId, sortOrder])
 }
 
@@ -400,6 +409,7 @@ model RateItem {
   @@index([orgId])
   @@index([fiscalYear])
   @@index([batchId])
+  @@index([code])                          // assembly apply-time resolution by DUDBC code
   @@index([source, fiscalYear])
   @@index([source, isPublished])
   @@index([source, fiscalYear, isPublished])
@@ -434,6 +444,7 @@ model RateAnalysis {
   computedRate      Float
   useComputedRate   Boolean  @default(false)
 
+  @@unique([projectId, rateItemId])
   @@index([projectId])
   @@index([rateItemId])
 }
@@ -457,6 +468,7 @@ model BOQOverride {
 
   @@index([projectId])
   @@index([projectId, status])
+  @@index([rateItemId])
 }
 
 // Notifications & Audit
@@ -473,6 +485,7 @@ model Notification {
 
   @@index([userId])
   @@index([userId, isRead])
+  @@index([userId, createdAt(sort: Desc)]) // notification list: userId + ORDER BY createdAt DESC
   @@index([createdAt(sort: Desc)])
 }
 
@@ -500,11 +513,12 @@ model Assembly {
   category    String?         // Structural, Civil, MEP, Architectural, Road, Irrigation
   orgId       String?         // null = platform template (visible to all orgs)
   org         Org?            @relation(fields: [orgId], references: [id])
-  isPublic    Boolean         @default(false)
-  createdById String?
-  groups      AssemblyGroup[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  isPublic         Boolean          @default(false)
+  createdById      String?
+  groups           AssemblyGroup[]
+  takeoffGroups    TakeoffGroup[]   @relation("TakeoffGroupAssembly")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@index([orgId])
   @@index([isPublic])
@@ -580,6 +594,7 @@ model ChangeOrder {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
+  @@unique([projectId, number])
   @@index([projectId])
   @@index([projectId, status])
 }

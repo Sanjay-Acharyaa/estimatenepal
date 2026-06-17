@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 
 const renameSchema = z.object({
@@ -13,7 +13,7 @@ const renameSchema = z.object({
 
 export async function PUT(req: NextRequest, { params }: { params: { batchId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: { params: { batchId: str
 
 export async function DELETE(req: NextRequest, { params }: { params: { batchId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

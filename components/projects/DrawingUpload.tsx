@@ -176,13 +176,14 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
           <h2 className="text-lg font-bold text-gray-900">
             {parentDrawingId ? "Upload Revision" : "Upload Drawing"}
           </h2>
-          <button onClick={dismiss} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <button onClick={dismiss} aria-label="Close dialog" className="text-gray-600 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
 
         {folders && folders.length > 0 && (
           <div className="mb-4">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Upload to folder</label>
+            <label htmlFor="upload-folder" className="block text-xs font-medium text-gray-600 mb-1">Upload to folder</label>
             <select
+              id="upload-folder"
               value={folderId ?? ""}
               onChange={e => setFolderId(e.target.value || null)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -194,19 +195,23 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
         )}
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>
+          <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>
         )}
 
         {status === "done" ? (
-          <div className="text-center py-6">
-            <div className="text-4xl mb-2">✅</div>
+          <div role="status" className="text-center py-6">
+            <div className="text-4xl mb-2" aria-hidden>✅</div>
             <p className="text-green-700 font-medium">Drawing uploaded successfully!</p>
           </div>
         ) : (
           <>
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Drop PDF here or click to browse"
               className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition mb-4"
               onClick={() => inputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputRef.current?.click(); } }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
             >
@@ -215,19 +220,20 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
               {file ? (
                 <div>
                   <p className="text-sm font-medium text-gray-800">{file.name}</p>
-                  <p className="text-xs text-gray-400 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  <p className="text-xs text-gray-600 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                 </div>
               ) : (
                 <div>
                   <p className="text-sm text-gray-500">Drop a PDF here or click to browse</p>
-                  <p className="text-xs text-gray-400 mt-1">PDF only · Max 50 MB · Max 100 pages</p>
+                  <p className="text-xs text-gray-600 mt-1">PDF only · Max 50 MB · Max 100 pages</p>
                 </div>
               )}
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Revision Number (optional)</label>
+              <label htmlFor="upload-revision" className="block text-xs font-medium text-gray-600 mb-1">Revision Number (optional)</label>
               <input
+                id="upload-revision"
                 type="text"
                 value={revisionNumber}
                 onChange={(e) => setRevisionNumber(e.target.value)}

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { sendEmail, proposalEmailHtml } from "@/lib/email";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const schema = z.object({
   to: z.string().email(),
@@ -15,7 +15,7 @@ const schema = z.object({
 // POST /api/projects/[id]/share-links/send — email a share link to a client
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

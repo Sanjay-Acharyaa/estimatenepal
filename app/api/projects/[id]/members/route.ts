@@ -6,6 +6,7 @@ import { handleApiError, apiError, unauthorized, forbidden, notFound, conflict }
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const addSchema = z.object({
   userId: z.string().min(1),
@@ -14,6 +15,9 @@ const addSchema = z.object({
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -40,7 +44,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -81,15 +87,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ipAddress: ip,
     });
 
-    // Notify the assigned user
-    await prisma.notification.create({
+    // Notify the assigned user — fire-and-forget
+    prisma.notification.create({
       data: {
         userId: parsed.data.userId,
         type: "project.assigned",
         message: `You have been assigned to project: ${project.name}`,
         link: `/dashboard/projects/${project.id}`,
       },
-    });
+    }).catch((err) => console.error("[members] notification failed:", err));
 
     return NextResponse.json(member, { status: 201 });
   } catch (err) {

@@ -46,6 +46,7 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newContent, setNewContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,9 +56,9 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/notes?limit=50`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error("fetch failed"); return r.json(); })
       .then(d => { setNotes(d.data ?? []); setTotal(d.pagination?.total ?? 0); })
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [projectId]);
 
@@ -109,8 +110,8 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
         <h3 className="text-sm font-semibold text-gray-800">Notes ({total})</h3>
         <button
           onClick={() => setAdding(a => !a)}
+          aria-label="Add note"
           className="w-6 h-6 rounded-full bg-blue-600 text-white text-lg flex items-center justify-center hover:bg-blue-700 leading-none"
-          title="Add note"
         >
           +
         </button>
@@ -119,12 +120,15 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
       {/* Add form */}
       {adding && (
         <div className="mb-3 space-y-2">
+          <label htmlFor="note-new-content" className="sr-only">Note content</label>
           <textarea
+            id="note-new-content"
             autoFocus
             rows={3}
             value={newContent}
             onChange={e => setNewContent(e.target.value)}
             placeholder="Write a note visible to all project members…"
+            aria-label="Note content"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
           <div className="flex gap-2">
@@ -140,11 +144,34 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
         </div>
       )}
 
-      {loading && <p className="text-xs text-gray-400 text-center py-4">Loading…</p>}
+      {fetchError && (
+        <div role="alert" className="text-xs text-red-600 text-center py-4">
+          Could not load notes.{" "}
+          <button
+            onClick={() => {
+              setFetchError(false);
+              setLoading(true);
+              fetch(`/api/projects/${projectId}/notes?limit=50`)
+                .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+                .then(d => { setNotes(d.data ?? []); setTotal(d.pagination?.total ?? 0); })
+                .catch(() => setFetchError(true))
+                .finally(() => setLoading(false));
+            }}
+            className="underline hover:no-underline"
+          >Try again</button>
+        </div>
+      )}
 
-      {!loading && notes.length === 0 && (
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-4" aria-label="Loading notes">
+          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" aria-hidden />
+          <p className="text-xs text-gray-600">Loading…</p>
+        </div>
+      )}
+
+      {!loading && !fetchError && notes.length === 0 && (
         <div className="text-center py-6">
-          <p className="text-xs text-gray-400">No notes yet.</p>
+          <p className="text-xs text-gray-600">No notes yet.</p>
           <button onClick={() => setAdding(true)} className="text-xs text-blue-600 hover:underline mt-1">
             Add the first note
           </button>
@@ -154,7 +181,7 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
       {/* Note groups */}
       {groups.map(({ month, notes: gNotes }) => (
         <div key={month} className="mb-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{month}</p>
+          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">{month}</p>
           <div className="space-y-3">
             {gNotes.map(note => (
               <div key={note.id} className="relative">
@@ -166,12 +193,13 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="text-xs font-semibold text-gray-800">{note.user.name}</span>
-                      <span className="text-xs text-gray-400">{timeAgo(note.createdAt)}</span>
+                      <span className="text-xs text-gray-600">{timeAgo(note.createdAt)}</span>
                     </div>
                     {editId === note.id ? (
                       <div className="space-y-1.5">
-                        <textarea rows={2} value={editContent} onChange={e => setEditContent(e.target.value)}
-                          autoFocus
+                        <label htmlFor={`note-edit-${note.id}`} className="sr-only">Edit note content</label>
+                        <textarea id={`note-edit-${note.id}`} rows={2} value={editContent} onChange={e => setEditContent(e.target.value)}
+                          autoFocus aria-label="Edit note content"
                           className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
                         <div className="flex gap-1.5">
                           <button onClick={() => saveEdit(note.id)}
@@ -190,7 +218,8 @@ export function NotesPanel({ projectId, currentUserId, isAdmin }: Props) {
                     <div className="relative flex-shrink-0">
                       <button
                         onClick={() => setMenuId(menuId === note.id ? null : note.id)}
-                        className="text-gray-400 hover:text-gray-600 text-base leading-none px-1"
+                        aria-label={`Note options for ${note.user.name}`}
+                        className="text-gray-600 hover:text-gray-600 text-base leading-none px-1"
                       >⋮</button>
                       {menuId === note.id && (
                         <>

@@ -1,11 +1,16 @@
 import { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { handleApiError, unauthorized } from "@/lib/errors";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import ExcelJS from "exceljs";
 
 // GET /api/rates/template — returns a pre-formatted .xlsx import template
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 

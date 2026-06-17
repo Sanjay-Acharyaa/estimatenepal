@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { getOrCreateDisciplines } from "@/lib/disciplines";
 
 export async function GET(
@@ -13,6 +14,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -36,7 +41,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -51,21 +56,22 @@ export async function POST(
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
 
-    const last = await prisma.discipline.findFirst({
-      where: { projectId: params.id },
-      orderBy: { sortOrder: "desc" },
-      select: { sortOrder: true },
-    });
-
-    const discipline = await prisma.discipline.create({
-      data: {
-        projectId: params.id,
-        name: parsed.data.name,
-        sortOrder: (last?.sortOrder ?? 0) + 1,
-        isPrimary: false,
-      },
-      include: { _count: { select: { groups: true } } },
-    });
+    const discipline = await prisma.$transaction(async (tx) => {
+      const last = await tx.discipline.findFirst({
+        where: { projectId: params.id },
+        orderBy: { sortOrder: "desc" },
+        select: { sortOrder: true },
+      });
+      return tx.discipline.create({
+        data: {
+          projectId: params.id,
+          name: parsed.data.name,
+          sortOrder: (last?.sortOrder ?? 0) + 1,
+          isPrimary: false,
+        },
+        include: { _count: { select: { groups: true } } },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     await appendAuditLog({
       orgId: project.orgId,

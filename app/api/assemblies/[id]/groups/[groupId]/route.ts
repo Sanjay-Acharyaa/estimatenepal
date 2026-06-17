@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(150).trim().optional(),
@@ -25,7 +25,7 @@ async function guardGroup(assemblyId: string, groupId: string, orgId: string | n
 // PUT /api/assemblies/[id]/groups/[groupId]
 export async function PUT(req: NextRequest, { params }: { params: { id: string; groupId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -83,7 +83,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 
       if (changes.length > 0 && admins.length > 0) {
         const message = `Assembly "${assembly?.name}" — layer "${before.name}" was updated${scope === "all_projects" ? ` (applied to ${updatedProjects} project layer${updatedProjects !== 1 ? "s" : ""})` : " (future projects only)"}.`;
-        await prisma.notification.createMany({
+        prisma.notification.createMany({
           data: admins.map(a => ({
             userId: a.id,
             type: "assembly.group_updated",
@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
             link: "/dashboard/assemblies",
             meta: { assemblyId: params.id, assemblyName: assembly?.name, layerName: before.name, before, after, scope, updatedProjects },
           })),
-        });
+        }).catch((err) => console.error("[assemblies/groups] notification failed:", err));
       }
     }
 
@@ -104,7 +104,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 // DELETE /api/assemblies/[id]/groups/[groupId]
 export async function DELETE(req: NextRequest, { params }: { params: { id: string; groupId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

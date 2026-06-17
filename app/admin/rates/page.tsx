@@ -219,13 +219,13 @@ export default function AdminRatesPage() {
           <summary className="cursor-pointer font-medium text-sm text-gray-700">Import from Excel (.xlsx)</summary>
           <form onSubmit={handleImport} className="mt-3 flex flex-wrap gap-3 items-end">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Fiscal Year</label>
-              <input value={importFY} onChange={e => setImportFY(e.target.value)} placeholder="e.g. 2081/82"
+              <label htmlFor="import-fy" className="block text-xs text-gray-500 mb-1">Fiscal Year</label>
+              <input id="import-fy" value={importFY} onChange={e => setImportFY(e.target.value)} placeholder="e.g. 2081/82"
                 className={inputCls + " w-32"} required />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Excel file</label>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" required
+              <label htmlFor="import-file" className="block text-xs text-gray-500 mb-1">Excel file</label>
+              <input id="import-file" ref={fileRef} type="file" accept=".xlsx,.xls" required
                 onChange={e => setImportFile(e.target.files?.[0] ?? null)}
                 className="text-sm" />
             </div>
@@ -298,11 +298,11 @@ export default function AdminRatesPage() {
           </div>
         </details>
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
 
         {/* Rate table */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+          <table className="w-full text-sm" aria-label="DUDBC rate items">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-2 text-left font-medium text-gray-600 w-24">Code</th>
@@ -316,10 +316,10 @@ export default function AdminRatesPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600">Loading…</td></tr>
               )}
               {!loading && data?.data.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No rates found.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600">No rates found.</td></tr>
               )}
               {data?.data.map(rate => (
                 <tr key={rate.id} className="hover:bg-gray-50">
@@ -336,7 +336,7 @@ export default function AdminRatesPage() {
                           <button type="submit" disabled={saving} className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Save</button>
                           <button type="button" onClick={() => setEditId(null)} className="text-xs text-gray-500 px-2 py-0.5 rounded border">Cancel</button>
                         </form>
-                        {formError && <p className="text-red-500 text-xs mt-1">{formError}</p>}
+                        {formError && <p role="alert" className="text-red-500 text-xs mt-1">{formError}</p>}
                       </td>
                     </>
                   ) : (
@@ -399,12 +399,12 @@ export default function AdminRatesPage() {
                 <h3 className="font-semibold text-gray-800">District Rates — {districtRate.code}</h3>
                 <p className="text-xs text-gray-500 mt-0.5">{districtRate.description} · FY {districtRate.fiscalYear}</p>
               </div>
-              <button onClick={() => setDistrictRate(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              <button onClick={() => setDistrictRate(null)} aria-label="Close" className="text-gray-600 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
 
             <div className="overflow-y-auto flex-1 px-6 py-4">
-              {districtLoading && <p className="text-center text-gray-400 py-8">Loading…</p>}
-              {districtError && <p className="text-red-600 text-sm mb-3">{districtError}</p>}
+              {districtLoading && <p className="text-center text-gray-600 py-8">Loading…</p>}
+              {districtError && <p role="alert" className="text-red-600 text-sm mb-3">{districtError}</p>}
               {!districtLoading && (
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                   {districtRows.map(row => (
@@ -417,6 +417,7 @@ export default function AdminRatesPage() {
                       ) : (
                         <input
                           type="number" min="0" step="0.01"
+                          aria-label={`Rate for ${row.district}`}
                           value={row.rate ?? ""}
                           onChange={e => updateDistrictRow(row.district, e.target.value)}
                           placeholder="Same as base"
@@ -431,7 +432,7 @@ export default function AdminRatesPage() {
 
             {!districtRate.isPublished && (
               <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
-                <p className="text-xs text-gray-400">Leave blank to use the base rate for that district.</p>
+                <p className="text-xs text-gray-600">Leave blank to use the base rate for that district.</p>
                 <div className="flex gap-3">
                   <button onClick={() => setDistrictRate(null)} className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50">Cancel</button>
                   <button onClick={saveDistrictRates} disabled={districtSaving}
@@ -443,7 +444,7 @@ export default function AdminRatesPage() {
             )}
             {districtRate.isPublished && (
               <div className="px-6 py-4 border-t border-gray-200 flex-shrink-0">
-                <p className="text-xs text-gray-400">Published rates are read-only.</p>
+                <p className="text-xs text-gray-600">Published rates are read-only.</p>
               </div>
             )}
           </div>
@@ -456,29 +457,29 @@ export default function AdminRatesPage() {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
             <h3 className="font-semibold text-gray-800 mb-4">Add DUDBC Rate</h3>
             <form onSubmit={handleAdd} className="space-y-3">
-              {formError && <p className="text-red-600 text-sm">{formError}</p>}
-              <div className="grid grid-cols-2 gap-3">
+              {formError && <p role="alert" className="text-red-600 text-sm">{formError}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Code</label>
-                  <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} required className={inputCls} />
+                  <label htmlFor="add-code" className="block text-xs text-gray-500 mb-1">Code</label>
+                  <input id="add-code" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} required className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Fiscal Year</label>
-                  <input value={form.fiscalYear} onChange={e => setForm(f => ({ ...f, fiscalYear: e.target.value }))} placeholder="2081/82" required className={inputCls} />
+                  <label htmlFor="add-fy" className="block text-xs text-gray-500 mb-1">Fiscal Year</label>
+                  <input id="add-fy" value={form.fiscalYear} onChange={e => setForm(f => ({ ...f, fiscalYear: e.target.value }))} placeholder="2081/82" required className={inputCls} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Description</label>
-                <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} required className={inputCls} />
+                <label htmlFor="add-description" className="block text-xs text-gray-500 mb-1">Description</label>
+                <input id="add-description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} required className={inputCls} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Unit</label>
-                  <input value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} required className={inputCls} />
+                  <label htmlFor="add-unit" className="block text-xs text-gray-500 mb-1">Unit</label>
+                  <input id="add-unit" value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} required className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Base Rate (NRS)</label>
-                  <input type="number" min="0" step="0.01" value={form.baseRate} onChange={e => setForm(f => ({ ...f, baseRate: e.target.value }))} required className={inputCls} />
+                  <label htmlFor="add-base-rate" className="block text-xs text-gray-500 mb-1">Base Rate (NRS)</label>
+                  <input id="add-base-rate" type="number" min="0" step="0.01" value={form.baseRate} onChange={e => setForm(f => ({ ...f, baseRate: e.target.value }))} required className={inputCls} />
                 </div>
               </div>
               <div className="flex gap-3 pt-2">

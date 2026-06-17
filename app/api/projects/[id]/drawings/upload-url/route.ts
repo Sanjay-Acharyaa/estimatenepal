@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkUploadRateLimit } from "@/lib/security";
+import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { getUploadUrl } from "@/lib/upload";
 import { randomUUID } from "crypto";
 
@@ -18,7 +18,7 @@ const schema = z.object({
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkUploadRateLimit(ip);
     if (limited) return limited;
 

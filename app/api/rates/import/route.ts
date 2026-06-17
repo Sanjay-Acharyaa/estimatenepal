@@ -3,7 +3,9 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
+import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
+import { invalidateRatesCache } from "@/lib/rates";
 import ExcelJS from "exceljs";
 
 // POST /api/rates/import
@@ -60,6 +62,10 @@ function cellNum(row: ExcelJS.Row, col: number): number | null {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkUploadRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     if (!token.orgId) throw forbidden();
@@ -77,6 +83,11 @@ export async function POST(req: NextRequest) {
     }
     if (!file.name.match(/\.(xlsx|xls)$/i)) {
       return NextResponse.json({ error: { message: "Only .xlsx files are accepted. Download the template and fill it in." } }, { status: 400 });
+    }
+
+    const MAX_IMPORT_SIZE = 5 * 1024 * 1024; // 5 MB
+    if (file.size > MAX_IMPORT_SIZE) {
+      return NextResponse.json({ error: { message: "File must be under 5 MB." } }, { status: 413 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -171,48 +182,51 @@ export async function POST(req: NextRequest) {
 
     if (toInsert.length > 0) {
       try {
-        const batch = await prisma.rateBatch.create({
-          data: {
-            orgId: token.orgId as string,
-            name: finalBatchName,
-            type: ["CUSTOM", "DISTRICT"].includes(batchType) ? batchType : "CUSTOM",
-            itemCount: toInsert.length,
-            fiscalYear: dominantFY,
-          },
+        const batch = await prisma.$transaction(async (tx) => {
+          const batch = await tx.rateBatch.create({
+            data: {
+              orgId: token.orgId as string,
+              name: finalBatchName,
+              type: ["CUSTOM", "DISTRICT"].includes(batchType) ? batchType : "CUSTOM",
+              itemCount: toInsert.length,
+              fiscalYear: dominantFY,
+            },
+          });
+          await tx.rateItem.createMany({
+            data: toInsert.map(r => ({
+              code: r.code,
+              description: r.description,
+              unit: r.unit,
+              baseRate: r.baseRate,
+              fiscalYear: r.fiscalYear,
+              source: "CUSTOM" as const,
+              orgId: token.orgId as string,
+              batchId: batch.id,
+            })),
+          });
+          return batch;
         });
         batchId = batch.id;
-
-        await prisma.rateItem.createMany({
-          data: toInsert.map(r => ({
-            code: r.code,
-            description: r.description,
-            unit: r.unit,
-            baseRate: r.baseRate,
-            fiscalYear: r.fiscalYear,
-            source: "CUSTOM" as const,
-            orgId: token.orgId as string,
-            batchId: batch.id,
-          })),
-        });
       } catch (dbErr: any) {
-        // Clean up batch if item insert failed
-        if (batchId) await prisma.rateBatch.delete({ where: { id: batchId } }).catch(() => {});
-        const msg = dbErr?.message ?? String(dbErr);
+        console.error("[rates/import] DB insert failed:", dbErr);
         return NextResponse.json({
           error: {
-            message: `Database error during import: ${msg.slice(0, 300)}`,
+            message: "Import failed while saving to database.",
             hint: "Common causes: description text too long, duplicate codes, or invalid data types.",
           }
         }, { status: 500 });
       }
     }
 
+    // Invalidate cached rate list so this org's rate picker shows the new batch immediately.
+    invalidateRatesCache().catch((e) => console.error("[rates/import] Cache invalidation failed:", e));
+
     await appendAuditLog({
       orgId: token.orgId as string,
       userId: token.id as string,
       event: "rate_items.bulk_imported",
       meta: { batchId, batchName: finalBatchName, created: toInsert.length, skipped, fileName: file.name } as any,
-      ipAddress: req.headers.get("x-forwarded-for") ?? "unknown",
+      ipAddress: getClientIp(req),
     });
 
     return NextResponse.json({

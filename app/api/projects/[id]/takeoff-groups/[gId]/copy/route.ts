@@ -4,48 +4,47 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { appendAuditLog } from "@/lib/audit";
+import { randomUUID } from "crypto";
 
 const copySchema = z.object({
   targetDisciplineId: z.string(),
   withObjects: z.boolean().default(false),
 });
 
-// Copies all TakeoffItems from originalGroupId to newGroupId.
-// Returns the newly created items so the client can add them to canvas state directly.
+// Copies all TakeoffItems from originalGroupId to newGroupId using createMany (no N+1).
 async function copyItems(originalGroupId: string, newGroupId: string) {
   const originals = await prisma.takeoffItem.findMany({ where: { groupId: originalGroupId } });
-  const created: unknown[] = [];
-  for (const item of originals) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newItem = await (prisma.takeoffItem.create as any)({
-      data: {
-        pageId: item.pageId,
-        groupId: newGroupId,
-        label: item.label,
-        toolType: item.toolType,
-        shapeType: item.shapeType ?? undefined,
-        isNegative: item.isNegative,
-        isLocked: false,
-        multiplier: item.multiplier,
-        length: item.length ?? undefined,
-        breadth: item.breadth ?? undefined,
-        height: item.height ?? undefined,
-        wastagePct: item.wastagePct,
-        siteLocation: item.siteLocation ?? undefined,
-        measuredDate: item.measuredDate ?? undefined,
-        notes: item.notes ?? undefined,
-        rawQuantity: item.rawQuantity,
-        quantity: item.quantity,
-        unit: item.unit,
-        scaleUsed: item.scaleUsed,
-        sortOrder: item.sortOrder,
-        toolData: item.toolData,
-        rateItemId: item.rateItemId ?? undefined,
-      },
-    });
-    created.push(newItem);
-  }
-  return created;
+  if (originals.length === 0) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (prisma.takeoffItem.createMany as any)({
+    data: originals.map(item => ({
+      pageId: item.pageId,
+      groupId: newGroupId,
+      label: item.label,
+      toolType: item.toolType,
+      shapeType: item.shapeType,
+      isNegative: item.isNegative,
+      isLocked: false,
+      multiplier: item.multiplier,
+      length: item.length,
+      breadth: item.breadth,
+      height: item.height,
+      wastagePct: item.wastagePct,
+      siteLocation: item.siteLocation,
+      measuredDate: item.measuredDate,
+      notes: item.notes,
+      rawQuantity: item.rawQuantity,
+      quantity: item.quantity,
+      unit: item.unit,
+      scaleUsed: item.scaleUsed,
+      sortOrder: item.sortOrder,
+      toolData: item.toolData,
+      rateItemId: item.rateItemId,
+    })),
+  });
+  return originals;
 }
 
 export async function POST(
@@ -53,6 +52,10 @@ export async function POST(
   { params }: { params: { id: string; gId: string } }
 ) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -105,12 +108,14 @@ export async function POST(
         include: { _count: { select: { items: true } }, rateItem: { select: { code: true, source: true } } },
       });
 
-      const newLayers: unknown[] = [];
-      const allCopiedItems: unknown[] = [];
-      for (const layer of original.children) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const newLayer = await (prisma.takeoffGroup.create as any)({
-          data: {
+      // Pre-generate layer IDs so we can createMany in one shot and copy items without
+      // sequential awaits (N+1 avoidance).
+      const layerIds = original.children.map(() => randomUUID());
+
+      if (original.children.length > 0) {
+        await (prisma.takeoffGroup.createMany as any)({
+          data: original.children.map((layer, i) => ({
+            id: layerIds[i],
             projectId: params.id,
             disciplineId: targetDisciplineId,
             parentId: newCat.id,
@@ -126,15 +131,36 @@ export async function POST(
             isLocked: false,
             isVisible: true,
             sortOrder: layer.sortOrder,
-          },
-          include: { _count: { select: { items: true } }, rateItem: { select: { code: true, source: true } } },
+          })),
         });
-        if (withObjects) {
-          const copied = await copyItems(layer.id, newLayer.id);
+      }
+
+      const allCopiedItems: unknown[] = [];
+      if (withObjects) {
+        for (let i = 0; i < original.children.length; i++) {
+          const copied = await copyItems(original.children[i].id, layerIds[i]);
           allCopiedItems.push(...copied);
         }
-        newLayers.push({ ...newLayer, parentId: newCat.id, disciplineId: targetDisciplineId });
       }
+
+      // Fetch the created layers with relations for the response
+      const newLayerRecords = layerIds.length > 0
+        ? await (prisma.takeoffGroup.findMany as any)({
+            where: { id: { in: layerIds } },
+            include: { _count: { select: { items: true } }, rateItem: { select: { code: true, source: true } } },
+            orderBy: { sortOrder: "asc" },
+          })
+        : [];
+      const newLayers = newLayerRecords.map((l: any) => ({ ...l, parentId: newCat.id, disciplineId: targetDisciplineId }));
+
+      await appendAuditLog({
+        orgId: project.orgId,
+        userId: token.id as string,
+        event: "takeoff_group.copied",
+        resourceId: newCat.id,
+        meta: { sourceGroupId: params.gId, targetDisciplineId, withObjects } as any,
+        ipAddress: ip,
+      });
 
       return NextResponse.json(
         { category: { ...newCat, disciplineId: targetDisciplineId }, layers: newLayers, copiedItems: allCopiedItems },
@@ -200,6 +226,15 @@ export async function POST(
       });
 
       const copiedItems = withObjects ? await copyItems(original.id, newLayer.id) : [];
+
+      await appendAuditLog({
+        orgId: project.orgId,
+        userId: token.id as string,
+        event: "takeoff_group.copied",
+        resourceId: newLayer.id,
+        meta: { sourceGroupId: params.gId, targetDisciplineId, withObjects } as any,
+        ipAddress: ip,
+      });
 
       return NextResponse.json(
         { layer: { ...newLayer, parentId: targetParentId, disciplineId: targetDisciplineId }, targetParentId, copiedItems },

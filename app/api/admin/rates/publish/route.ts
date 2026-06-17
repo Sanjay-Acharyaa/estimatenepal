@@ -4,11 +4,16 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { invalidateDudbcCaches } from "@/lib/rates";
 
-function requireSuperAdmin(token: { isSuperAdmin?: unknown } | null) {
+async function requireSuperAdmin(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) throw unauthorized();
   if (!token.isSuperAdmin) throw forbidden();
+  const user = await prisma.user.findUnique({ where: { id: token.id as string }, select: { isSuperAdmin: true } });
+  if (!user?.isSuperAdmin) throw forbidden();
+  return token;
 }
 
 const schema = z.object({
@@ -19,12 +24,11 @@ const schema = z.object({
 // Marks all DUDBC rates for the given fiscal year as isPublished=true (irreversible).
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    requireSuperAdmin(token);
+    const token = await requireSuperAdmin(req);
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
@@ -51,8 +55,11 @@ export async function POST(req: NextRequest) {
       event: "dudbc_rates.published",
       resourceId: fiscalYear,
       meta: { fiscalYear, count: result.count } as any,
-      ipAddress: req.headers.get("x-forwarded-for") ?? "unknown",
+      ipAddress: getClientIp(req),
     });
+
+    // Invalidate the FY and rates caches so all replicas see the new published rates immediately.
+    invalidateDudbcCaches().catch((e) => console.error("[publish] Cache invalidation failed:", e));
 
     return NextResponse.json({ fiscalYear, published: result.count });
   } catch (err) {

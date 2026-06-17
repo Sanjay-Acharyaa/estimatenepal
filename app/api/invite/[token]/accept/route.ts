@@ -1,22 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { appendAuditLog } from "@/lib/audit";
-import { sendEmail, verificationEmailHtml } from "@/lib/email";
 import { handleApiError, apiError, notFound, conflict } from "@/lib/errors";
-import crypto from "crypto";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { invalidateUserCache } from "@/lib/auth";
 
 const acceptSchema = z.object({
-  // For existing users: provide their userId (from session)
-  userId: z.string().optional(),
-  // For new users: provide registration details
   name: z.string().min(2).max(100).trim().optional(),
-  password: z.string().min(8).optional(),
+  password: z
+    .string()
+    .min(8)
+    .max(100)
+    .refine(
+      (p) => /[A-Z]/.test(p) && /[0-9]/.test(p),
+      "Password must contain at least one uppercase letter and one number."
+    )
+    .optional(),
 });
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    const jwtToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
     const invite = await prisma.orgInvite.findUnique({
       where: { token: params.token },
       include: { org: { select: { id: true, name: true } } },
@@ -32,9 +44,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     let userId: string;
 
-    if (parsed.data.userId) {
-      // Existing logged-in user accepting the invite
-      const user = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
+    if (jwtToken) {
+      // Existing logged-in user accepting the invite — use JWT identity, not body
+      const user = await prisma.user.findUnique({ where: { id: jwtToken.id as string } });
       if (!user) throw notFound("User");
       if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
         return apiError("VALIDATION_ERROR", "You must be logged in with the invited email address.", 400);
@@ -46,6 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         where: { id: user.id },
         data: { orgId: invite.orgId, role: invite.role },
       });
+      await invalidateUserCache(user.id);
       userId = user.id;
     } else {
       // New user registration via invite
@@ -72,11 +85,14 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       userId = newUser.id;
     }
 
-    // Mark invite as accepted
-    await prisma.orgInvite.update({
-      where: { id: invite.id },
+    // Atomically mark invite as accepted — prevents double-accept via concurrent requests
+    const updated = await prisma.orgInvite.updateMany({
+      where: { id: invite.id, acceptedAt: null },
       data: { acceptedAt: new Date() },
     });
+    if (updated.count === 0) {
+      return apiError("CONFLICT", "This invitation has already been accepted.", 409);
+    }
 
     await appendAuditLog({
       orgId: invite.orgId,

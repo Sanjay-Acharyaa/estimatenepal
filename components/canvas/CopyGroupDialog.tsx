@@ -48,21 +48,28 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
   const isSameTab = targetDisciplineId === activeDisciplineId;
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-80 p-5">
-        <h3 className="text-sm font-semibold text-gray-800 mb-1">
+    <div
+      className="fixed inset-0 z-[500] flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cgd-title"
+      onKeyDown={e => { if (e.key === "Escape") onCancel(); }}
+    >
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-sm p-5">
+        <h3 id="cgd-title" className="text-sm font-semibold text-gray-800 mb-1">
           Copy {isCategory ? "Group" : "Layer"}
         </h3>
         <p className="text-xs text-gray-500 mb-4 truncate">"{group.name}"</p>
 
         {error && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded mb-3">{error}</p>
+          <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded mb-3">{error}</p>
         )}
 
         {/* Destination tab */}
         <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">Copy to tab</label>
+          <label htmlFor="cgd-target-tab" className="block text-xs font-medium text-gray-700 mb-1.5">Copy to tab</label>
           <select
+            id="cgd-target-tab"
             value={targetDisciplineId}
             onChange={e => setTargetDisciplineId(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -88,7 +95,7 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
               <span className="text-xs font-medium text-gray-700 block">
                 Include measured shapes
               </span>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-600">
                 Copies all quantities from all drawings
               </span>
             </span>

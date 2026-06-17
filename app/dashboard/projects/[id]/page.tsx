@@ -7,6 +7,7 @@ import { DocumentsTab } from "@/components/projects/tabs/DocumentsTab";
 import { EstimatingTab } from "@/components/projects/tabs/EstimatingTab";
 import { ProposalTab } from "@/components/projects/tabs/ProposalTab";
 import { TakeoffTabRedirect } from "@/components/projects/tabs/TakeoffTabRedirect";
+import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 
 const TABS = [
   { key: "overview",    label: "Overview" },
@@ -57,30 +58,28 @@ export default async function ProjectDetailPage({
       <div className="px-6 pt-4 pb-0 bg-white border-b border-gray-200 flex-shrink-0">
         <div className="flex items-start justify-between mb-3">
           <div className="min-w-0">
-            <div className="text-xs text-gray-400 mb-1">
+            <div className="text-xs text-gray-600 mb-1">
               <Link href="/dashboard/bid-board" className="hover:text-gray-600">Bid Board</Link>
               <span className="mx-1">›</span>
               <span className="text-gray-600 font-medium truncate">{project.name}</span>
             </div>
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-bold text-gray-900 truncate max-w-xl">{project.name}</h1>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                project.status === "ESTIMATING" ? "bg-yellow-100 text-yellow-800" :
-                project.status === "ACCEPTED" || project.status === "IN_PROGRESS" ? "bg-green-100 text-green-800" :
-                project.status === "COMPLETE" ? "bg-blue-100 text-blue-800" :
-                project.status === "LOST" ? "bg-red-100 text-red-800" :
-                "bg-gray-100 text-gray-600"
-              }`}>
-                {project.status.replace(/_/g, " ")}
-              </span>
+              <ProjectStatusBadge status={project.status} />
               {(project as any).priority === "HIGH" && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">H</span>
+                <span aria-label="High priority" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">
+                  <span aria-hidden>H</span>
+                </span>
               )}
               {(project as any).priority === "MEDIUM" && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700">M</span>
+                <span aria-label="Medium priority" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700">
+                  <span aria-hidden>M</span>
+                </span>
               )}
               {(project as any).priority === "LOW" && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-500">L</span>
+                <span aria-label="Low priority" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-600">
+                  <span aria-hidden>L</span>
+                </span>
               )}
             </div>
           </div>
@@ -109,20 +108,21 @@ export default async function ProjectDetailPage({
         </div>
 
         {/* ── Tab bar ── */}
-        <nav className="flex gap-0 -mb-px">
+        <nav aria-label="Project sections" className="flex gap-0 -mb-px">
           {TABS.map(tab => (
             <Link
               key={tab.key}
               href={`/dashboard/projects/${project.id}?tab=${tab.key}`}
+              aria-current={activeTab === tab.key ? "page" : undefined}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.key
                   ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  : "border-transparent text-gray-600 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               {tab.label}
               {tab.key === "estimating" && project._count.disciplines > 0 && (
-                <span className="ml-1.5 text-xs bg-gray-100 text-gray-500 rounded px-1">{project._count.disciplines}</span>
+                <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 rounded px-1" aria-hidden>{project._count.disciplines}</span>
               )}
             </Link>
           ))}

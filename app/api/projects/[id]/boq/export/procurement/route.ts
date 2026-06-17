@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { generateBOQ } from "@/lib/boq";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { withSemaphore } from "@/lib/semaphore";
 import ExcelJS from "exceljs";
 
 // GET /api/projects/[id]/boq/export/procurement
@@ -11,6 +13,10 @@ import ExcelJS from "exceljs";
 // For each BOQ group: quantity × (1 + wastagePct/100) = material to order.
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -124,15 +130,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     noteRow.getCell(1).font = { italic: true, size: 9, color: { argb: "FF6B7280" } };
     ws.mergeCells(`A${noteRow.number}:I${noteRow.number}`);
 
-    const buffer = await wb.xlsx.writeBuffer();
-    const filename = `${project.name.replace(/[^a-z0-9]/gi, "_")}_Procurement.xlsx`;
-
-    return new NextResponse(new Uint8Array(buffer as ArrayBuffer), {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+    const result = await withSemaphore("excel", 5, async () => {
+      const buffer = await wb.xlsx.writeBuffer();
+      const filename = `${project.name.replace(/[^a-z0-9]/gi, "_")}_Procurement.xlsx`;
+      return new NextResponse(new Uint8Array(buffer as ArrayBuffer), {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
     });
+    return result as NextResponse;
   } catch (err) {
     return handleApiError(err);
   }

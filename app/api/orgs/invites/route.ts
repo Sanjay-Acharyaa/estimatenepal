@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { sendEmail, inviteEmailHtml } from "@/lib/email";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
@@ -12,11 +12,14 @@ import crypto from "crypto";
 
 const inviteSchema = z.object({
   email: z.string().email().toLowerCase(),
-  role: z.enum(["OWNER", "ADMIN", "MEMBER"]).default("MEMBER"),
+  role: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
 });
 
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     if (!token.orgId) throw forbidden();
@@ -46,7 +49,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -85,13 +88,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const org = await prisma.org.findUnique({ where: { id: token.orgId as string }, select: { name: true } });
+    const orgName = (token.orgName as string | null) ?? "NepaliEstimate";
     const inviteUrl = `${process.env.NEXTAUTH_URL}/invite/${inviteToken}`;
 
-    await sendEmail({
+    // Fire-and-forget — invite record is in DB; SMTP latency must not hold the response
+    sendEmail({
       to: parsed.data.email,
-      subject: `You've been invited to join ${org?.name ?? "NepaliEstimate"}`,
-      html: inviteEmailHtml(inviteUrl, org?.name ?? "NepaliEstimate", user.name, parsed.data.role),
+      subject: `You've been invited to join ${orgName}`,
+      html: inviteEmailHtml(inviteUrl, orgName, user.name, parsed.data.role),
+    }).catch((err) => {
+      console.error("[invite] Failed to send invite email:", { to: parsed.data.email, err });
     });
 
     await appendAuditLog({

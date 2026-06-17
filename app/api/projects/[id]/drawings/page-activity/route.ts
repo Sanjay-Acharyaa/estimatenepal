@@ -3,11 +3,16 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 // Returns { [pageId]: { hasAnnotations: boolean, hasTakeoff: boolean } }
 // Used to render page indicators in the drawing selector dropdown.
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -15,13 +20,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
-    // All pages in the project with their annotation/takeoff state
+    // All pages in the project with their annotation/takeoff state.
+    // Uses the denormalized hasAnnotations flag — no JSON blob loading.
     const pages = await prisma.drawingPage.findMany({
       where: { drawing: { projectId: params.id, isLatest: true } },
       select: {
         id: true,
-        annotationsJson: true,
-        canvasJson: true,
+        hasAnnotations: true,
         _count: { select: { takeoffItems: true } },
       },
     });
@@ -29,15 +34,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const activity: Record<string, { hasAnnotations: boolean; hasTakeoff: boolean }> = {};
 
     for (const page of pages) {
-      const hasAnnotations = (() => {
-        if (!page.annotationsJson) return false;
-        const a = page.annotationsJson as any;
-        return Array.isArray(a.annotations) && a.annotations.length > 0;
-      })();
-
       activity[page.id] = {
-        hasAnnotations,
-        hasTakeoff: (page as any)._count.takeoffItems > 0,
+        hasAnnotations: page.hasAnnotations,
+        hasTakeoff: page._count.takeoffItems > 0,
       };
     }
 

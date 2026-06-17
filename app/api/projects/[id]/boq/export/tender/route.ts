@@ -4,14 +4,30 @@ import { prisma } from "@/lib/prisma";
 import { generateBOQ } from "@/lib/boq";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { withSemaphore } from "@/lib/semaphore";
 
 const NRS = (n: number) => n.toLocaleString("en-NP", { minimumFractionDigits: 2 });
+
+function escHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
 
 // GET /api/projects/[id]/boq/export/tender
 // Generates a comprehensive tender bundle PDF:
 // Cover page → Org letterhead → Scope of Work → Full BOQ → Rate Analysis summary
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -30,6 +46,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const boq = await generateBOQ(params.id);
     const org = project.org;
     const today = new Date().toLocaleDateString("en-NP", { year: "numeric", month: "long", day: "numeric" });
+    // Only allow HTTPS URLs to prevent SSRF against internal metadata services
+    const safeLogoUrl = (org.logoUrl ?? "").startsWith("https://") ? org.logoUrl : null;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -76,19 +94,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 <!-- COVER PAGE -->
 <div class="page">
   <div class="cover">
-    ${org.logoUrl ? `<img class="cover-logo" src="${org.logoUrl}" alt="Logo"/>` : ""}
-    <div class="cover-org">${org.name}</div>
-    ${org.address ? `<div style="font-size:11px;color:#6b7280">${org.address}</div>` : ""}
-    ${org.phone ? `<div style="font-size:11px;color:#6b7280">Tel: ${org.phone}</div>` : ""}
+    ${safeLogoUrl ? `<img class="cover-logo" src="${safeLogoUrl}" alt="Logo"/>` : ""}
+    <div class="cover-org">${escHtml(org.name)}</div>
+    ${org.address ? `<div style="font-size:11px;color:#6b7280">${escHtml(org.address)}</div>` : ""}
+    ${org.phone ? `<div style="font-size:11px;color:#6b7280">Tel: ${escHtml(org.phone)}</div>` : ""}
     <div class="divider" style="width:100%;margin:28px 0;"></div>
     <div class="cover-subtitle">TENDER DOCUMENT</div>
-    <div class="cover-project">${project.name}</div>
-    ${project.district ? `<div class="cover-subtitle">${project.district}</div>` : ""}
+    <div class="cover-project">${escHtml(project.name)}</div>
+    ${project.district ? `<div class="cover-subtitle">${escHtml(project.district)}</div>` : ""}
     <div class="cover-meta">
-      ${project.clientCompany ? `<div><strong>Client:</strong> ${project.clientCompany}</div>` : ""}
-      ${project.projectNumber ? `<div><strong>Project No:</strong> ${project.projectNumber}</div>` : ""}
-      <div><strong>Prepared by:</strong> ${org.name}</div>
-      ${org.panNumber ? `<div><strong>PAN:</strong> ${org.panNumber}</div>` : ""}
+      ${project.clientCompany ? `<div><strong>Client:</strong> ${escHtml(project.clientCompany)}</div>` : ""}
+      ${project.projectNumber ? `<div><strong>Project No:</strong> ${escHtml(project.projectNumber)}</div>` : ""}
+      <div><strong>Prepared by:</strong> ${escHtml(org.name)}</div>
+      ${org.panNumber ? `<div><strong>PAN:</strong> ${escHtml(org.panNumber)}</div>` : ""}
       <div><strong>Date:</strong> ${today}</div>
     </div>
   </div>
@@ -99,14 +117,14 @@ ${project.scopeOfWork ? `
 <div class="page">
   <h2>Scope of Work</h2>
   <div class="divider"></div>
-  <div style="margin-top:16px;line-height:1.8;white-space:pre-wrap;">${project.scopeOfWork}</div>
+  <div style="margin-top:16px;line-height:1.8;white-space:pre-wrap;">${escHtml(project.scopeOfWork)}</div>
 </div>
 ` : ""}
 
 <!-- BILL OF QUANTITIES -->
 <div class="page">
   <h2>Bill of Quantities</h2>
-  <div style="font-size:10px;color:#6b7280;margin-bottom:12px;">Project: ${project.name} | Generated: ${today}</div>
+  <div style="font-size:10px;color:#6b7280;margin-bottom:12px;">Project: ${escHtml(project.name)} | Generated: ${today}</div>
   <div class="divider"></div>
 
   <table>
@@ -123,20 +141,20 @@ ${project.scopeOfWork ? `
     <tbody>
       ${boq.disciplines.map((disc, di) => `
         <tr class="discipline-header">
-          <td colspan="6">${String.fromCharCode(65 + di)}. ${disc.name.toUpperCase()}</td>
+          <td colspan="6">${String.fromCharCode(65 + di)}. ${escHtml(disc.name).toUpperCase()}</td>
         </tr>
         ${disc.groups.map((grp, gi) => `
           <tr class="group-row">
             <td>${String.fromCharCode(65 + di)}.${gi + 1}</td>
-            <td>${grp.name}${grp.preamble ? `<br/><span style="font-weight:normal;font-size:9px;color:#6b7280">${grp.preamble}</span>` : ""}</td>
-            <td>${grp.unit}</td>
+            <td>${escHtml(grp.name)}${grp.preamble ? `<br/><span style="font-weight:normal;font-size:9px;color:#6b7280">${escHtml(grp.preamble)}</span>` : ""}</td>
+            <td>${escHtml(grp.unit)}</td>
             <td class="text-right">${grp.totalQuantity.toFixed(3)}</td>
             <td class="text-right">${NRS(grp.rate)}</td>
             <td class="text-right">${NRS(grp.amount)}</td>
           </tr>
         `).join("")}
         <tr class="total-row">
-          <td colspan="5" class="text-right">Sub-total — ${disc.name}</td>
+          <td colspan="5" class="text-right">Sub-total — ${escHtml(disc.name)}</td>
           <td class="text-right">${NRS(disc.subtotal)}</td>
         </tr>
       `).join("")}
@@ -180,7 +198,7 @@ ${project.rateAnalyses.length > 0 ? `
   <div style="margin-top:16px;">
     ${project.rateAnalyses.map(ra => `
       <div class="rate-analysis-item">
-        <div class="ra-title">${ra.rateItem.code} — ${ra.rateItem.description} (per ${ra.rateItem.unit})</div>
+        <div class="ra-title">${escHtml(ra.rateItem.code)} — ${escHtml(ra.rateItem.description)} (per ${escHtml(ra.rateItem.unit)})</div>
         <div class="ra-row"><span>Material Cost</span><span>NRS ${NRS(ra.materialCost)}</span></div>
         <div class="ra-row"><span>Skilled Labour</span><span>NRS ${NRS(ra.skilledLabour)}</span></div>
         <div class="ra-row"><span>Semi-skilled Labour</span><span>NRS ${NRS(ra.semiSkilledLabour)}</span></div>
@@ -188,7 +206,7 @@ ${project.rateAnalyses.length > 0 ? `
         <div class="ra-row"><span>Equipment Cost</span><span>NRS ${NRS(ra.equipmentCost)}</span></div>
         <div class="ra-row"><span>Overhead (${ra.overheadPct}%)</span><span>NRS ${NRS((ra.materialCost + ra.skilledLabour + ra.semiSkilledLabour + ra.unskilledLabour + ra.equipmentCost) * ra.overheadPct / 100)}</span></div>
         <div class="ra-row"><span>Profit (${ra.profitPct}%)</span><span>NRS ${NRS((ra.materialCost + ra.skilledLabour + ra.semiSkilledLabour + ra.unskilledLabour + ra.equipmentCost) * ra.profitPct / 100)}</span></div>
-        <div class="computed-rate">Composite Rate: NRS ${NRS(ra.computedRate)} / ${ra.rateItem.unit} ${ra.useComputedRate ? "(ACTIVE)" : "(not applied)"}</div>
+        <div class="computed-rate">Composite Rate: NRS ${NRS(ra.computedRate)} / ${escHtml(ra.rateItem.unit)} ${ra.useComputedRate ? "(ACTIVE)" : "(not applied)"}</div>
       </div>
     `).join("")}
   </div>
@@ -209,11 +227,11 @@ ${project.rateAnalyses.length > 0 ? `
   <div style="margin-top:60px;display:flex;justify-content:space-between;">
     <div style="text-align:center;width:40%;">
       <div style="border-top:1px solid #374151;padding-top:6px;margin-top:40px;">Signature of Estimator</div>
-      <div style="font-size:10px;color:#6b7280;">${org.name}</div>
+      <div style="font-size:10px;color:#6b7280;">${escHtml(org.name)}</div>
     </div>
     <div style="text-align:center;width:40%;">
       <div style="border-top:1px solid #374151;padding-top:6px;margin-top:40px;">Signature of Client</div>
-      <div style="font-size:10px;color:#6b7280;">${project.clientCompany ?? "___________________"}</div>
+      <div style="font-size:10px;color:#6b7280;">${escHtml(project.clientCompany ?? "___________________")}</div>
     </div>
   </div>
 </div>
@@ -221,20 +239,24 @@ ${project.rateAnalyses.length > 0 ? `
 </body>
 </html>`;
 
-    const puppeteer = await import("puppeteer");
-    const browser = await puppeteer.default.launch({ headless: true });
-    const browserPage = await browser.newPage();
-    await browserPage.setContent(html, { waitUntil: "load" });
-    const pdfBytes = await browserPage.pdf({ format: "A4", printBackground: true, margin: { top: "10mm", bottom: "10mm" } });
-    await browser.close();
+    const result = await withSemaphore("pdf", 3, async () => {
+      const puppeteer = await import("puppeteer");
+      const browser = await puppeteer.default.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+      const browserPage = await browser.newPage();
+      await browserPage.setJavaScriptEnabled(false);
+      await browserPage.setContent(html, { waitUntil: "domcontentloaded" });
+      const pdfBytes = await browserPage.pdf({ format: "A4", printBackground: true, margin: { top: "10mm", bottom: "10mm" } });
+      await browser.close();
 
-    const filename = `${project.name.replace(/[^a-z0-9]/gi, "_")}_Tender.pdf`;
-    return new NextResponse(new Uint8Array(pdfBytes), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+      const filename = `${project.name.replace(/[^a-z0-9]/gi, "_")}_Tender.pdf`;
+      return new NextResponse(new Uint8Array(pdfBytes), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
     });
+    return result as NextResponse;
   } catch (err) {
     return handleApiError(err);
   }

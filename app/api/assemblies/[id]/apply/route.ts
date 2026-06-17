@@ -4,8 +4,10 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withTenantGuard } from "@/lib/auth";
+import { getLatestDudbcFY } from "@/lib/rates";
+import { randomUUID } from "crypto";
 
 const schema = z.object({
   projectId: z.string().min(1),
@@ -18,7 +20,7 @@ const schema = z.object({
 // Resolves rateCode → rateItemId against published DUDBC rates (latest FY if fiscalYear not given).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -56,11 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!discipline) return apiError("NOT_FOUND", "Discipline not found on this project.", 404);
 
     // Build rateCode → rateItemId map from published DUDBC rates
-    const targetFY = fiscalYear ?? (await prisma.rateItem.findFirst({
-      where: { source: "DUDBC", isPublished: true },
-      orderBy: { fiscalYear: "desc" },
-      select: { fiscalYear: true },
-    }))?.fiscalYear;
+    const targetFY = fiscalYear ?? await getLatestDudbcFY();
 
     const allCodes = assembly.groups.flatMap(g => [
       g.rateCode,
@@ -83,47 +81,46 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
     let sortBase = (maxSort._max.sortOrder ?? -1) + 1;
 
-    let created = 0;
+    // Pre-generate category IDs so children can reference them without sequential round-trips.
+    const categoryIds = assembly.groups.map(() => randomUUID());
 
-    // Create category groups and their layer children
-    for (const category of assembly.groups) {
-      const cat = await prisma.takeoffGroup.create({
-        data: {
-          projectId,
-          disciplineId,
-          parentId: null,
-          name: category.name,
-          type: category.type as any,
-          colour: category.colour,
-          lineWidth: category.lineWidth,
-          additionalParams: category.additionalParams as any ?? undefined,
-          rateItemId: category.rateCode ? rateMap.get(category.rateCode) ?? null : null,
-          assemblyId: assembly.id,
-          sortOrder: sortBase++,
-        },
-      });
-      created++;
+    const categoryRows = assembly.groups.map((category, i) => ({
+      id: categoryIds[i],
+      projectId,
+      disciplineId,
+      parentId: null as string | null,
+      name: category.name,
+      type: category.type as string,
+      colour: category.colour,
+      lineWidth: category.lineWidth,
+      additionalParams: (category.additionalParams as any) ?? undefined,
+      rateItemId: category.rateCode ? rateMap.get(category.rateCode) ?? null : null,
+      assemblyId: assembly.id,
+      sortOrder: sortBase + i,
+    }));
 
-      let childSort = 0;
-      for (const child of (category.children as any[])) {
-        await prisma.takeoffGroup.create({
-          data: {
-            projectId,
-            disciplineId,
-            parentId: cat.id,
-            name: child.name,
-            type: child.type as any,
-            colour: child.colour,
-            lineWidth: child.lineWidth ?? 2,
-            additionalParams: child.additionalParams as any ?? undefined,
-            rateItemId: child.rateCode ? rateMap.get(child.rateCode) ?? null : null,
-            assemblyId: assembly.id,
-            sortOrder: childSort++,
-          },
-        });
-        created++;
-      }
-    }
+    const childRows = assembly.groups.flatMap((category, i) =>
+      (category.children as any[]).map((child: any, ci: number) => ({
+        projectId,
+        disciplineId,
+        parentId: categoryIds[i],
+        name: child.name,
+        type: child.type as string,
+        colour: child.colour,
+        lineWidth: child.lineWidth ?? 2,
+        additionalParams: child.additionalParams ?? undefined,
+        rateItemId: child.rateCode ? rateMap.get(child.rateCode) ?? null : null,
+        assemblyId: assembly.id,
+        sortOrder: ci,
+      }))
+    );
+
+    await prisma.$transaction(async (tx) => {
+      if (categoryRows.length > 0) await (tx.takeoffGroup.createMany as any)({ data: categoryRows });
+      if (childRows.length > 0) await (tx.takeoffGroup.createMany as any)({ data: childRows });
+    });
+
+    const created = categoryRows.length + childRows.length;
 
     await appendAuditLog({
       orgId: project.orgId,

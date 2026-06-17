@@ -47,6 +47,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | "all">("all");
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFolderId, setUploadFolderId] = useState<string | null>(null);
@@ -67,12 +68,12 @@ export function DocumentsTab({ project, isAdmin }: Props) {
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/projects/${project.id}/folders`).then(r => r.json()),
-      fetch(`/api/projects/${project.id}/drawings?limit=200&isLatest=1`).then(r => r.json()),
+      fetch(`/api/projects/${project.id}/folders`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+      fetch(`/api/projects/${project.id}/drawings?limit=200&isLatest=1`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
     ]).then(([fData, dData]) => {
       setFolders(Array.isArray(fData) ? fData : []);
       setDrawings(dData.data ?? []);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => setFetchError(true)).finally(() => setLoading(false));
   }, [project.id]);
 
   const visibleDrawings = drawings.filter(d => {
@@ -186,8 +187,8 @@ export function DocumentsTab({ project, isAdmin }: Props) {
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
           <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Folders</h3>
           {isAdmin && (
-            <button onClick={() => setCreatingFolder(true)} title="New folder"
-              className="w-5 h-5 rounded text-gray-400 hover:text-blue-600 text-lg leading-none flex items-center justify-center">+</button>
+            <button onClick={() => setCreatingFolder(true)} aria-label="New folder"
+              className="w-5 h-5 rounded text-gray-600 hover:text-blue-600 text-lg leading-none flex items-center justify-center">+</button>
           )}
         </div>
 
@@ -202,7 +203,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
             <span className="flex items-center gap-2">
               <span>📂</span> All Drawings
             </span>
-            <span className="text-gray-400">{allCount}</span>
+            <span className="text-gray-600">{allCount}</span>
           </button>
 
           {/* Folder items */}
@@ -230,12 +231,13 @@ export function DocumentsTab({ project, isAdmin }: Props) {
                     <span className="truncate">{folder.name}</span>
                   </span>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className="text-gray-400">{folder._count.drawings}</span>
+                    <span className="text-gray-600">{folder._count.drawings}</span>
                     {isAdmin && (
                       <div className="relative">
                         <button
                           onClick={e => { e.stopPropagation(); setFolderMenuId(folderMenuId === folder.id ? null : folder.id); }}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 text-sm px-0.5"
+                          aria-label={`Options for folder ${folder.name}`}
+                          className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-gray-600 text-sm px-0.5"
                         >⋮</button>
                         {folderMenuId === folder.id && (
                           <>
@@ -268,7 +270,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
               }`}
             >
               <span className="flex items-center gap-2"><span>📄</span> Uncategorized</span>
-              <span className="text-gray-400">{uncategorizedCount}</span>
+              <span className="text-gray-600">{uncategorizedCount}</span>
             </button>
           )}
 
@@ -282,7 +284,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
                 className="w-full text-xs border border-blue-400 rounded px-2 py-1 focus:outline-none" />
               <div className="flex gap-1 mt-1">
                 <button onClick={createFolder} className="text-xs text-blue-600 font-medium hover:underline">Add</button>
-                <button onClick={() => { setCreatingFolder(false); setNewFolderName(""); }} className="text-xs text-gray-400 hover:underline">Cancel</button>
+                <button onClick={() => { setCreatingFolder(false); setNewFolderName(""); }} className="text-xs text-gray-600 hover:underline">Cancel</button>
               </div>
             </div>
           )}
@@ -294,17 +296,22 @@ export function DocumentsTab({ project, isAdmin }: Props) {
         {/* Content toolbar */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-200 flex-shrink-0 bg-white">
           <div className="flex-1">
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <label htmlFor="drawings-search" className="sr-only">Search drawings</label>
+            <input id="drawings-search" value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search drawings…"
               className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-0.5">
             <button onClick={() => setViewMode("grid")}
-              className={`px-2 py-1 text-xs rounded transition ${viewMode === "grid" ? "bg-gray-100 text-gray-800" : "text-gray-400 hover:text-gray-600"}`}
-              title="Grid view">⊞</button>
+              aria-label="Grid view"
+              aria-pressed={viewMode === "grid"}
+              className={`px-2 py-1 text-xs rounded transition ${viewMode === "grid" ? "bg-gray-100 text-gray-800" : "text-gray-600 hover:text-gray-600"}`}
+            >⊞</button>
             <button onClick={() => setViewMode("list")}
-              className={`px-2 py-1 text-xs rounded transition ${viewMode === "list" ? "bg-gray-100 text-gray-800" : "text-gray-400 hover:text-gray-600"}`}
-              title="List view">☰</button>
+              aria-label="List view"
+              aria-pressed={viewMode === "list"}
+              className={`px-2 py-1 text-xs rounded transition ${viewMode === "list" ? "bg-gray-100 text-gray-800" : "text-gray-600 hover:text-gray-600"}`}
+            >☰</button>
           </div>
           {isAdmin && (
             <button
@@ -332,13 +339,33 @@ export function DocumentsTab({ project, isAdmin }: Props) {
 
         {/* Drawing grid / list */}
         <div className="flex-1 overflow-y-auto p-5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
-          {loading && (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-gray-400 text-sm">Loading drawings…</div>
+          {fetchError && (
+            <div role="alert" className="flex flex-col items-center justify-center py-20 text-center">
+              <p className="text-gray-700 font-medium mb-2">Could not load documents</p>
+              <button
+                onClick={() => {
+                  setFetchError(false);
+                  setLoading(true);
+                  Promise.all([
+                    fetch(`/api/projects/${project.id}/folders`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+                    fetch(`/api/projects/${project.id}/drawings?limit=200&isLatest=1`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+                  ]).then(([fData, dData]) => {
+                    setFolders(Array.isArray(fData) ? fData : []);
+                    setDrawings(dData.data ?? []);
+                  }).catch(() => setFetchError(true)).finally(() => setLoading(false));
+                }}
+                className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+              >Try again</button>
             </div>
           )}
 
-          {!loading && visibleDrawings.length === 0 && (
+          {!fetchError && loading && (
+            <div className="flex items-center justify-center py-20">
+              <div className="text-gray-600 text-sm">Loading drawings…</div>
+            </div>
+          )}
+
+          {!loading && !fetchError && visibleDrawings.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="text-5xl mb-4">📄</div>
               <p className="text-gray-500 font-medium">No drawings here yet</p>
@@ -351,7 +378,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
             </div>
           )}
 
-          {!loading && visibleDrawings.length > 0 && viewMode === "grid" && (
+          {!loading && !fetchError && visibleDrawings.length > 0 && viewMode === "grid" && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {visibleDrawings.map(drawing => (
                 <DrawingCard key={drawing.id} drawing={drawing} folders={folders}
@@ -368,7 +395,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
             </div>
           )}
 
-          {!loading && visibleDrawings.length > 0 && viewMode === "list" && (
+          {!loading && !fetchError && visibleDrawings.length > 0 && viewMode === "list" && (
             <div className="border border-gray-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -392,16 +419,19 @@ export function DocumentsTab({ project, isAdmin }: Props) {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-xs text-gray-500">
+                      <td className="px-4 py-2.5 text-xs text-gray-600">
                         {folders.find(f => f.id === d.folderId)?.name ?? "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-xs text-gray-500">{d.pageCount}</td>
-                      <td className="px-4 py-2.5 text-xs text-gray-500">{timeAgo(d.createdAt)}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-600">{d.pageCount}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-600">{timeAgo(d.createdAt)}</td>
                       <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
                         {isAdmin && (
                           <div className="relative inline-block">
-                            <button onClick={() => setDrawingMenuId(drawingMenuId === d.id ? null : d.id)}
-                              className="text-gray-400 hover:text-gray-600 px-2">⋮</button>
+                            <button
+                              onClick={() => setDrawingMenuId(drawingMenuId === d.id ? null : d.id)}
+                              aria-label={`Options for ${d.fileName}`}
+                              className="text-gray-600 hover:text-gray-600 px-2"
+                            >⋮</button>
                             {drawingMenuId === d.id && (
                               <>
                                 <div className="fixed inset-0 z-10" onClick={() => setDrawingMenuId(null)} />
@@ -410,7 +440,7 @@ export function DocumentsTab({ project, isAdmin }: Props) {
                                     className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-gray-50">🎯 Open for Takeoff</button>
                                   <div className="border-t border-gray-100 my-1" />
                                   {folders.length > 0 && (
-                                    <div className="px-3 py-1 text-gray-400 text-[10px] font-semibold uppercase">Move to</div>
+                                    <div className="px-3 py-1 text-gray-600 text-[10px] font-semibold uppercase">Move to</div>
                                   )}
                                   {folders.filter(f => f.id !== d.folderId).map(f => (
                                     <button key={f.id} onClick={async () => { await moveDrawingToFolder(d.id, f.id); setDrawingMenuId(null); }}
@@ -490,12 +520,12 @@ function DrawingCard({ drawing, folders, isAdmin, projectId, showMenu, onMenuTog
       <div className="p-2.5">
         <p className="text-xs font-medium text-gray-800 truncate" title={drawing.fileName}>{drawing.fileName}</p>
         <div className="flex items-center gap-1 mt-0.5">
-          <span className="text-[10px] text-gray-400">{drawing.pageCount} page{drawing.pageCount !== 1 ? "s" : ""}</span>
+          <span className="text-[10px] text-gray-600">{drawing.pageCount} page{drawing.pageCount !== 1 ? "s" : ""}</span>
           {drawing.revisionNumber && (
             <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-semibold">Rev {drawing.revisionNumber}</span>
           )}
         </div>
-        <p className="text-[10px] text-gray-400 mt-0.5">{timeAgo(drawing.createdAt)}</p>
+        <p className="text-[10px] text-gray-600 mt-0.5">{timeAgo(drawing.createdAt)}</p>
       </div>
 
       {/* Menu button */}
@@ -503,6 +533,7 @@ function DrawingCard({ drawing, folders, isAdmin, projectId, showMenu, onMenuTog
         <div className="absolute top-2 right-2" onClick={e => e.stopPropagation()}>
           <button
             onClick={onMenuToggle}
+            aria-label={`Options for ${drawing.fileName}`}
             className="opacity-0 group-hover:opacity-100 w-6 h-6 bg-white/90 rounded-full text-gray-500 hover:text-gray-800 shadow flex items-center justify-center text-sm transition"
           >⋮</button>
           {showMenu && (
@@ -513,7 +544,7 @@ function DrawingCard({ drawing, folders, isAdmin, projectId, showMenu, onMenuTog
                 {folders.length > 0 && (
                   <>
                     <div className="border-t border-gray-100 my-1" />
-                    <div className="px-3 py-1 text-gray-400 text-[10px] font-semibold uppercase">Move to</div>
+                    <div className="px-3 py-1 text-gray-600 text-[10px] font-semibold uppercase">Move to</div>
                     {folders.filter(f => f.id !== drawing.folderId).map(f => (
                       <button key={f.id} onClick={() => onMove(f.id)}
                         className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-gray-50">📁 {f.name}</button>

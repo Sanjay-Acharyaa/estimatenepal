@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { redis } from "./redis";
 
 export interface BOQItem {
   id: string;
@@ -71,7 +72,27 @@ export interface BOQDocument {
   generatedAt: string;
 }
 
+const BOQ_CACHE_TTL = 30; // seconds — short enough to feel live, long enough to batch export calls
+
+export async function invalidateBOQCache(projectId: string): Promise<void> {
+  redis.del(`boq:${projectId}`).catch(() => {});
+}
+
 export async function generateBOQ(projectId: string): Promise<BOQDocument> {
+  const cacheKey = `boq:${projectId}`;
+  try {
+    const hit = await redis.get(cacheKey);
+    if (hit) return JSON.parse(hit) as BOQDocument;
+  } catch {
+    // Redis miss or error — proceed to compute
+  }
+
+  const boq = await computeBOQ(projectId);
+  redis.set(cacheKey, JSON.stringify(boq), "EX", BOQ_CACHE_TTL).catch(() => {});
+  return boq;
+}
+
+async function computeBOQ(projectId: string): Promise<BOQDocument> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {

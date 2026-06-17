@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const applySchema = z.object({
   projectId: z.string().min(1),
@@ -12,7 +12,7 @@ const applySchema = z.object({
 // POST /api/project-templates/[id]/apply — apply template to a project
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -53,11 +53,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           data: { projectId: project.id, disciplineId: disc.id, name: g.name, type: g.type as any, colour: g.colour, lineWidth: g.lineWidth, rateItemId: g.rateCode ? rateMap.get(g.rateCode) ?? null : null, sortOrder: sortOrder++ },
         });
         created++;
-        for (const c of g.children ?? []) {
-          await prisma.takeoffGroup.create({
-            data: { projectId: project.id, disciplineId: disc.id, parentId: cat.id, name: c.name, type: c.type as any, colour: c.colour, lineWidth: c.lineWidth, rateItemId: c.rateCode ? rateMap.get(c.rateCode) ?? null : null, sortOrder: sortOrder++ },
+        const children = g.children ?? [];
+        if (children.length > 0) {
+          await prisma.takeoffGroup.createMany({
+            data: children.map((c, ci) => ({
+              projectId: project.id, disciplineId: disc.id, parentId: cat.id,
+              name: c.name, type: c.type as any, colour: c.colour, lineWidth: c.lineWidth,
+              rateItemId: c.rateCode ? rateMap.get(c.rateCode) ?? null : null,
+              sortOrder: sortOrder + ci,
+            })),
           });
-          created++;
+          sortOrder += children.length;
+          created += children.length;
         }
       }
     }
@@ -69,6 +76,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 // DELETE /api/project-templates/[id]
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     const orgId = token.orgId as string | null;

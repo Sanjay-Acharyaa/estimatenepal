@@ -16,30 +16,40 @@ export function ScaleZonePanel({ defaultUnit, defaultScale, onSave, onCancel }: 
   const [unit, setUnit] = useState(UNITS.includes(defaultUnit) ? defaultUnit : "m");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState("");
 
   function handleSave() {
     const val = parseFloat(scale);
     if (!val || val <= 0) {
-      setError("Enter a positive scale value.");
+      setFieldError("Enter a positive scale value.");
       return;
     }
+    setFieldError("");
     onSave(val, unit, label);
   }
 
   return (
-    <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-80">
-        <h3 className="font-bold text-gray-900 mb-1">Scale Zone</h3>
+    <div
+      className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="szp-title"
+      onKeyDown={e => { if (e.key === "Escape") onCancel(); }}
+    >
+      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
+        <h3 id="szp-title" className="font-bold text-gray-900 mb-1">Scale Zone</h3>
         <p className="text-xs text-gray-500 mb-4">
           Set the scale for this region. It will override the page scale inside the zone.
         </p>
 
-        {error && <p className="text-red-600 text-xs mb-2">{error}</p>}
+        {error && <p role="alert" className="text-red-600 text-xs mb-2">{error}</p>}
+        {fieldError && <p id="szp-scale-err" role="alert" className="text-red-600 text-xs mb-2">{fieldError}</p>}
 
         <div className="space-y-3 mb-4">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Label (optional)</label>
+            <label htmlFor="szp-label" className="block text-xs font-medium text-gray-700 mb-1">Label (optional)</label>
             <input
+              id="szp-label"
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
@@ -49,21 +59,25 @@ export function ScaleZonePanel({ defaultUnit, defaultScale, onSave, onCancel }: 
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Scale (real-world units / px)</label>
+            <label htmlFor="szp-scale" className="block text-xs font-medium text-gray-700 mb-1">Scale (real-world units / px)</label>
             <div className="flex gap-2">
               <input
+                id="szp-scale"
                 type="number"
                 min="0.000001"
                 step="any"
                 value={scale}
-                onChange={(e) => { setScale(e.target.value); setError(""); }}
+                onChange={(e) => { setScale(e.target.value); setFieldError(""); setError(""); }}
                 placeholder="e.g. 0.05"
                 autoFocus
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                aria-describedby={fieldError ? "szp-scale-err" : undefined}
+                aria-invalid={!!fieldError}
+                className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldError ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-green-500"}`}
               />
               <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
+                aria-label="Scale unit"
                 className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}

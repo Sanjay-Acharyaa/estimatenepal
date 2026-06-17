@@ -83,7 +83,7 @@ function RateCodePicker({ value, onChange }: { value: string; onChange: (code: s
               className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs">
               <span className="font-mono text-blue-700 mr-2">{r.code}</span>
               <span className="text-gray-600">{r.description.slice(0, 50)}</span>
-              <span className="ml-1 text-gray-400">· {r.unit}</span>
+              <span className="ml-1 text-gray-600">· {r.unit}</span>
             </button>
           ))}
         </div>
@@ -149,7 +149,7 @@ function ScopeDialog({ ctx, onDone }: { ctx: ScopeCtx; onDone: (updated: Assembl
             <p className="text-xs text-gray-500 mt-0.5">Updates template and patches all existing projects that used this assembly.</p>
           </button>
         </div>
-        {saving && <p className="text-xs text-center text-gray-400">Saving…</p>}
+        {saving && <p className="text-xs text-center text-gray-600">Saving…</p>}
       </div>
     </div>
   );
@@ -193,7 +193,7 @@ function LayerRow({ layer, assemblyId, categoryId, isOrg, onUpdate, onDelete }: 
             {TOOL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
           <input type="color" value={colour} onChange={e => setColour(e.target.value)}
-            className="w-8 h-7 rounded border border-gray-300 cursor-pointer" title="Colour" />
+            className="w-8 h-7 rounded border border-gray-300 cursor-pointer" aria-label="Layer colour" />
         </div>
         <RateCodePicker value={rateCode} onChange={setRateCode} />
         <div className="flex gap-2 justify-end">
@@ -211,7 +211,7 @@ function LayerRow({ layer, assemblyId, categoryId, isOrg, onUpdate, onDelete }: 
       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: layer.colour }} />
       <span className="text-sm text-gray-700 flex-1 truncate">{layer.name}</span>
       <span className={`text-xs px-1.5 py-0.5 rounded ${typeBadge(layer.type)}`}>{typeLabel(layer.type)}</span>
-      {layer.rateCode && <span className="text-xs font-mono text-gray-400">{layer.rateCode}</span>}
+      {layer.rateCode && <span className="text-xs font-mono text-gray-600">{layer.rateCode}</span>}
       {isOrg && (
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
           <button onClick={() => setEditing(true)} className="text-xs text-blue-600 hover:text-blue-800 px-1.5 py-0.5 rounded hover:bg-blue-50">Edit</button>
@@ -390,7 +390,7 @@ export default function AssembliesPage() {
           <h1 className="text-xl font-bold text-gray-800">Assembly Library</h1>
           <p className="text-sm text-gray-500 mt-0.5">Reusable takeoff templates — apply to any project</p>
         </div>
-        <Link href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600">← Dashboard</Link>
+        <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-600">← Dashboard</Link>
       </div>
 
       <div className="flex h-[calc(100vh-73px)]">
@@ -417,14 +417,14 @@ export default function AssembliesPage() {
                 </button>
               ))}
             </div>
-            <p className="text-xs text-gray-400">{total} assemblies found</p>
+            <p className="text-xs text-gray-600">{total} assemblies found</p>
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
             {loading && Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="p-4 animate-pulse"><div className="h-4 bg-gray-200 rounded w-3/4 mb-2" /><div className="h-3 bg-gray-100 rounded w-1/2" /></div>
             ))}
-            {!loading && assemblies.length === 0 && <div className="text-center text-gray-400 py-16 text-sm">No assemblies found.</div>}
+            {!loading && assemblies.length === 0 && <div className="text-center text-gray-600 py-16 text-sm">No assemblies found.</div>}
             {assemblies.map(a => (
               <div key={a.id} onClick={() => setPreview(a)}
                 className={`p-4 cursor-pointer hover:bg-gray-50 transition ${preview?.id === a.id ? "bg-blue-50 border-l-4 border-blue-500" : ""} ${deleting === a.id ? "opacity-40 pointer-events-none" : ""}`}>
@@ -435,7 +435,7 @@ export default function AssembliesPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   {a.category && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{a.category}</span>}
-                  <span className="text-xs text-gray-400">{a._count.groups} groups</span>
+                  <span className="text-xs text-gray-600">{a._count.groups} groups</span>
                 </div>
               </div>
             ))}
@@ -456,7 +456,7 @@ export default function AssembliesPage() {
             <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
               <div className="text-5xl mb-4">🏗️</div>
               <h2 className="text-lg font-semibold text-gray-700 mb-2">Assembly Library</h2>
-              <p className="text-sm text-gray-400 max-w-sm">Select an assembly to preview or edit its structure.</p>
+              <p className="text-sm text-gray-600 max-w-sm">Select an assembly to preview or edit its structure.</p>
             </div>
           ) : (
             <div className="flex flex-col h-full">
@@ -501,7 +501,7 @@ export default function AssembliesPage() {
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-200">
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: cat.colour }} />
                       <span className="font-medium text-sm text-gray-800 flex-1">{cat.name}</span>
-                      <span className="text-xs text-gray-400">{cat.children.length} layers</span>
+                      <span className="text-xs text-gray-600">{cat.children.length} layers</span>
                       {isOrg(preview) && (
                         <button onClick={() => handleDeleteGroup(preview.id, cat.id, true)}
                           className="text-xs text-red-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100">✕</button>
@@ -516,7 +516,7 @@ export default function AssembliesPage() {
                         />
                       ))}
                       {cat.children.length === 0 && !isOrg(preview) && (
-                        <div className="px-4 py-2 text-xs text-gray-400 italic">No layers defined</div>
+                        <div className="px-4 py-2 text-xs text-gray-600 italic">No layers defined</div>
                       )}
                       {isOrg(preview) && (
                         <AddLayerForm assemblyId={preview.id} categoryId={cat.id}

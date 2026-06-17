@@ -36,7 +36,8 @@ export default async function SharePage({ params }: { params: { token: string } 
     );
   }
 
-  await prisma.shareLink.update({ where: { id: link.id }, data: { viewCount: { increment: 1 } } });
+  // Fire-and-forget: viewCount is a soft metric; do not block page render on it
+  prisma.shareLink.update({ where: { id: link.id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
 
   const p = link.project;
   const alreadyResponded = !!link.approvalStatus;
@@ -64,13 +65,13 @@ export default async function SharePage({ params }: { params: { token: string } 
         {/* Project details */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Project Details</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {p.clientName && <div><p className="text-xs text-gray-400">Client</p><p className="text-sm font-medium text-gray-700">{p.clientName}</p></div>}
-            {p.clientCompany && <div><p className="text-xs text-gray-400">Company</p><p className="text-sm font-medium text-gray-700">{p.clientCompany}</p></div>}
-            {p.district && <div><p className="text-xs text-gray-400">District</p><p className="text-sm font-medium text-gray-700">{p.district}</p></div>}
-            {(p as any).bidDueDate && <div><p className="text-xs text-gray-400">Bid Due Date</p><p className="text-sm font-medium text-gray-700">{new Date((p as any).bidDueDate).toLocaleDateString()}</p></div>}
-            <div><p className="text-xs text-gray-400">Unit System</p><p className="text-sm font-medium text-gray-700">{p.unitSystem}</p></div>
-            <div><p className="text-xs text-gray-400">VAT</p><p className="text-sm font-medium text-gray-700">{p.vatEnabled ? `${p.vatRate}%` : "Not applicable"}</p></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {p.clientName && <div><p className="text-xs text-gray-600">Client</p><p className="text-sm font-medium text-gray-700">{p.clientName}</p></div>}
+            {p.clientCompany && <div><p className="text-xs text-gray-600">Company</p><p className="text-sm font-medium text-gray-700">{p.clientCompany}</p></div>}
+            {p.district && <div><p className="text-xs text-gray-600">District</p><p className="text-sm font-medium text-gray-700">{p.district}</p></div>}
+            {(p as any).bidDueDate && <div><p className="text-xs text-gray-600">Bid Due Date</p><p className="text-sm font-medium text-gray-700">{new Date((p as any).bidDueDate).toLocaleDateString()}</p></div>}
+            <div><p className="text-xs text-gray-600">Unit System</p><p className="text-sm font-medium text-gray-700">{p.unitSystem}</p></div>
+            <div><p className="text-xs text-gray-600">VAT</p><p className="text-sm font-medium text-gray-700">{p.vatEnabled ? `${p.vatRate}%` : "Not applicable"}</p></div>
           </div>
         </div>
 
@@ -85,7 +86,7 @@ export default async function SharePage({ params }: { params: { token: string } 
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                     <span className="text-sm text-gray-700">{d.name}</span>
                   </div>
-                  <span className="text-xs text-gray-400">{d._count.groups} takeoff groups</span>
+                  <span className="text-xs text-gray-600">{d._count.groups} takeoff groups</span>
                 </div>
               ))}
             </div>
@@ -116,13 +117,13 @@ export default async function SharePage({ params }: { params: { token: string } 
               Proposal {link.approvalStatus === "APPROVED" ? "Approved" : "Rejected"} by {link.clientName}
             </p>
             {link.approvalNote && <p className="text-sm text-gray-600 mt-2">"{link.approvalNote}"</p>}
-            <p className="text-xs text-gray-400 mt-2">{link.approvedAt ? new Date(link.approvedAt).toLocaleString() : ""}</p>
+            <p className="text-xs text-gray-600 mt-2">{link.approvedAt ? new Date(link.approvedAt).toLocaleString() : ""}</p>
           </div>
         ) : (
           <ShareApprovalForm token={params.token} clientEmail={link.clientEmail} />
         )}
 
-        <p className="text-xs text-gray-400 text-center">Shared via NepaliEstimate</p>
+        <p className="text-xs text-gray-600 text-center">Shared via NepaliEstimate</p>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 
 const updateSchema = z.object({
@@ -29,6 +29,10 @@ async function getRateAndGuard(rateId: string, token: any) {
 
 export async function GET(req: NextRequest, { params }: { params: { rateId: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -49,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: { rateId: stri
 
 export async function PUT(req: NextRequest, { params }: { params: { rateId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -88,7 +92,7 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
 
 export async function DELETE(req: NextRequest, { params }: { params: { rateId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

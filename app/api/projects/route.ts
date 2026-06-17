@@ -5,11 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withTenantGuard } from "@/lib/auth";
 
 const VALID_SORT_FIELDS = ["name", "createdAt", "bidDueDate", "status", "estimatedValue"] as const;
 type SortField = typeof VALID_SORT_FIELDS[number];
+
+const VALID_STATUSES = ["ESTIMATING","BID_SUBMITTED","ACCEPTED","IN_PROGRESS","COMPLETE","LOST","ARCHIVED"] as const;
+type ProjectStatus = typeof VALID_STATUSES[number];
 
 const createSchema = z.object({
   name: z.string().min(2).max(200),
@@ -42,19 +45,21 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token?.orgId) throw unauthorized();
 
-    // Tenant guard: verify user belongs to the org they're querying
+    // Tenant guard: verify user belongs to the org they're querying (Redis-cached)
     await withTenantGuard(token.id as string, token.orgId as string);
 
     const { page, limit, skip } = parsePagination(req.nextUrl.searchParams);
-    const search = req.nextUrl.searchParams.get("search") ?? "";
-    const status = req.nextUrl.searchParams.get("status") ?? "";
+    const search = (req.nextUrl.searchParams.get("search") ?? "").slice(0, 200);
+    // Whitelist status — reject unknown values rather than passing raw strings to Prisma
+    const rawStatus = req.nextUrl.searchParams.get("status") ?? "";
+    const status: ProjectStatus | "" = VALID_STATUSES.includes(rawStatus as ProjectStatus) ? rawStatus as ProjectStatus : "";
 
     // Whitelist sort fields to prevent arbitrary column access
     const rawSort = req.nextUrl.searchParams.get("sort") ?? "createdAt";
@@ -63,12 +68,11 @@ export async function GET(req: NextRequest) {
       : "createdAt";
     const sortDir = req.nextUrl.searchParams.get("dir") === "asc" ? "asc" : "desc";
 
-    // MEMBER with explicit project assignments only sees those projects
-    const user = await prisma.user.findUnique({ where: { id: token.id as string } });
-    const hasExplicitAssignments =
-      user?.role === "MEMBER"
-        ? (await prisma.projectMember.count({ where: { userId: token.id as string } })) > 0
-        : false;
+    // Role is in the JWT — no extra DB query needed
+    const isMember = token.role === "MEMBER";
+    const hasExplicitAssignments = isMember
+      ? (await prisma.projectMember.count({ where: { userId: token.id as string } })) > 0
+      : false;
 
     const where: any = {
       orgId: token.orgId as string,
@@ -103,7 +107,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -137,18 +141,22 @@ export async function POST(req: NextRequest) {
       ipAddress: ip,
     });
 
-    // Notify org admins
-    const admins = await prisma.user.findMany({
+    // Fire-and-forget — notification fan-out must not block the project creation response
+    prisma.user.findMany({
       where: { orgId: token.orgId as string, role: { in: ["OWNER", "ADMIN"] } },
       select: { id: true },
-    });
-    await prisma.notification.createMany({
-      data: admins.map((a) => ({
-        userId: a.id,
-        type: "project.created",
-        message: `New project created: ${project.name}`,
-        link: `/dashboard/projects/${project.id}`,
-      })),
+    }).then((admins) => {
+      if (admins.length === 0) return;
+      return prisma.notification.createMany({
+        data: admins.map((a) => ({
+          userId: a.id,
+          type: "project.created",
+          message: `New project created: ${project.name}`,
+          link: `/dashboard/projects/${project.id}`,
+        })),
+      });
+    }).catch((err) => {
+      console.error("[projects] Failed to create project notifications:", err);
     });
 
     return NextResponse.json(project, { status: 201 });

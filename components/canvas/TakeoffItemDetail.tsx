@@ -22,6 +22,7 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
   const [notes, setNotes] = useState(item.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ label?: string; wastagePct?: string }>({});
 
   const qtyDisplay = item.unit === "each"
     ? `${Math.round(item.quantity)} ${item.unit}`
@@ -29,11 +30,11 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
 
   async function handleSave() {
     const pct = parseFloat(wastagePct);
-    if (isNaN(pct) || pct < 0 || pct > 100) {
-      setError("Wastage % must be between 0 and 100.");
-      return;
-    }
-    if (!label.trim()) { setError("Label cannot be empty."); return; }
+    const fe: typeof fieldErrors = {};
+    if (!label.trim()) fe.label = "Label cannot be empty.";
+    if (isNaN(pct) || pct < 0 || pct > 100) fe.wastagePct = "Wastage % must be between 0 and 100.";
+    if (Object.keys(fe).length) { setFieldErrors(fe); return; }
+    setFieldErrors({});
     setError("");
     setSaving(true);
     try {
@@ -68,10 +69,10 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
         <div className="min-w-0">
-          <p className="text-xs text-gray-400 uppercase font-semibold mb-0.5">Shape detail</p>
+          <p className="text-xs text-gray-600 uppercase font-semibold mb-0.5">Shape detail</p>
           <p className="text-sm font-semibold text-gray-800 truncate">{item.label}</p>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-2 flex-shrink-0">×</button>
+        <button onClick={onClose} aria-label="Close shape detail" className="text-gray-600 hover:text-gray-600 text-xl leading-none ml-2 flex-shrink-0">×</button>
       </div>
 
       {/* Quantity badge */}
@@ -95,32 +96,43 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
         {error && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{error}</p>
+          <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{error}</p>
         )}
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Label</label>
+          <label htmlFor="tid-label" className="block text-xs text-gray-700 mb-1">Label</label>
           <input
-            value={label} onChange={e => setLabel(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            id="tid-label"
+            value={label}
+            onChange={e => { setLabel(e.target.value); setFieldErrors(f => ({ ...f, label: undefined })); }}
+            aria-describedby={fieldErrors.label ? "tid-label-err" : undefined}
+            aria-invalid={!!fieldErrors.label}
+            className={`w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 ${fieldErrors.label ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
           />
+          {fieldErrors.label && <p id="tid-label-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.label}</p>}
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">
+          <label htmlFor="tid-wastage" className="block text-xs text-gray-700 mb-1">
             Wastage %
-            <span className="text-gray-400 font-normal ml-1">(added on top of quantity)</span>
+            <span className="text-gray-600 font-normal ml-1">(added on top of quantity)</span>
           </label>
           <input
+            id="tid-wastage"
             type="number" min="0" max="100" step="0.5"
-            value={wastagePct} onChange={e => setWastagePct(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={wastagePct}
+            onChange={e => { setWastagePct(e.target.value); setFieldErrors(f => ({ ...f, wastagePct: undefined })); }}
+            aria-describedby={fieldErrors.wastagePct ? "tid-wastage-err" : undefined}
+            aria-invalid={!!fieldErrors.wastagePct}
+            className={`w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 ${fieldErrors.wastagePct ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
           />
+          {fieldErrors.wastagePct && <p id="tid-wastage-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.wastagePct}</p>}
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Site location</label>
+          <label htmlFor="tid-site-location" className="block text-xs text-gray-700 mb-1">Site location</label>
           <input
+            id="tid-site-location"
             value={siteLocation} onChange={e => setSiteLocation(e.target.value)}
             placeholder="e.g. Block A, Ground Floor"
             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -128,8 +140,9 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Date measured</label>
+          <label htmlFor="tid-date-measured" className="block text-xs text-gray-700 mb-1">Date measured</label>
           <input
+            id="tid-date-measured"
             type="date"
             value={measuredDate} onChange={e => setMeasuredDate(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -137,8 +150,9 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Notes</label>
+          <label htmlFor="tid-notes" className="block text-xs text-gray-700 mb-1">Notes</label>
           <textarea
+            id="tid-notes"
             value={notes} onChange={e => setNotes(e.target.value)}
             rows={4} placeholder="Any remarks about this measurement…"
             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
@@ -148,11 +162,11 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
         {/* Read-only info */}
         <div className="border-t border-gray-100 pt-3 space-y-1.5">
           <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Tool</span>
+            <span className="text-gray-600">Tool</span>
             <span className="text-gray-600 font-medium">{item.toolType}{item.shapeType ? ` · ${item.shapeType}` : ""}</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Scale used</span>
+            <span className="text-gray-600">Scale used</span>
             <span className="text-gray-600 font-medium">{item.scaleUsed.toFixed(5)}</span>
           </div>
         </div>

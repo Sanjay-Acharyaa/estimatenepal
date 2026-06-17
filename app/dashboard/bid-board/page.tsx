@@ -30,7 +30,7 @@ export default async function BidBoardPage() {
     return (
       <div className="p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Bid Board</h1>
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-600 text-sm">
           Super admins do not belong to an organisation. Use the{" "}
           <a href="/admin" className="text-red-600 hover:underline">Admin Panel</a> to manage organisations.
         </div>

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { sendEmail, passwordResetEmailHtml } from "@/lib/email";
-import { checkLoginRateLimit } from "@/lib/security";
+import { checkLoginRateLimit, getClientIp } from "@/lib/security";
 import { apiError, handleApiError } from "@/lib/errors";
 
 const schema = z.object({ email: z.string().email() });
@@ -13,7 +13,7 @@ const SUCCESS_MSG = "If that email is registered, a reset link has been sent.";
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkLoginRateLimit(ip);
     if (limited) return limited;
 
@@ -26,13 +26,20 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ message: SUCCESS_MSG });
 
     const token = crypto.randomBytes(32).toString("hex");
+    // Invalidate any previous reset token for this user before issuing a new one
+    const prevToken = await redis.get(`reset_user:${user.id}`);
+    if (prevToken) await redis.del(`reset:${prevToken}`);
+    await redis.set(`reset_user:${user.id}`, token, "EX", 3600);
     await redis.set(`reset:${token}`, user.id, "EX", 3600);
 
     const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`;
-    await sendEmail({
+    // Fire-and-forget — reset tokens are already in Redis; SMTP latency must not block the response.
+    sendEmail({
       to: user.email,
       subject: "Reset your NepaliEstimate password",
       html: passwordResetEmailHtml(resetUrl),
+    }).catch((emailErr) => {
+      console.error("[forgot-password] Failed to send reset email:", { email: user.email, emailErr });
     });
 
     return NextResponse.json({ message: SUCCESS_MSG });

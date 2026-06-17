@@ -40,8 +40,8 @@ export default async function SuperAdminPage() {
           <h2 className="text-lg font-bold text-gray-800 mb-4">
             Organisations ({orgs.length})
           </h2>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table className="w-full text-sm" aria-label="Organisations">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Name</th>
@@ -62,14 +62,14 @@ export default async function SuperAdminPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{org._count.users}</td>
                     <td className="px-4 py-3 text-gray-600">{org._count.projects}</td>
-                    <td className="px-4 py-3 text-gray-400">
+                    <td className="px-4 py-3 text-gray-600">
                       {new Date(org.createdAt).toLocaleDateString()}
                     </td>
                   </tr>
                 ))}
                 {orgs.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-600">
                       No organisations yet.
                     </td>
                   </tr>
@@ -84,8 +84,8 @@ export default async function SuperAdminPage() {
           <h2 className="text-lg font-bold text-gray-800 mb-4">
             Recent Users ({users.length})
           </h2>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table className="w-full text-sm" aria-label="Recent users">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Name</th>

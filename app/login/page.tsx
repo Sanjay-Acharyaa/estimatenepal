@@ -14,7 +14,9 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
 
   const verified = params.get("verified");
-  const callbackUrl = params.get("callbackUrl") ?? "/dashboard";
+  // Restrict to same-origin paths only — prevents open redirect via crafted callbackUrl
+  const rawCallback = params.get("callbackUrl") ?? "";
+  const callbackUrl = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/dashboard";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,28 +37,44 @@ function LoginForm() {
       <p className="text-gray-500 mb-6 text-sm">Sign in to your account</p>
 
       {verified && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">
+        <div role="status" className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">
           Email verified! You can now log in.
         </div>
       )}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
+        <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+          <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input
+            id="login-email"
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-label="Email address"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="you@example.com" />
+            placeholder="you@example.com"
+          />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+          <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <input
+            id="login-password"
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            aria-label="Password"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="••••••••" />
+            placeholder="••••••••"
+          />
         </div>
         <div className="text-right">
           <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
@@ -80,7 +98,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Suspense fallback={<div className="w-full max-w-md bg-white rounded-xl shadow p-8 text-center text-gray-400">Loading...</div>}>
+      <Suspense fallback={<div className="w-full max-w-md bg-white rounded-xl shadow p-8 text-center text-gray-600">Loading...</div>}>
         <LoginForm />
       </Suspense>
     </div>

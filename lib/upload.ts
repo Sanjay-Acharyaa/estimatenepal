@@ -1,13 +1,17 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+if (!process.env.STORAGE_ACCESS_KEY || !process.env.STORAGE_SECRET_KEY) {
+  throw new Error("STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY environment variables must be set.");
+}
+
 const s3 = new S3Client({
   region: process.env.STORAGE_REGION ?? "us-east-1",
   endpoint: process.env.STORAGE_ENDPOINT ?? "http://localhost:9000",
   forcePathStyle: true,
   credentials: {
-    accessKeyId: process.env.STORAGE_ACCESS_KEY ?? "minioadmin",
-    secretAccessKey: process.env.STORAGE_SECRET_KEY ?? "minioadmin",
+    accessKeyId: process.env.STORAGE_ACCESS_KEY,
+    secretAccessKey: process.env.STORAGE_SECRET_KEY,
   },
 });
 
@@ -25,6 +29,10 @@ export async function getDownloadUrl(key: string): Promise<string> {
 
 export async function deleteFile(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+}
+
+export async function uploadBuffer(key: string, buffer: Buffer, contentType: string): Promise<void> {
+  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: buffer, ContentType: contentType }));
 }
 
 export function keyFromUrl(fileUrl: string): string {

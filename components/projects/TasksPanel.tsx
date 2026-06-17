@@ -42,6 +42,7 @@ export function TasksPanel({ projectId, orgUsers, currentUserId, isAdmin }: Prop
   const [tasks, setTasks] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
 
@@ -54,9 +55,9 @@ export function TasksPanel({ projectId, orgUsers, currentUserId, isAdmin }: Prop
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/tasks?limit=100`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error("fetch failed"); return r.json(); })
       .then(d => { setTasks(d.data ?? []); setTotal(d.pagination?.total ?? 0); })
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [projectId]);
 
@@ -134,8 +135,8 @@ export function TasksPanel({ projectId, orgUsers, currentUserId, isAdmin }: Prop
         <h3 className="text-sm font-semibold text-gray-800">Tasks ({total})</h3>
         <button
           onClick={() => setCreating(c => !c)}
+          aria-label="Create task"
           className="w-6 h-6 rounded-full bg-blue-600 text-white text-lg flex items-center justify-center hover:bg-blue-700 leading-none"
-          title="Create task"
         >
           +
         </button>
@@ -144,20 +145,28 @@ export function TasksPanel({ projectId, orgUsers, currentUserId, isAdmin }: Prop
       {/* Create task form */}
       {creating && (
         <div className="mb-4 border border-gray-200 rounded-xl p-3 space-y-2 bg-gray-50">
-          <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)}
+          <label htmlFor="new-task-title" className="sr-only">Task title</label>
+          <input id="new-task-title" autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)}
             placeholder="Task title *"
             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <textarea rows={2} value={newDesc} onChange={e => setNewDesc(e.target.value)}
+          <label htmlFor="new-task-desc" className="sr-only">Description</label>
+          <textarea id="new-task-desc" rows={2} value={newDesc} onChange={e => setNewDesc(e.target.value)}
             placeholder="Description (optional)"
             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
           <div className="grid grid-cols-2 gap-2">
-            <select value={newAssignee} onChange={e => setNewAssignee(e.target.value)}
-              className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Unassigned</option>
-              {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-            <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)}
-              className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div>
+              <label htmlFor="new-task-assignee" className="sr-only">Assignee</label>
+              <select id="new-task-assignee" value={newAssignee} onChange={e => setNewAssignee(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Unassigned</option>
+                {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="new-task-due" className="sr-only">Due date</label>
+              <input id="new-task-due" type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
           </div>
           <div className="flex gap-2">
             <button onClick={createTask} disabled={saving || !newTitle.trim()}
@@ -170,12 +179,35 @@ export function TasksPanel({ projectId, orgUsers, currentUserId, isAdmin }: Prop
         </div>
       )}
 
-      {loading && <p className="text-xs text-gray-400 text-center py-4">Loading…</p>}
+      {fetchError && (
+        <div role="alert" className="text-xs text-red-600 text-center py-4">
+          Could not load tasks.{" "}
+          <button
+            onClick={() => {
+              setFetchError(false);
+              setLoading(true);
+              fetch(`/api/projects/${projectId}/tasks?limit=100`)
+                .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+                .then(d => { setTasks(d.data ?? []); setTotal(d.pagination?.total ?? 0); })
+                .catch(() => setFetchError(true))
+                .finally(() => setLoading(false));
+            }}
+            className="underline hover:no-underline"
+          >Try again</button>
+        </div>
+      )}
 
-      {!loading && tasks.length === 0 && (
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-4" aria-label="Loading tasks">
+          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" aria-hidden />
+          <p className="text-xs text-gray-600">Loading…</p>
+        </div>
+      )}
+
+      {!loading && !fetchError && tasks.length === 0 && (
         <div className="text-center py-8">
-          <div className="text-3xl mb-2">✅</div>
-          <p className="text-xs text-gray-400">No tasks yet.</p>
+          <div className="text-3xl mb-2" aria-hidden>✅</div>
+          <p className="text-xs text-gray-600">No tasks yet.</p>
           <button onClick={() => setCreating(true)} className="text-xs text-blue-600 hover:underline mt-1">
             Create a Task
           </button>
@@ -192,7 +224,7 @@ export function TasksPanel({ projectId, orgUsers, currentUserId, isAdmin }: Prop
       {/* Completed tasks */}
       {done.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs text-gray-400 font-medium mb-2">Completed ({done.length})</p>
+          <p className="text-xs text-gray-600 font-medium mb-2">Completed ({done.length})</p>
           <div className="space-y-1 opacity-60">
             {done.map(task => <TaskRow key={task.id} task={task} orgUsers={orgUsers} isAdmin={isAdmin}
               currentUserId={currentUserId} onToggle={() => toggleComplete(task)}
@@ -201,38 +233,59 @@ export function TasksPanel({ projectId, orgUsers, currentUserId, isAdmin }: Prop
         </div>
       )}
 
-      {/* Edit drawer */}
+      {/* Edit modal */}
       {editTask && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-task-title"
+          onKeyDown={e => { if (e.key === "Escape") setEditTask(null); }}
+        >
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
-            <h4 className="font-semibold text-gray-900">Edit Task</h4>
-            <input value={editTask.title} onChange={e => setEditTask(t => t ? { ...t, title: e.target.value } : t)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <textarea rows={3} value={editTask.description ?? ""}
-              onChange={e => setEditTask(t => t ? { ...t, description: e.target.value } : t)}
-              placeholder="Description…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            <h4 id="edit-task-title" className="font-semibold text-gray-900">Edit Task</h4>
+            <div>
+              <label htmlFor="edit-task-title-input" className="sr-only">Task title</label>
+              <input
+                id="edit-task-title-input"
+                autoFocus
+                value={editTask.title}
+                onChange={e => setEditTask(t => t ? { ...t, title: e.target.value } : t)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-task-desc" className="sr-only">Task description</label>
+              <textarea id="edit-task-desc" rows={3} value={editTask.description ?? ""}
+                onChange={e => setEditTask(t => t ? { ...t, description: e.target.value } : t)}
+                placeholder="Description…"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Assignee</label>
+                <label htmlFor="edit-task-assignee" className="block text-xs text-gray-700 mb-1">Assignee</label>
                 <select
+                  id="edit-task-assignee"
                   value={editTask.assignedTo?.id ?? ""}
                   onChange={e => setEditTask(t => t ? {
                     ...t,
                     assignedTo: e.target.value ? orgUsers.find(u => u.id === e.target.value) ?? null : null
                   } : t)}
-                  className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Unassigned</option>
                   {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Due Date</label>
-                <input type="date"
+                <label htmlFor="edit-task-due" className="block text-xs text-gray-700 mb-1">Due Date</label>
+                <input
+                  id="edit-task-due"
+                  type="date"
                   value={editTask.dueDate ? new Date(editTask.dueDate).toISOString().slice(0, 10) : ""}
                   onChange={e => setEditTask(t => t ? { ...t, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null } : t)}
-                  className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
+                  className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </div>
             <div className="flex gap-2 pt-2">
@@ -264,15 +317,17 @@ function TaskRow({
     <div className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition ${
       task.isCompleted ? "border-gray-100 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
     }`}>
-      <button onClick={onToggle}
+      <button
+        onClick={onToggle}
+        aria-label={task.isCompleted ? `Mark "${task.title}" incomplete` : `Mark "${task.title}" complete`}
         className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition ${
           task.isCompleted ? "bg-green-500 border-green-500 text-white" : "border-gray-300 hover:border-blue-400"
         }`}>
-        {task.isCompleted && <span className="text-[10px] font-bold">✓</span>}
+        {task.isCompleted && <span className="text-[10px] font-bold" aria-hidden>✓</span>}
       </button>
 
       <div className="flex-1 min-w-0">
-        <p className={`text-xs font-medium ${task.isCompleted ? "line-through text-gray-400" : "text-gray-800"}`}>
+        <p className={`text-xs font-medium ${task.isCompleted ? "line-through text-gray-600" : "text-gray-800"}`}>
           {task.title}
         </p>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -290,9 +345,13 @@ function TaskRow({
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0">
-        <button onClick={onEdit} className="text-gray-400 hover:text-gray-600 text-xs px-1" title="Edit">✏️</button>
+        <button onClick={onEdit} aria-label={`Edit task "${task.title}"`} className="text-gray-600 hover:text-gray-600 text-xs px-1">✏️</button>
         {canDelete && (
-          <button onClick={onDelete} className="text-gray-400 hover:text-red-500 text-xs px-1" title="Delete">🗑</button>
+          <button
+            onClick={() => { if (window.confirm(`Delete task "${task.title}"?`)) onDelete(); }}
+            aria-label={`Delete task "${task.title}"`}
+            className="text-gray-600 hover:text-red-500 text-xs px-1"
+          >🗑</button>
         )}
       </div>
     </div>

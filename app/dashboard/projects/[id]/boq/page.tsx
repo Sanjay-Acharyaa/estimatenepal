@@ -50,7 +50,7 @@ export default function BOQPage() {
   }, [params.id]);
 
   if (status === "loading" || !session) {
-    return <div className="p-8 text-gray-400 text-sm">Loading…</div>;
+    return <div role="status" aria-live="polite" className="p-8 text-gray-600 text-sm">Loading…</div>;
   }
 
   const isAdmin = ["OWNER", "ADMIN"].includes(session.user.role ?? "");
@@ -86,15 +86,19 @@ export default function BOQPage() {
           {project && <span className="text-gray-500 font-normal text-xl ml-2">— {project.name}</span>}
         </h1>
         {project?.district && (
-          <p className="text-sm text-gray-400 mt-1">District: {project.district}</p>
+          <p className="text-sm text-gray-600 mt-1">District: {project.district}</p>
         )}
       </div>
 
       {/* Tab nav */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div role="tablist" aria-label="BOQ sections" className="flex gap-1 mb-6 border-b border-gray-200">
         {TABS.map(({ key, label, badge }) => (
           <button
             key={key}
+            role="tab"
+            aria-selected={tab === key}
+            aria-controls={`tabpanel-${key}`}
+            id={`tab-${key}`}
             onClick={() => setTab(key)}
             className={`relative px-5 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
               tab === key
@@ -104,8 +108,8 @@ export default function BOQPage() {
           >
             {label}
             {badge !== undefined && (
-              <span className="ml-1.5 bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">
-                {badge}
+              <span className="ml-1.5 bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center" aria-label={`${badge} pending`}>
+                <span aria-hidden>{badge}</span>
               </span>
             )}
           </button>
@@ -113,13 +117,13 @@ export default function BOQPage() {
       </div>
 
       {/* Tab content */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" role="tabpanel" id={`tabpanel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === "boq" && (
           <div>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-gray-800">Quantity Schedule</h2>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-600 mt-0.5">
                   Click a group row to expand measurement details. Yellow cells have approved rate overrides.
                 </p>
               </div>
@@ -147,7 +151,7 @@ export default function BOQPage() {
           <div className="p-6">
             <div className="mb-4">
               <h2 className="font-semibold text-gray-800">Rate Overrides</h2>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-600 mt-0.5">
                 {isAdmin
                   ? "Review and approve or reject proposed rate changes."
                   : "Propose rate changes for Admin review. Overrides take effect once approved."}
@@ -161,7 +165,7 @@ export default function BOQPage() {
           <div className="p-6">
             <div className="mb-5">
               <h2 className="font-semibold text-gray-800">Export BOQ</h2>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-600 mt-0.5">
                 Download the Bill of Quantities in standard Nepal formats.
               </p>
             </div>

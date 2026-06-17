@@ -104,10 +104,10 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
     <div>
       <label className="block text-xs text-gray-500 mb-1">{label}</label>
       <div className="flex items-center gap-1.5">
-        {!suffix && <span className="text-xs text-gray-400">NRS</span>}
+        {!suffix && <span className="text-xs text-gray-600">NRS</span>}
         <input type="number" min="0" step="0.01" value={value} onChange={e => set(e.target.value)}
           className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-        {suffix && <span className="text-xs text-gray-400">{suffix}</span>}
+        {suffix && <span className="text-xs text-gray-600">{suffix}</span>}
       </div>
     </div>
   );
@@ -123,11 +123,11 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
               <span className="font-mono">{rate.code}</span> — {rate.description}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl ml-4">×</button>
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-xl ml-4">×</button>
         </div>
 
         {loading ? (
-          <div className="p-10 text-center text-gray-400 text-sm">Loading…</div>
+          <div className="p-10 text-center text-gray-600 text-sm">Loading…</div>
         ) : (
           <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
             {/* Input grid */}

@@ -3,6 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 function getNum(v: unknown): number {
   const n = Number(v); return isNaN(n) ? 0 : n;
@@ -38,6 +39,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 

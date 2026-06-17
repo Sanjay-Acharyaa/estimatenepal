@@ -124,7 +124,7 @@ export function AssemblyLibraryModal({ projectId, disciplines, activeDisciplineI
             <h2 className="text-lg font-semibold text-gray-800">Assembly Library</h2>
             <p className="text-xs text-gray-500 mt-0.5">Browse templates and apply them to this project</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
@@ -160,7 +160,7 @@ export function AssemblyLibraryModal({ projectId, disciplines, activeDisciplineI
                 <div key={i} className="h-28 bg-gray-100 rounded-lg animate-pulse" />
               ))}
               {!loading && assemblies.length === 0 && (
-                <div className="col-span-2 text-center text-gray-400 py-12 text-sm">No assemblies found.</div>
+                <div className="col-span-2 text-center text-gray-600 py-12 text-sm">No assemblies found.</div>
               )}
               {assemblies.map(a => (
                 <div key={a.id}
@@ -173,8 +173,8 @@ export function AssemblyLibraryModal({ projectId, disciplines, activeDisciplineI
                     )}
                   </div>
                   {a.category && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{a.category}</span>}
-                  {a.description && <p className="text-xs text-gray-400 mt-1 line-clamp-2">{a.description}</p>}
-                  <p className="text-xs text-gray-400 mt-2">{a._count.groups} groups</p>
+                  {a.description && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{a.description}</p>}
+                  <p className="text-xs text-gray-600 mt-2">{a._count.groups} groups</p>
                 </div>
               ))}
             </div>
@@ -194,7 +194,7 @@ export function AssemblyLibraryModal({ projectId, disciplines, activeDisciplineI
           {/* Right — preview + apply */}
           <div className="w-2/5 flex flex-col overflow-hidden">
             {!preview ? (
-              <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+              <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
                 Select an assembly to preview
               </div>
             ) : (
@@ -222,11 +222,11 @@ export function AssemblyLibraryModal({ projectId, disciplines, activeDisciplineI
                                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: layer.colour }} />
                                 <span className="text-xs text-gray-600 flex-1">{layer.name}</span>
                                 <span className={`text-xs px-1.5 py-0.5 rounded ${toolBadge(layer.type)}`}>{layer.type}</span>
-                                {layer.rateCode && <span className="text-xs text-gray-400 font-mono">{layer.rateCode}</span>}
+                                {layer.rateCode && <span className="text-xs text-gray-600 font-mono">{layer.rateCode}</span>}
                               </div>
                             ))}
                             {cat.children.length === 0 && (
-                              <div className="px-3 py-1.5 text-xs text-gray-400 italic">No layers</div>
+                              <div className="px-3 py-1.5 text-xs text-gray-600 italic">No layers</div>
                             )}
                           </div>
                         </div>
@@ -241,7 +241,7 @@ export function AssemblyLibraryModal({ projectId, disciplines, activeDisciplineI
                     <p className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{applySuccess}</p>
                   ) : (
                     <>
-                      {applyError && <p className="text-sm text-red-600">{applyError}</p>}
+                      {applyError && <p role="alert" className="text-sm text-red-600">{applyError}</p>}
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Apply to discipline</label>
                         <select value={selectedDiscipline} onChange={e => setSelectedDiscipline(e.target.value)}

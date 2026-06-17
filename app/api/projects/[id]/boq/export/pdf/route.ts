@@ -5,11 +5,17 @@ import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
 import { buildBOQPdf } from "@/lib/export";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { withSemaphore } from "@/lib/semaphore";
 
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -21,18 +27,21 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     await withTenantGuard(token.id as string, project.orgId);
 
     const boq = await generateBOQ(params.id);
-    const buffer = await buildBOQPdf(boq);
 
-    const filename = `BOQ_${project.name.replace(/[^a-z0-9]/gi, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
-
-    return new Response(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": buffer.length.toString(),
-      },
+    // Limit concurrent Puppeteer instances to 3 to prevent OOM and Chrome spawn queue exhaustion.
+    const result = await withSemaphore("pdf", 3, async () => {
+      const buffer = await buildBOQPdf(boq);
+      const filename = `BOQ_${project.name.replace(/[^a-z0-9]/gi, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      return new Response(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Length": buffer.length.toString(),
+        },
+      });
     });
+    return result as Response;
   } catch (err) {
     return handleApiError(err);
   }

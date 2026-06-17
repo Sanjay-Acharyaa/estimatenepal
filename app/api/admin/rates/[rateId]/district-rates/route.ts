@@ -4,12 +4,16 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { NEPAL_DISTRICTS } from "@/lib/districts";
 
-function requireSuperAdmin(token: { isSuperAdmin?: unknown } | null) {
+async function requireSuperAdmin(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) throw unauthorized();
   if (!token.isSuperAdmin) throw forbidden();
+  const user = await prisma.user.findUnique({ where: { id: token.id as string }, select: { isSuperAdmin: true } });
+  if (!user?.isSuperAdmin) throw forbidden();
+  return token;
 }
 
 const upsertSchema = z.object({
@@ -26,8 +30,11 @@ export async function GET(
   { params }: { params: { rateId: string } }
 ) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    requireSuperAdmin(token);
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    const token = await requireSuperAdmin(req);
 
     const rate = await prisma.rateItem.findUnique({ where: { id: params.rateId } });
     if (!rate || rate.source !== "DUDBC") throw notFound("Rate");
@@ -53,12 +60,11 @@ export async function PUT(
   { params }: { params: { rateId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    requireSuperAdmin(token);
+    const token = await requireSuperAdmin(req);
 
     const rate = await prisma.rateItem.findUnique({ where: { id: params.rateId } });
     if (!rate || rate.source !== "DUDBC") throw notFound("Rate");

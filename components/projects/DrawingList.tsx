@@ -41,6 +41,7 @@ export function DrawingList({ projectId }: { projectId: string }) {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [revisionFor, setRevisionFor] = useState<string | undefined>();
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -48,14 +49,17 @@ export function DrawingList({ projectId }: { projectId: string }) {
 
   const fetchDrawings = useCallback(async (p: number) => {
     setLoading(true);
+    setFetchError(false);
     try {
       const res = await fetch(
         `/api/projects/${projectId}/drawings?page=${p}&limit=${PAGE_SIZE}`
       );
-      if (!res.ok) return;
+      if (!res.ok) { setFetchError(true); return; }
       const data = await res.json();
       setDrawings(data.data);
       setPagination(data.pagination);
+    } catch {
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -104,7 +108,7 @@ export function DrawingList({ projectId }: { projectId: string }) {
         <h2 className="font-semibold text-gray-800">
           Drawings
           {pagination && (
-            <span className="ml-2 text-xs text-gray-400 font-normal">
+            <span className="ml-2 text-xs text-gray-600 font-normal">
               ({pagination.total} total)
             </span>
           )}
@@ -117,14 +121,21 @@ export function DrawingList({ projectId }: { projectId: string }) {
         </button>
       </div>
 
-      {loading ? (
+      {fetchError ? (
+        <div role="alert" className="text-center py-8 text-sm text-red-600">
+          Could not load drawings.{" "}
+          <button onClick={() => fetchDrawings(page)} className="underline hover:no-underline">
+            Try again
+          </button>
+        </div>
+      ) : loading ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-14 bg-gray-100 rounded-lg animate-pulse" />
           ))}
         </div>
       ) : drawings.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">
+        <div className="text-center py-10 text-gray-600 text-sm">
           No drawings yet.{" "}
           <button onClick={() => setShowUpload(true)} className="text-blue-600 hover:underline">
             Upload the first one
@@ -159,7 +170,7 @@ export function DrawingList({ projectId }: { projectId: string }) {
                         {updatingStatus === d.id ? "…" : STATUS_META[d.status].label}
                       </button>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 mt-0.5">
                       <span>{d.pageCount} page{d.pageCount !== 1 ? "s" : ""}</span>
                       {d.revisionNumber && (
                         <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
@@ -174,24 +185,25 @@ export function DrawingList({ projectId }: { projectId: string }) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition flex-shrink-0 ml-3">
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition flex-shrink-0 ml-3">
                   <button
                     onClick={() => { setRevisionFor(d.id); setShowUpload(true); }}
+                    aria-label={`Upload revision for ${d.fileName}`}
                     className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-2 py-1 rounded"
-                    title="Upload revision"
                   >
                     Revise
                   </button>
                   <Link
                     href={`/dashboard/projects/${projectId}/drawings/${d.id}`}
+                    aria-label={`Open ${d.fileName}`}
                     className="text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 px-2 py-1 rounded"
                   >
                     Open →
                   </Link>
                   <button
                     onClick={() => handleDelete(d.id, d.fileName)}
+                    aria-label={`Delete ${d.fileName}`}
                     className="text-xs text-red-500 hover:text-red-700 border border-red-200 px-2 py-1 rounded"
-                    title="Delete drawing"
                   >
                     ✕
                   </button>
@@ -203,7 +215,7 @@ export function DrawingList({ projectId }: { projectId: string }) {
           {/* Pagination controls */}
           {pagination && pagination.totalPages > 1 && (
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-600">
                 Page {pagination.page} of {pagination.totalPages}
               </p>
               <div className="flex gap-2">

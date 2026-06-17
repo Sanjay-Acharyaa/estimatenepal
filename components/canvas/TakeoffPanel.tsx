@@ -413,36 +413,38 @@ export function TakeoffPanel({
       {confirmDialogEl}
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
-        <span className="text-xs font-semibold text-gray-400 uppercase">Takeoffs ({categories.length})</span>
+        <span className="text-xs font-semibold text-gray-600 uppercase">Takeoffs ({categories.length})</span>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setShowAssemblyModal(true)}
             className="text-xs text-indigo-400 hover:text-indigo-200 px-1.5 py-0.5 rounded border border-indigo-700/50 hover:border-indigo-500 transition"
-            title="Apply assembly template">
+            aria-label="Apply assembly template">
             🏗️
           </button>
           <button onClick={() => setShowSaveAssembly(true)}
-            className="text-xs text-gray-400 hover:text-green-300 px-1.5 py-0.5 rounded border border-gray-700 hover:border-green-700 transition"
-            title="Save groups as assembly">
+            className="text-xs text-gray-600 hover:text-green-300 px-1.5 py-0.5 rounded border border-gray-700 hover:border-green-700 transition"
+            aria-label="Save groups as assembly">
             💾
           </button>
           <button onClick={() => setShowCreateCategory(true)}
-            className="text-gray-400 hover:text-white text-lg leading-none transition" title="New group">
+            className="text-gray-600 hover:text-white text-lg leading-none transition" aria-label="New group">
             +
           </button>
         </div>
       </div>
 
       {panelError && (
-        <div className="mx-3 mt-2 px-2 py-1.5 bg-red-900/60 border border-red-700 text-red-300 text-xs rounded flex items-start justify-between gap-1">
+        <div role="alert" className="mx-3 mt-2 px-2 py-1.5 bg-red-900/60 border border-red-700 text-red-300 text-xs rounded flex items-start justify-between gap-1">
           <span>{panelError}</span>
-          <button onClick={() => setPanelError("")} className="flex-shrink-0 text-red-400 hover:text-red-200">×</button>
+          <button onClick={() => setPanelError("")} aria-label="Dismiss error" className="flex-shrink-0 text-red-400 hover:text-red-200">×</button>
         </div>
       )}
 
       {/* Create group inline */}
       {showCreateCategory && (
         <div className="px-3 py-2 bg-gray-700/40 border-b border-gray-700">
+          <label htmlFor="new-group-name" className="sr-only">Group name</label>
           <input
+            id="new-group-name"
             type="text" autoFocus value={newCategoryName}
             onChange={e => setNewCategoryName(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleCreateCategory(); if (e.key === "Escape") { setShowCreateCategory(false); setNewCategoryName(""); } }}
@@ -451,14 +453,16 @@ export function TakeoffPanel({
           />
           <div className="flex gap-1.5">
             <button onClick={handleCreateCategory} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-1 rounded transition">Create</button>
-            <button onClick={() => { setShowCreateCategory(false); setNewCategoryName(""); }} className="px-3 text-xs text-gray-400 border border-gray-600 rounded hover:bg-gray-700">Cancel</button>
+            <button onClick={() => { setShowCreateCategory(false); setNewCategoryName(""); }} className="px-3 text-xs text-gray-600 border border-gray-600 rounded hover:bg-gray-700">Cancel</button>
           </div>
         </div>
       )}
 
       {/* Search */}
       <div className="px-3 py-2 border-b border-gray-700">
+        <label htmlFor="takeoff-search" className="sr-only">Search layers</label>
         <input
+          id="takeoff-search"
           type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
           className="w-full bg-gray-700 text-gray-200 placeholder-gray-500 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
@@ -492,17 +496,25 @@ export function TakeoffPanel({
                   onDrop={e => { e.preventDefault(); handleCategoryDrop(cat.id); }}
                   onDragEnd={() => { setDragState(null); setDropTarget(null); }}
                   onClick={() => setExpandedIds(prev => { const n = new Set(prev); n.has(cat.id) ? n.delete(cat.id) : n.add(cat.id); return n; })}
-                  className={`flex items-center gap-1.5 px-2 py-2 border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/30 group/cat${isCatDragging ? " opacity-40" : ""}${dropIndicator(cat.id)}`}
+                  onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedIds(prev => { const n = new Set(prev); n.has(cat.id) ? n.delete(cat.id) : n.add(cat.id); return n; }); } }}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  aria-label={`${cat.name} group, ${layers.length} layers`}
+                  className={`flex items-center gap-1.5 px-2 py-2 border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/30 focus:outline-none focus:ring-1 focus:ring-blue-500 group/cat${isCatDragging ? " opacity-40" : ""}${dropIndicator(cat.id)}`}
                 >
                   {/* Drag handle */}
-                  <span className="text-gray-600 opacity-0 group-hover/cat:opacity-100 cursor-grab flex-shrink-0 select-none" title="Drag to reorder">
+                  <span aria-hidden="true" className="text-gray-600 opacity-0 group-hover/cat:opacity-100 cursor-grab flex-shrink-0 select-none" title="Drag to reorder">
                     <GripIcon />
                   </span>
 
-                  <span className="text-gray-500 text-xs w-3 flex-shrink-0 select-none">{isExpanded ? "▼" : "▶"}</span>
+                  <span aria-hidden="true" className="text-gray-500 text-xs w-3 flex-shrink-0 select-none">{isExpanded ? "▼" : "▶"}</span>
 
-                  <button onClick={e => toggleVisibility(cat, e)}
-                    className={`flex-shrink-0 w-4 h-4 flex items-center justify-center ${cat.isVisible ? "text-gray-400 hover:text-white" : "text-gray-600"}`}>
+                  <button
+                    onClick={e => toggleVisibility(cat, e)}
+                    aria-label={cat.isVisible ? `Hide ${cat.name}` : `Show ${cat.name}`}
+                    aria-pressed={cat.isVisible}
+                    className={`flex-shrink-0 w-4 h-4 flex items-center justify-center ${cat.isVisible ? "text-gray-600 hover:text-white" : "text-gray-600"}`}>
                     {cat.isVisible ? <EyeOpen /> : <EyeClosed />}
                   </button>
 
@@ -511,12 +523,13 @@ export function TakeoffPanel({
 
                   {/* Add layer */}
                   <button onClick={e => { e.stopPropagation(); setCreatingLayerIn(cat.id); }}
-                    className="flex-shrink-0 opacity-0 group-hover/cat:opacity-100 w-5 h-5 flex items-center justify-center text-gray-500 hover:text-blue-400 rounded hover:bg-gray-700 transition text-xs"
-                    title="Add layer">+</button>
+                    className="flex-shrink-0 opacity-0 group-hover/cat:opacity-100 focus-visible:opacity-100 w-5 h-5 flex items-center justify-center text-gray-500 hover:text-blue-400 rounded hover:bg-gray-700 transition text-xs"
+                    aria-label={`Add layer to ${cat.name}`}>+</button>
 
                   {/* 3-dot */}
                   <button onClick={e => openMenu(e, cat.id)}
-                    className="opacity-0 group-hover/cat:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-gray-300 transition flex-shrink-0">
+                    aria-label={`Options for ${cat.name}`}
+                    className="opacity-0 group-hover/cat:opacity-100 focus-visible:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-gray-300 transition flex-shrink-0">
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                     </svg>
@@ -541,33 +554,41 @@ export function TakeoffPanel({
                           onDrop={e => { e.preventDefault(); handleLayerDrop(layer.id); }}
                           onDragEnd={() => { setDragState(null); setDropTarget(null); }}
                           onClick={() => onSelectGroup(selectedGroupId === layer.id ? null : layer.id)}
-                          className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 cursor-pointer border-b border-gray-700/30 transition group/layer${selectedGroupId === layer.id ? " bg-blue-900/40 border-l-2 border-l-blue-500" : " hover:bg-gray-700/30"}${isLayerDragging ? " opacity-40" : ""}${dropIndicator(layer.id)}`}
+                          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectGroup(selectedGroupId === layer.id ? null : layer.id); } }}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={selectedGroupId === layer.id}
+                          aria-label={`Select layer ${layer.name}`}
+                          className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 cursor-pointer border-b border-gray-700/30 transition focus:outline-none focus:ring-1 focus:ring-blue-500 group/layer${selectedGroupId === layer.id ? " bg-blue-900/40 border-l-2 border-l-blue-500" : " hover:bg-gray-700/30"}${isLayerDragging ? " opacity-40" : ""}${dropIndicator(layer.id)}`}
                         >
                           {/* Drag handle */}
-                          <span className="text-gray-600 opacity-0 group-hover/layer:opacity-100 cursor-grab flex-shrink-0 select-none" title="Drag to reorder">
+                          <span aria-hidden="true" className="text-gray-600 opacity-0 group-hover/layer:opacity-100 cursor-grab flex-shrink-0 select-none" title="Drag to reorder">
                             <GripIcon />
                           </span>
 
-                          <button onClick={e => toggleVisibility(layer, e)}
-                            className={`flex-shrink-0 w-4 h-4 flex items-center justify-center ${layer.isVisible ? "text-gray-400 hover:text-white" : "text-gray-600"}`}>
+                          <button
+                            onClick={e => toggleVisibility(layer, e)}
+                            aria-label={layer.isVisible ? `Hide ${layer.name}` : `Show ${layer.name}`}
+                            aria-pressed={layer.isVisible}
+                            className={`flex-shrink-0 w-4 h-4 flex items-center justify-center ${layer.isVisible ? "text-gray-600 hover:text-white" : "text-gray-600"}`}>
                             {layer.isVisible ? <EyeOpen /> : <EyeClosed />}
                           </button>
 
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: layer.colour }} />
+                          <span aria-hidden="true" className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: layer.colour }} />
                           {(layer.type === "COUNT" || layer.type === "COUNT_BY_DISTANCE") ? (() => {
                             const shapeName = (layer.additionalParams as any)?.countShape ?? "circle";
                             const shape = COUNT_SHAPES.find(s => s.value === shapeName) ?? COUNT_SHAPES[0];
                             return (
                               <span
+                                aria-hidden="true"
                                 className="text-xs flex-shrink-0 leading-none"
                                 style={{ color: layer.colour }}
-                                title={`${shape.title} marker`}
                               >
                                 {shape.label}
                               </span>
                             );
                           })() : (
-                            <span className="text-gray-500 text-xs flex-shrink-0">{TYPE_ICONS[layer.type] ?? "○"}</span>
+                            <span aria-hidden="true" className="text-gray-500 text-xs flex-shrink-0">{TYPE_ICONS[layer.type] ?? "○"}</span>
                           )}
 
                           <div className="flex-1 min-w-0">
@@ -614,8 +635,9 @@ export function TakeoffPanel({
                           </span>
 
                           <button onClick={e => toggleLock(layer, e)}
-                            className={`flex-shrink-0 transition ${layer.isLocked ? "text-red-400" : "text-gray-600 hover:text-gray-400"}`}
-                            title={layer.isLocked ? "Unlock" : "Lock"}>
+                            aria-label={layer.isLocked ? `Unlock ${layer.name}` : `Lock ${layer.name}`}
+                            aria-pressed={layer.isLocked}
+                            className={`flex-shrink-0 transition ${layer.isLocked ? "text-red-400" : "text-gray-600 hover:text-gray-600"}`}>
                             {layer.isLocked ? (
                               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
@@ -628,7 +650,8 @@ export function TakeoffPanel({
                           </button>
 
                           <button onClick={e => openMenu(e, layer.id)}
-                            className="opacity-0 group-hover/layer:opacity-100 w-4 h-4 flex items-center justify-center text-gray-600 hover:text-gray-300 transition flex-shrink-0">
+                            aria-label={`Options for ${layer.name}`}
+                            className="opacity-0 group-hover/layer:opacity-100 focus-visible:opacity-100 w-4 h-4 flex items-center justify-center text-gray-600 hover:text-gray-300 transition flex-shrink-0">
                             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                             </svg>
@@ -734,20 +757,26 @@ export function TakeoffPanel({
 
       {/* Save as Assembly Modal */}
       {showSaveAssembly && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-assembly-title"
+          onKeyDown={e => { if (e.key === "Escape") setShowSaveAssembly(false); }}
+        >
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="font-semibold text-gray-800 mb-1">Save as Assembly</h3>
-            <p className="text-xs text-gray-400 mb-4">Saves selected category groups as a reusable template in your organisation library.</p>
+            <h3 id="save-assembly-title" className="font-semibold text-gray-800 mb-1">Save as Assembly</h3>
+            <p className="text-xs text-gray-600 mb-4">Saves selected category groups as a reusable template in your organisation library.</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Assembly Name</label>
-                <input required value={saveAssemblyForm.name} onChange={e => setSaveAssemblyForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Standard RCC Frame" className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                <label htmlFor="tp-assembly-name" className="block text-xs text-gray-700 mb-1">Assembly Name</label>
+                <input id="tp-assembly-name" required value={saveAssemblyForm.name} onChange={e => setSaveAssemblyForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Standard RCC Frame" autoFocus className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Category (optional)</label>
-                  <select value={saveAssemblyForm.category} onChange={e => setSaveAssemblyForm(f => ({ ...f, category: e.target.value }))}
+                  <label htmlFor="tp-assembly-category" className="block text-xs text-gray-700 mb-1">Category (optional)</label>
+                  <select id="tp-assembly-category" value={saveAssemblyForm.category} onChange={e => setSaveAssemblyForm(f => ({ ...f, category: e.target.value }))}
                     className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none">
                     <option value="">None</option>
                     {["Structural","Civil","MEP","Architectural","Road","Irrigation"].map(c => <option key={c} value={c}>{c}</option>)}
@@ -755,7 +784,7 @@ export function TakeoffPanel({
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Select Groups</label>
-                  <p className="text-xs text-gray-400">{selectedForSave.size} selected</p>
+                  <p className="text-xs text-gray-600">{selectedForSave.size} selected</p>
                 </div>
               </div>
               <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">

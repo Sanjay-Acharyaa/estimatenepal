@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound, forbidden } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { appendAuditLog } from "@/lib/audit";
 
 const updateSchema = z.object({
@@ -20,7 +20,7 @@ export async function PUT(
   { params }: { params: { id: string; tId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -70,16 +70,16 @@ export async function PUT(
       },
     });
 
-    // Notify new assignee if changed
+    // Notify new assignee if changed — fire-and-forget
     if (parsed.data.assignedToId && parsed.data.assignedToId !== task.assignedToId && parsed.data.assignedToId !== token.id) {
-      await prisma.notification.create({
+      prisma.notification.create({
         data: {
           userId: parsed.data.assignedToId,
           type: "task_assigned",
           message: `You have been assigned a task: "${updated.title}"`,
           link: `/dashboard/projects/${params.id}?tab=overview`,
         },
-      });
+      }).catch((err) => console.error("[tasks/update] notification failed:", err));
     }
 
     await appendAuditLog({
@@ -102,7 +102,7 @@ export async function DELETE(
   { params }: { params: { id: string; tId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

@@ -4,7 +4,8 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { appendAuditLog } from "@/lib/audit";
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).trim().optional(),
@@ -17,7 +18,7 @@ const updateSchema = z.object({
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string; coId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -43,13 +44,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
     if (parsed.data.status === "REJECTED") { data.rejectedAt = new Date(); }
 
     const updated = await prisma.changeOrder.update({ where: { id: params.coId }, data });
+
+    await appendAuditLog({
+      orgId: project.orgId,
+      userId: token.id as string,
+      event: "change_order.updated",
+      resourceId: params.coId,
+      meta: { status: parsed.data.status, title: co.title } as any,
+      ipAddress: ip,
+    });
+
     return NextResponse.json(updated);
   } catch (err) { return handleApiError(err); }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string; coId: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -59,7 +70,20 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const caller = await withTenantGuard(token.id as string, project.orgId);
     if (!["OWNER", "ADMIN"].includes(caller.role)) throw forbidden();
 
+    const co = await prisma.changeOrder.findFirst({ where: { id: params.coId, projectId: params.id } });
+    if (!co) throw notFound("Change Order");
+
     await prisma.changeOrder.delete({ where: { id: params.coId } });
+
+    await appendAuditLog({
+      orgId: project.orgId,
+      userId: token.id as string,
+      event: "change_order.deleted",
+      resourceId: params.coId,
+      meta: { title: co.title, number: co.number } as any,
+      ipAddress: ip,
+    });
+
     return NextResponse.json({ message: "Deleted." });
   } catch (err) { return handleApiError(err); }
 }

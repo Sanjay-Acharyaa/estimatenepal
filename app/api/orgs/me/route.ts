@@ -3,8 +3,9 @@ import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
+import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(200).trim().optional(),
@@ -17,10 +18,12 @@ const updateSchema = z.object({
 // GET /api/orgs/me
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     const orgId = token.orgId as string | null;
-    const role = token.role as string;
     if (!orgId) return apiError("NOT_FOUND", "No organisation found.", 404);
 
     const org = await prisma.org.findUnique({ where: { id: orgId } });
@@ -35,16 +38,16 @@ export async function GET(req: NextRequest) {
 // PUT /api/orgs/me — OWNER only
 export async function PUT(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     const orgId = token.orgId as string | null;
-    const role = token.role as string;
     if (!orgId) return apiError("NOT_FOUND", "No organisation found.", 404);
-    if (role !== "OWNER") throw forbidden();
+    const member = await withTenantGuard(token.id as string, orgId);
+    if (member.role !== "OWNER") throw forbidden();
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);

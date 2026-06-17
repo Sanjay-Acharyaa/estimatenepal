@@ -4,9 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 

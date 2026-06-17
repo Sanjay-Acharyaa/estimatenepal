@@ -1,5 +1,5 @@
 export const DEFAULT_PAGE_LIMIT = 20;
-export const MAX_PAGE_LIMIT = 500;
+export const MAX_PAGE_LIMIT = 100;
 
 export function parsePagination(searchParams: URLSearchParams) {
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);

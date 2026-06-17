@@ -27,6 +27,7 @@ export default function InvitePage() {
 
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; password?: string; confirm?: string }>({});
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -42,15 +43,18 @@ export default function InvitePage() {
   const accept = async () => {
     setAccepting(true);
     setError("");
+    setFieldErrors({});
     try {
       const body: Record<string, string> = {};
 
       if (session?.user?.id) {
         body.userId = session.user.id;
       } else {
-        if (!name.trim()) { setError("Name is required."); setAccepting(false); return; }
-        if (password.length < 8) { setError("Password must be at least 8 characters."); setAccepting(false); return; }
-        if (password !== confirm) { setError("Passwords do not match."); setAccepting(false); return; }
+        const fe: typeof fieldErrors = {};
+        if (!name.trim()) fe.name = "Name is required.";
+        if (password.length < 8) fe.password = "Password must be at least 8 characters.";
+        else if (password !== confirm) fe.confirm = "Passwords do not match.";
+        if (Object.keys(fe).length) { setFieldErrors(fe); setAccepting(false); return; }
         body.name = name.trim();
         body.password = password;
       }
@@ -99,7 +103,7 @@ export default function InvitePage() {
   if (!info) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-400 text-sm">Loading invitation…</p>
+        <p className="text-gray-600 text-sm">Loading invitation…</p>
       </div>
     );
   }
@@ -129,7 +133,7 @@ export default function InvitePage() {
           <p className="text-sm text-gray-500 mt-2">
             Join <strong>{info.orgName}</strong> as a <strong className="capitalize">{info.role.toLowerCase()}</strong>
           </p>
-          <p className="text-xs text-gray-400 mt-1">Invite sent to {info.email}</p>
+          <p className="text-xs text-gray-600 mt-1">Invite sent to {info.email}</p>
         </div>
 
         {isLoggedInWithWrongEmail && (
@@ -144,43 +148,73 @@ export default function InvitePage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
               Logged in as <strong>{session.user.email}</strong>. Click Accept to join {info.orgName}.
             </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
             <button onClick={accept} disabled={accepting}
               className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
               {accepting ? "Accepting…" : `Accept & Join ${info.orgName}`}
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <form
+            onSubmit={(e) => { e.preventDefault(); accept(); }}
+            className="space-y-4"
+            aria-label="Create account to accept invite"
+          >
             <p className="text-sm text-gray-600 text-center">Create your account to get started</p>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Full Name</label>
-              <input value={name} onChange={e => setName(e.target.value)}
+              <label htmlFor="inv-name" className="block text-xs font-medium text-gray-700 mb-1">Full Name</label>
+              <input
+                id="inv-name"
+                value={name}
+                onChange={e => { setName(e.target.value); setFieldErrors(f => ({ ...f, name: undefined })); }}
                 placeholder="Your name"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                autoComplete="name"
+                aria-describedby={fieldErrors.name ? "inv-name-err" : undefined}
+                aria-invalid={!!fieldErrors.name}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.name ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+              />
+              {fieldErrors.name && <p id="inv-name-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
-              <input value={info.email} disabled
+              <label htmlFor="inv-email" className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+              <input id="inv-email" value={info.email} disabled
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <label htmlFor="inv-password" className="block text-xs font-medium text-gray-700 mb-1">Password</label>
+              <input
+                id="inv-password"
+                type="password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setFieldErrors(f => ({ ...f, password: undefined })); }}
                 placeholder="Min. 8 characters"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                autoComplete="new-password"
+                aria-describedby={fieldErrors.password ? "inv-password-err" : undefined}
+                aria-invalid={!!fieldErrors.password}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.password ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+              />
+              {fieldErrors.password && <p id="inv-password-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.password}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Confirm Password</label>
-              <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+              <label htmlFor="inv-confirm" className="block text-xs font-medium text-gray-700 mb-1">Confirm Password</label>
+              <input
+                id="inv-confirm"
+                type="password"
+                value={confirm}
+                onChange={e => { setConfirm(e.target.value); setFieldErrors(f => ({ ...f, confirm: undefined })); }}
                 placeholder="Repeat password"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                autoComplete="new-password"
+                aria-describedby={fieldErrors.confirm ? "inv-confirm-err" : undefined}
+                aria-invalid={!!fieldErrors.confirm}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.confirm ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+              />
+              {fieldErrors.confirm && <p id="inv-confirm-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.confirm}</p>}
             </div>
 
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
 
-            <button onClick={accept} disabled={accepting}
+            <button type="submit" disabled={accepting}
               className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
               {accepting ? "Creating account…" : `Create Account & Join ${info.orgName}`}
             </button>
@@ -193,7 +227,7 @@ export default function InvitePage() {
                 </Link>
               </p>
             )}
-          </div>
+          </form>
         )}
       </div>
     </div>

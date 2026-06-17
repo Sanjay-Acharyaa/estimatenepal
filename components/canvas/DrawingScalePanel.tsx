@@ -117,8 +117,9 @@ export function DrawingScalePanel({
               </p>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-0.5">Feet</label>
+                  <label htmlFor="dsp-feet" className="block text-xs text-gray-700 mb-0.5">Feet</label>
                   <input
+                    id="dsp-feet"
                     type="number"
                     min="0"
                     step="1"
@@ -129,8 +130,9 @@ export function DrawingScalePanel({
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-0.5">Inches</label>
+                  <label htmlFor="dsp-inches" className="block text-xs text-gray-700 mb-0.5">Inches</label>
                   <input
+                    id="dsp-inches"
                     type="number"
                     min="0"
                     max="11.99"

@@ -4,8 +4,9 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { recognizeText } from "@/lib/ocr";
+import { withSemaphore } from "@/lib/semaphore";
 
 // ~4MB base64 ≈ 3MB raw image — enough for a title-block crop
 const MAX_IMAGE_B64 = 4 * 1024 * 1024;
@@ -22,7 +23,7 @@ export async function POST(
   { params }: { params: { id: string; drawingId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -42,8 +43,12 @@ export async function POST(
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
     }
 
-    const text = await recognizeText(parsed.data.imageBase64);
-    return NextResponse.json({ text });
+    // Limit concurrent Tesseract workers to 4 to cap CPU usage per replica.
+    const result = await withSemaphore("ocr", 4, async () => {
+      const text = await recognizeText(parsed.data.imageBase64);
+      return NextResponse.json({ text });
+    });
+    return result as NextResponse;
   } catch (err) {
     return handleApiError(err);
   }

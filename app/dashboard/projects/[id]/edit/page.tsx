@@ -117,60 +117,60 @@ export default function EditProjectPage() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>
+        <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
-          <input name="name" required value={form.name} onChange={handleChange}
+          <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+          <input id="edit-name" name="name" required value={form.name} onChange={handleChange}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <textarea name="description" value={form.description} onChange={handleChange} rows={3}
+          <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <textarea id="edit-description" name="description" value={form.description} onChange={handleChange} rows={3}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-            <input name="clientName" type="text" value={form.clientName} onChange={handleChange}
+            <label htmlFor="edit-clientName" className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
+            <input id="edit-clientName" name="clientName" type="text" value={form.clientName} onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client Company</label>
-            <input name="clientCompany" type="text" value={form.clientCompany} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bid Due Date</label>
-            <input name="bidDueDate" type="date" value={form.bidDueDate} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Value (NRS)</label>
-            <input name="estimatedValue" type="number" value={form.estimatedValue} onChange={handleChange} min="0"
+            <label htmlFor="edit-clientCompany" className="block text-sm font-medium text-gray-700 mb-1">Client Company</label>
+            <input id="edit-clientCompany" name="clientCompany" type="text" value={form.clientCompany} onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
-            <select name="district" value={form.district} onChange={handleChange}
+            <label htmlFor="edit-bidDueDate" className="block text-sm font-medium text-gray-700 mb-1">Bid Due Date</label>
+            <input id="edit-bidDueDate" name="bidDueDate" type="date" value={form.bidDueDate} onChange={handleChange}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label htmlFor="edit-estimatedValue" className="block text-sm font-medium text-gray-700 mb-1">Estimated Value (NRS)</label>
+            <input id="edit-estimatedValue" name="estimatedValue" type="number" value={form.estimatedValue} onChange={handleChange} min="0"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="edit-district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
+            <select id="edit-district" name="district" value={form.district} onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">Select district</option>
               {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Seismic Zone</label>
-            <select name="seismicZone" value={form.seismicZone} onChange={handleChange}
+            <label htmlFor="edit-seismicZone" className="block text-sm font-medium text-gray-700 mb-1">Seismic Zone</label>
+            <select id="edit-seismicZone" name="seismicZone" value={form.seismicZone} onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">Select zone</option>
               <option value="Zone I">Zone I (Low)</option>
@@ -182,18 +182,18 @@ export default function EditProjectPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Unit System</label>
-            <select name="unitSystem" value={form.unitSystem} onChange={handleChange}
+            <label htmlFor="edit-unitSystem" className="block text-sm font-medium text-gray-700 mb-1">Unit System</label>
+            <select id="edit-unitSystem" name="unitSystem" value={form.unitSystem} onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="METRIC">Metric (m, m², m³)</option>
               <option value="IMPERIAL">Imperial (ft, ft², ft³)</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
-            <select name="dateFormat" value={form.dateFormat} onChange={handleChange}
+            <label htmlFor="edit-dateFormat" className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
+            <select id="edit-dateFormat" name="dateFormat" value={form.dateFormat} onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="AD">AD (Gregorian)</option>
               <option value="BS">BS (Bikram Sambat)</option>

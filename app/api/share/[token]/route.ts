@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, notFound } from "@/lib/errors";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const approveSchema = z.object({
   action: z.enum(["APPROVED", "REJECTED"]),
@@ -12,6 +13,10 @@ const approveSchema = z.object({
 // POST /api/share/[token] — client approves or rejects proposal
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const link = await prisma.shareLink.findUnique({
       where: { token: params.token },
       include: { project: { select: { orgId: true, name: true } } },
@@ -40,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       select: { id: true },
     });
     if (admins.length > 0) {
-      await prisma.notification.createMany({
+      prisma.notification.createMany({
         data: admins.map(a => ({
           userId: a.id,
           type: action === "APPROVED" ? "proposal.approved" : "proposal.rejected",
@@ -48,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           link: `/dashboard/projects/${link.projectId}?tab=proposal`,
           meta: { clientName, action, projectId: link.projectId, note: note ?? null },
         })),
-      });
+      }).catch((err) => console.error("[share/approve] notification failed:", err));
     }
 
     return NextResponse.json({ status: updated.approvalStatus, clientName });

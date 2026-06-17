@@ -209,7 +209,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <h2 className="font-semibold text-gray-900">{title}</h2>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+          <button onClick={onCancel} className="text-gray-600 hover:text-gray-600 text-xl">×</button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -271,7 +271,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                 )}
               </div>
               {unit && (
-                <p className="text-xs text-gray-400 mt-1">Unit: <span className="font-medium text-gray-600">{unit}</span></p>
+                <p className="text-xs text-gray-600 mt-1">Unit: <span className="font-medium text-gray-600">{unit}</span></p>
               )}
             </div>
           </div>
@@ -303,7 +303,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
               <div className="w-48">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Base Rate (NRS)</label>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">NRS</span>
+                  <span className="text-xs text-gray-600">NRS</span>
                   <input type="number" min="0" step="0.01" value={manualRate}
                     onChange={e => setManualRate(e.target.value)}
                     placeholder="0.00"
@@ -358,12 +358,12 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                     {showCatalogDropdown && (catalogResults.length > 0 || catalogLoading || catalogSearch.length >= 2) && (
                       <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
                         {catalogLoading && (
-                          <p className="text-center py-4 text-xs text-gray-400">Searching…</p>
+                          <p className="text-center py-4 text-xs text-gray-600">Searching…</p>
                         )}
                         {!catalogLoading && catalogResults.length === 0 && (
                           <div className="py-4 px-3 text-center">
                             <p className="text-xs text-gray-500">No DUDBC rates found.</p>
-                            <p className="text-xs text-gray-400 mt-1">DUDBC catalog is added in Phase 8. You can still enter a manual rate.</p>
+                            <p className="text-xs text-gray-600 mt-1">DUDBC catalog is added in Phase 8. You can still enter a manual rate.</p>
                           </div>
                         )}
                         {catalogResults.map(r => (
@@ -375,7 +375,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                             <span className="font-mono text-xs text-gray-500 flex-shrink-0 mt-0.5">{r.code}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs text-gray-700 truncate">{r.description}</p>
-                              <p className="text-xs text-gray-400">{r.unit} · FY {r.fiscalYear}</p>
+                              <p className="text-xs text-gray-600">{r.unit} · FY {r.fiscalYear}</p>
                             </div>
                             <div className="text-right flex-shrink-0">
                               <p className="text-xs font-semibold text-gray-800">NRS {NRS(r.baseRate)}</p>
@@ -393,7 +393,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                           <span className="text-green-600 ml-2">DUDBC rate: NRS {NRS(selectedCatalog.baseRate)} / {selectedCatalog.unit}</span>
                         </div>
                         <button onClick={() => { setSelectedCatalog(null); setCatalogSearch(""); }}
-                          className="text-gray-400 hover:text-gray-600 text-sm ml-1">×</button>
+                          className="text-gray-600 hover:text-gray-600 text-sm ml-1">×</button>
                       </div>
                     )}
                   </div>
@@ -411,7 +411,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
 
                     {selectedDistrict && (
                       districtRateLoading ? (
-                        <p className="text-xs text-gray-400 mt-1.5">Loading district rate…</p>
+                        <p className="text-xs text-gray-600 mt-1.5">Loading district rate…</p>
                       ) : (
                         <div className="mt-2 text-xs">
                           {getDistrictRate() ? (
@@ -465,7 +465,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-400 mb-1">Source</p>
+                      <p className="text-xs text-gray-600 mb-1">Source</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         linkedSource === "dudbc" ? "bg-green-100 text-green-700" :
                         linkedSource === "district" ? "bg-blue-100 text-blue-700" :
@@ -485,18 +485,18 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                   }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                   <span className="text-xs text-gray-600">
                     Override rate manually
-                    <span className="text-gray-400 ml-1">(use a custom value instead of the linked source)</span>
+                    <span className="text-gray-600 ml-1">(use a custom value instead of the linked source)</span>
                   </span>
                 </label>
 
                 {manualOverride && (
                   <div className="flex items-center gap-2 pl-6">
-                    <span className="text-xs text-gray-400">NRS</span>
+                    <span className="text-xs text-gray-600">NRS</span>
                     <input type="number" min="0" step="0.01" value={manualRate}
                       onChange={e => setManualRate(e.target.value)}
                       placeholder="0.00"
                       className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <span className="text-xs text-gray-400">/ {unit || "unit"}</span>
+                    <span className="text-xs text-gray-600">/ {unit || "unit"}</span>
                   </div>
                 )}
               </div>
@@ -508,7 +508,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 flex-shrink-0">
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-gray-600">
             {effectiveRate !== null
               ? `Will save at NRS ${NRS(effectiveRate)} / ${unit || "unit"}`
               : "Set a base rate before saving"}

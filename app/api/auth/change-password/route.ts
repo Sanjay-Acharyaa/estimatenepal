@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { redis } from "@/lib/redis";
 import { handleApiError, apiError, unauthorized } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { invalidateUserCache } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
 const schema = z.object({
@@ -18,7 +20,7 @@ const schema = z.object({
 // POST /api/auth/change-password
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -36,10 +38,14 @@ export async function POST(req: NextRequest) {
     if (!valid) return apiError("UNAUTHORIZED", "Current password is incorrect.", 401);
 
     const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    const now = new Date();
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash: newHash, passwordChangedAt: new Date() },
+      data: { passwordHash: newHash, passwordChangedAt: now },
     });
+    // Signal active JWTs to self-invalidate — key TTL matches max session lifetime
+    await redis.set(`pw_changed:${user.id}`, now.getTime().toString(), "EX", 7 * 24 * 3600);
+    invalidateUserCache(user.id).catch((e) => console.error("[change-password] cache invalidation failed:", e));
 
     await appendAuditLog({
       orgId: user.orgId ?? "SYSTEM",

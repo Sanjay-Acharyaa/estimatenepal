@@ -64,6 +64,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   const [detail, setDetail] = useState<Group | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ multiplier?: string }>({});
   const [paramsSaved, setParamsSaved] = useState(false);
   const [showCatalogBrowser, setShowCatalogBrowser] = useState(false);
   const [showThisPage, setShowThisPage] = useState(true);
@@ -128,7 +129,11 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
 
   async function handleSave() {
     const mult = parseFloat(multiplier);
-    if (isNaN(mult) || mult <= 0) { setSaveError("Multiplier must be a positive number."); return; }
+    if (isNaN(mult) || mult <= 0) {
+      setFieldErrors({ multiplier: "Multiplier must be a positive number." });
+      return;
+    }
+    setFieldErrors({});
     setSaveError("");
     setSaving(true);
     try {
@@ -228,16 +233,20 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: group.colour }} />
+          <span aria-hidden="true" className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: group.colour }} />
           <span className="text-sm font-semibold text-gray-800 truncate">{group.name}</span>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-2">×</button>
+        <button onClick={onClose} aria-label="Close layer details" className="text-gray-600 hover:text-gray-600 text-xl leading-none ml-2">×</button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 text-xs font-medium">
+      <div role="tablist" aria-label="Layer detail sections" className="flex border-b border-gray-200 text-xs font-medium">
         {(["main", "params", "drawings"] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
+          <button
+            key={t}
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
             className={`flex-1 py-2 transition ${tab === t ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
             {t === "main" ? "Main Details" : t === "params" ? "Add. Params" : "Drawings"}
           </button>
@@ -248,7 +257,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         {/* ── Main Details ── */}
         {tab === "main" && (
           <div className="space-y-3">
-            {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{saveError}</p>}
+            {saveError && <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{saveError}</p>}
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Takeoff Type</label>
@@ -287,7 +296,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                           {selectedRate.source}
                         </span>
                         {selectedRate.fiscalYear && (
-                          <span className="text-xs text-gray-400">FY {selectedRate.fiscalYear}</span>
+                          <span className="text-xs text-gray-600">FY {selectedRate.fiscalYear}</span>
                         )}
                       </div>
                       {selectedRate.description && (
@@ -301,8 +310,8 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                     </div>
                     <button
                       onClick={() => setSelectedRate(null)}
-                      className="text-gray-400 hover:text-red-500 text-sm flex-shrink-0 mt-0.5"
-                      title="Unlink catalog item"
+                      className="text-gray-600 hover:text-red-500 text-sm flex-shrink-0 mt-0.5"
+                      aria-label="Unlink catalog item"
                     >
                       ✕
                     </button>
@@ -320,43 +329,47 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Display Name</label>
-              <input value={name} onChange={e => { setName(e.target.value); setNameManuallyEdited(true); }}
+              <label htmlFor="tgdd-name" className="block text-xs text-gray-700 mb-1">Display Name</label>
+              <input id="tgdd-name" value={name} onChange={e => { setName(e.target.value); setNameManuallyEdited(true); }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">Color</label>
-                <input type="color" value={colour} onChange={e => setColour(e.target.value)}
+                <label htmlFor="tgdd-color" className="block text-xs text-gray-700 mb-1">Color</label>
+                <input id="tgdd-color" type="color" value={colour} onChange={e => setColour(e.target.value)}
                   className="w-full h-8 rounded border border-gray-300 cursor-pointer" />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">
+                <label htmlFor="tgdd-line-width" className="block text-xs text-gray-700 mb-1">
                   {(group.type === "COUNT" || group.type === "COUNT_BY_DISTANCE") ? "Dot Size" : "Line Width"}
                 </label>
-                <input type="range" min={1} max={8} step={1} value={lineWidth} onChange={e => setLineWidth(Number(e.target.value))}
+                <input id="tgdd-line-width" type="range" min={1} max={8} step={1} value={lineWidth} onChange={e => setLineWidth(Number(e.target.value))}
                   className="w-full mt-2 accent-blue-600" />
-                <span className="text-xs text-gray-400">{lineWidth}</span>
+                <span className="text-xs text-gray-700" aria-live="polite">{lineWidth}</span>
               </div>
             </div>
 
             {/* Marker Shape — COUNT and COUNT_BY_DISTANCE */}
             {(group.type === "COUNT" || group.type === "COUNT_BY_DISTANCE") && (
               <div>
-                <label className="block text-xs text-gray-500 mb-2">Marker Shape</label>
-                <div className="flex gap-1.5">
+                <label className="block text-xs text-gray-700 mb-2">Marker Shape</label>
+                <div className="flex gap-1.5" role="group" aria-label="Select marker shape">
                   {COUNT_SHAPES.map(s => (
-                    <button key={s.value} type="button" title={s.title}
+                    <button
+                      key={s.value}
+                      type="button"
+                      aria-label={s.title}
+                      aria-pressed={countShape === s.value}
                       onClick={() => setCountShape(s.value)}
                       style={{ color: countShape === s.value ? colour : undefined }}
                       className={`flex-1 py-1.5 text-base rounded-lg border-2 transition ${
                         countShape === s.value
                           ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300 text-gray-400"
+                          : "border-gray-200 hover:border-gray-300 text-gray-600"
                       }`}
                     >
-                      {s.label}
+                      <span aria-hidden="true">{s.label}</span>
                     </button>
                   ))}
                 </div>
@@ -364,45 +377,54 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
             )}
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Tag</label>
-              <input value={tag} onChange={e => setTag(e.target.value)} placeholder={'e.g. AFF 18\'-9"'}
+              <label htmlFor="tgdd-tag" className="block text-xs text-gray-700 mb-1">Tag</label>
+              <input id="tgdd-tag" value={tag} onChange={e => setTag(e.target.value)} placeholder={'e.g. AFF 18\'-9"'}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">
+              <label htmlFor="tgdd-preamble" className="block text-xs text-gray-700 mb-1">
                 Preamble
-                <span className="text-gray-400 font-normal ml-1">(shown in BOQ under item name)</span>
+                <span className="text-gray-600 font-normal ml-1">(shown in BOQ under item name)</span>
               </label>
-              <textarea value={preamble} onChange={e => setPreamble(e.target.value)}
+              <textarea id="tgdd-preamble" value={preamble} onChange={e => setPreamble(e.target.value)}
                 rows={2} placeholder="e.g. Measured net in place. Deduct openings &gt; 1 m²."
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
             </div>
 
-
             <div>
-              <label className="block text-xs text-gray-500 mb-1">
+              <label htmlFor="tgdd-multiplier" className="block text-xs text-gray-700 mb-1">
                 Multiplier
-                <span className="text-gray-400 font-normal ml-1">(e.g. 3 identical footings)</span>
+                <span className="text-gray-600 font-normal ml-1">(e.g. 3 identical footings)</span>
               </label>
-              <input type="number" min="0.001" step="0.1" value={multiplier} onChange={e => setMultiplier(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input
+                id="tgdd-multiplier"
+                type="number"
+                min="0.001"
+                step="0.1"
+                value={multiplier}
+                onChange={e => { setMultiplier(e.target.value); setFieldErrors({}); }}
+                aria-describedby={fieldErrors.multiplier ? "tgdd-multiplier-err" : undefined}
+                aria-invalid={!!fieldErrors.multiplier}
+                className={`w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 ${fieldErrors.multiplier ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+              />
+              {fieldErrors.multiplier && <p id="tgdd-multiplier-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.multiplier}</p>}
             </div>
 
             {/* ── This page total (dismissable) ── */}
             {thisPageTotal && showThisPage && (
               <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                 <div>
-                  <p className="text-xs text-gray-400 mb-0.5">This page</p>
+                  <p className="text-xs text-gray-600 mb-0.5">This page</p>
                   <p className="text-sm font-semibold text-gray-700">
                     {thisPageDisplay.toFixed(2)}
-                    <span className="text-xs font-normal text-gray-400 ml-1">{thisPageUnit}</span>
+                    <span className="text-xs font-normal text-gray-600 ml-1">{thisPageUnit}</span>
                   </p>
                 </div>
                 <button
                   onClick={() => setShowThisPage(false)}
-                  className="text-gray-300 hover:text-gray-500 text-base leading-none ml-4 flex-shrink-0"
-                  title="Hide this page total"
+                  className="text-gray-500 hover:text-gray-700 text-base leading-none ml-4 flex-shrink-0"
+                  aria-label="Hide this page total"
                 >
                   ✕
                 </button>
@@ -421,22 +443,22 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                   <span className="text-sm font-normal text-gray-500 ml-1">{qtyUnit}</span>
                 </p>
                 {group.type === "VOLUME" && currentH > 0 ? (
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-600 mt-0.5">
                     {volumeMethod === "lbh"
                       ? `${totalRaw.toFixed(2)} ft × ${currentB.toFixed(3)} ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} cu ft`
                       : `${totalRaw.toFixed(2)} sq ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} cu ft`
                     }
                   </p>
                 ) : group.type === "VERTICAL_WALL_AREA" && currentWallH > 0 ? (
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-600 mt-0.5">
                     {`${totalRaw.toFixed(2)} ft × ${currentWallH.toFixed(3)} ft (wall)${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} sq ft`}
                   </p>
                 ) : group.type === "COUNT_BY_DISTANCE" && currentSpacing > 0 ? (
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-600 mt-0.5">
                     {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.ceil(totalRaw / currentSpacing)} items${currentMult !== 1 ? ` × ${currentMult} = ${displayTotal}` : ""}`}
                   </p>
                 ) : currentMult !== 1 ? (
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-600 mt-0.5">
                     {`${totalRaw.toFixed(2)} ${qtyUnit} × ${currentMult} = ${displayTotal.toFixed(2)}`}
                   </p>
                 ) : null}
@@ -448,25 +470,27 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         {/* ── Additional Parameters ── */}
         {tab === "params" && (
           <div className="space-y-4">
-            {saveError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{saveError}</p>}
-            {paramsSaved && <p className="text-xs text-green-600 bg-green-50 border border-green-200 px-2 py-1.5 rounded">Saved — new shapes will use this value.</p>}
+            {saveError && <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{saveError}</p>}
+            {paramsSaved && <p role="status" className="text-xs text-green-600 bg-green-50 border border-green-200 px-2 py-1.5 rounded">Saved — new shapes will use this value.</p>}
 
             {group.type === "VOLUME" && (
               <div className="space-y-3">
                 {/* Method toggle */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1.5">Calculation Method</label>
-                  <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+                  <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs" role="group" aria-label="Volume calculation method">
                     <button
+                      aria-pressed={volumeMethod === "area_x_h"}
                       onClick={() => setVolumeMethod("area_x_h")}
                       className={`flex-1 py-1.5 transition ${volumeMethod === "area_x_h" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                     >Area × Height</button>
                     <button
+                      aria-pressed={volumeMethod === "lbh"}
                       onClick={() => setVolumeMethod("lbh")}
                       className={`flex-1 py-1.5 border-l border-gray-300 transition ${volumeMethod === "lbh" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                     >L × B × H</button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-600 mt-1">
                     {volumeMethod === "area_x_h"
                       ? "Draw a rectangle → area × height = volume"
                       : "Draw a polyline (length) → length × breadth × height = volume"}
@@ -521,7 +545,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       {displayTotal.toFixed(3)} <span className="text-sm font-normal text-gray-500">{qtyUnit}</span>
                     </p>
                     {currentH > 0 && (
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-gray-600 mt-0.5">
                         {volumeMethod === "lbh"
                           ? `${totalRaw.toFixed(2)} ft × ${currentB.toFixed(3)} ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(3)} cu ft`
                           : `${totalRaw.toFixed(2)} sq ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(3)} cu ft`
@@ -530,7 +554,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                     )}
                   </div>
                 )}
-                <p className="text-xs text-gray-400">Changing these values updates the total immediately. New shapes drawn after saving will use these dimensions.</p>
+                <p className="text-xs text-gray-600">Changing these values updates the total immediately. New shapes drawn after saving will use these dimensions.</p>
               </div>
             )}
 
@@ -562,7 +586,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       }
                     </p>
                     {currentWallH > 0 && (
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-gray-600 mt-0.5">
                         {`${totalRaw.toFixed(2)} ft (perimeter) × ${currentWallH.toFixed(3)} ft (height)${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${(totalRaw * currentWallH * currentMult).toFixed(2)} sq ft`}
                       </p>
                     )}
@@ -576,7 +600,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Item Spacing
-                    <span className="text-gray-400 font-normal ml-1">(e.g. J-hooks every 4 ft)</span>
+                    <span className="text-gray-600 font-normal ml-1">(e.g. J-hooks every 4 ft)</span>
                   </label>
                   <div className="flex gap-2">
                     <div className="flex-1">
@@ -603,20 +627,20 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       }
                     </p>
                     {currentSpacing > 0 && (
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-gray-600 mt-0.5">
                         {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.ceil(totalRaw / currentSpacing)} items${currentMult !== 1 ? ` × ${currentMult} = ${Math.ceil(totalRaw / currentSpacing) * currentMult}` : ""}`}
                       </p>
                     )}
                   </div>
                 )}
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-600">
                   Count = ⌈ total length ÷ spacing ⌉. Set spacing first, then draw shapes.
                 </p>
               </div>
             )}
 
             {!hasParams && (
-              <p className="text-center py-8 text-gray-400 text-xs">
+              <p className="text-center py-8 text-gray-600 text-xs">
                 No additional parameters for {TYPE_LABELS[group.type] ?? group.type} type.
               </p>
             )}
@@ -633,15 +657,15 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         {/* ── Drawings ── */}
         {tab === "drawings" && (
           <div className="space-y-1">
-            <p className="text-xs text-gray-400 mb-3">Drawings containing shapes from this layer.</p>
+            <p className="text-xs text-gray-600 mb-3">Drawings containing shapes from this layer.</p>
             {allDrawings.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">No drawings in this project.</p>
+              <p className="text-xs text-gray-600 text-center py-4">No drawings in this project.</p>
             ) : (
               allDrawings.map(d => (
                 <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
                   <a href={`/dashboard/projects/${projectId}/drawings/${d.id}`}
                     className="text-xs text-blue-600 hover:underline truncate flex-1 mr-2">{d.fileName}</a>
-                  <span className="text-xs text-gray-400">—</span>
+                  <span className="text-xs text-gray-600">—</span>
                 </div>
               ))
             )}

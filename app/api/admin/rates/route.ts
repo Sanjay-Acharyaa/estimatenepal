@@ -5,11 +5,19 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { invalidateDudbcCaches } from "@/lib/rates";
 
-function requireSuperAdmin(token: { isSuperAdmin?: unknown } | null) {
+async function requireSuperAdmin(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) throw unauthorized();
   if (!token.isSuperAdmin) throw forbidden();
+  const user = await prisma.user.findUnique({
+    where: { id: token.id as string },
+    select: { isSuperAdmin: true },
+  });
+  if (!user?.isSuperAdmin) throw forbidden();
+  return token;
 }
 
 const createSchema = z.object({
@@ -23,13 +31,16 @@ const createSchema = z.object({
 // GET /api/admin/rates?page=&limit=&fiscalYear=&search=
 export async function GET(req: NextRequest) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    requireSuperAdmin(token);
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    const token = await requireSuperAdmin(req);
 
     const sp = req.nextUrl.searchParams;
     const { page, limit, skip } = parsePagination(sp);
     const fiscalYear = sp.get("fiscalYear") ?? "";
-    const search = sp.get("search") ?? "";
+    const search = (sp.get("search") ?? "").slice(0, 200);
 
     const where = {
       source: "DUDBC" as const,
@@ -72,12 +83,11 @@ export async function GET(req: NextRequest) {
 // POST /api/admin/rates — create a single DUDBC rate item
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    requireSuperAdmin(token);
+    const token = await requireSuperAdmin(req);
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
@@ -99,7 +109,7 @@ export async function POST(req: NextRequest) {
       event: "dudbc_rate.created",
       resourceId: rate.id,
       meta: { code: rate.code, fiscalYear: rate.fiscalYear } as any,
-      ipAddress: req.headers.get("x-forwarded-for") ?? "unknown",
+      ipAddress: getClientIp(req),
     });
 
     return NextResponse.json(rate, { status: 201 });
@@ -113,12 +123,11 @@ export async function POST(req: NextRequest) {
 // including district rates, rate analyses, and BOQ overrides linked to them.
 export async function DELETE(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    requireSuperAdmin(token);
+    const token = await requireSuperAdmin(req);
 
     const fiscalYear = req.nextUrl.searchParams.get("fiscalYear")?.trim() ?? "";
     if (!fiscalYear) return apiError("VALIDATION_ERROR", "fiscalYear is required.", 400);
@@ -145,8 +154,10 @@ export async function DELETE(req: NextRequest) {
       event: "dudbc_rates.fiscal_year_deleted",
       resourceId: fiscalYear,
       meta: { fiscalYear, count: ids.length } as any,
-      ipAddress: req.headers.get("x-forwarded-for") ?? "unknown",
+      ipAddress: getClientIp(req),
     });
+
+    invalidateDudbcCaches().catch((e) => console.error("[admin/rates DELETE] Cache invalidation failed:", e));
 
     return NextResponse.json({ deleted: ids.length, fiscalYear });
   } catch (err) {

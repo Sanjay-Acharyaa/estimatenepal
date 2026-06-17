@@ -114,7 +114,7 @@ export function OverrideDialog({ projectId, group, onClose, onSuccess }: Props) 
           </button>
         </div>
 
-        <p className="text-xs text-gray-400 mt-3 text-center">
+        <p className="text-xs text-gray-600 mt-3 text-center">
           Override requires approval from an Admin or Owner before taking effect.
         </p>
       </div>

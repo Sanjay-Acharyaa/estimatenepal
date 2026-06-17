@@ -71,13 +71,13 @@ export function CatalogBrowser({ onSelect, onClose }: Props) {
             <h2 className="font-semibold text-gray-900 text-lg">Browse Rate Catalog</h2>
             <p className="text-xs text-gray-500 mt-0.5">Click a row to expand its full description, then select.</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
 
         {/* Search + Filter */}
         <div className="flex gap-3 px-6 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
           <div className="flex-1 relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm">🔍</span>
             <input
               ref={searchRef}
               value={search}
@@ -95,7 +95,7 @@ export function CatalogBrowser({ onSelect, onClose }: Props) {
             <option value="CUSTOM">Custom (org)</option>
             <option value="DUDBC">DUDBC</option>
           </select>
-          <div className="text-xs text-gray-400 self-center whitespace-nowrap">
+          <div className="text-xs text-gray-600 self-center whitespace-nowrap">
             {total} item{total !== 1 ? "s" : ""}
           </div>
         </div>
@@ -103,15 +103,15 @@ export function CatalogBrowser({ onSelect, onClose }: Props) {
         {/* Item list */}
         <div className="flex-1 overflow-y-auto">
           {loading && (
-            <div className="text-center py-12 text-gray-400 text-sm">Searching…</div>
+            <div className="text-center py-12 text-gray-600 text-sm">Searching…</div>
           )}
 
           {!loading && items.length === 0 && (
             <div className="text-center py-16">
-              <p className="text-gray-400 text-sm">
+              <p className="text-gray-600 text-sm">
                 {search ? `No rates matching "${search}"` : "No rates in catalog yet."}
               </p>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-600 mt-2">
                 Add rates via Rate Catalog → + New Rate, or use bulk import.
               </p>
             </div>
@@ -145,9 +145,9 @@ export function CatalogBrowser({ onSelect, onClose }: Props) {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SOURCE_BADGE[item.source] ?? "bg-gray-100 text-gray-600"}`}>
                         {item.source}
                       </span>
-                      <span className="text-xs text-gray-400">FY {item.fiscalYear}</span>
+                      <span className="text-xs text-gray-600">FY {item.fiscalYear}</span>
                       {!expanded && (
-                        <span className="text-xs text-gray-400 ml-auto">click to expand ▼</span>
+                        <span className="text-xs text-gray-600 ml-auto">click to expand ▼</span>
                       )}
                     </div>
                   </div>

@@ -37,7 +37,7 @@ export function TakeoffTabRedirect({ projectId }: { projectId: string }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-400 text-sm">Loading drawings…</p>
+        <p className="text-gray-600 text-sm">Loading drawings…</p>
       </div>
     );
   }
@@ -63,7 +63,7 @@ export function TakeoffTabRedirect({ projectId }: { projectId: string }) {
   // Redirecting — show a brief loading state while router.replace fires
   return (
     <div className="flex items-center justify-center h-full">
-      <p className="text-gray-400 text-sm">Opening drawing…</p>
+      <p className="text-gray-600 text-sm">Opening drawing…</p>
     </div>
   );
 }

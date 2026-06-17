@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { redis } from "@/lib/redis";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
+
+const RATES_CACHE_TTL = 300; // 5 minutes
 
 const createSchema = z.object({
   code: z.string().min(1).max(50).trim(),
@@ -18,13 +21,17 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     if (!token.orgId) throw forbidden();
 
     const sp = req.nextUrl.searchParams;
     const { page, limit, skip } = parsePagination(sp);
-    const search = sp.get("search") ?? "";
+    const search = (sp.get("search") ?? "").slice(0, 200);
     const source = sp.get("source") ?? "";
     const batchId = sp.get("batchId") ?? "";
 
@@ -45,11 +52,23 @@ export async function GET(req: NextRequest) {
       ],
     };
 
+    // Cache key encodes all filter dimensions. Short search prefix avoids key explosion.
+    const cacheKey = `rates:${token.orgId}:${source}:${batchId}:${search.slice(0, 40)}`;
+    try {
+      const hit = await redis.get(cacheKey);
+      if (hit) {
+        const cached = JSON.parse(hit) as { all: any[]; total: number };
+        const data = cached.all.slice(skip, skip + limit);
+        return NextResponse.json(paginatedResponse(data, cached.total, page, limit));
+      }
+    } catch {
+      // Redis miss — fall through to DB
+    }
+
     // Natural sort: numeric codes sort as numbers (1,2,3,10,100) not strings (1,10,100,2)
-    // Prisma can't do LENGTH()-based ordering natively so we sort after fetch.
-    // Rate catalogs are small (< 5000 items) so in-memory sort is fine.
+    // Cap at 5000 rows to prevent unbounded memory use at scale.
     const [allData, total] = await Promise.all([
-      prisma.rateItem.findMany({ where }),
+      prisma.rateItem.findMany({ where, take: 5000 }),
       prisma.rateItem.count({ where }),
     ]);
 
@@ -68,6 +87,9 @@ export async function GET(req: NextRequest) {
       return a.code.localeCompare(b.code);
     });
 
+    // Cache the full sorted list; pagination is done in-memory from the cached array.
+    redis.set(cacheKey, JSON.stringify({ all: allData, total }), "EX", RATES_CACHE_TTL).catch(() => {});
+
     const data = allData.slice(skip, skip + limit);
 
     return NextResponse.json(paginatedResponse(data, total, page, limit));
@@ -78,7 +100,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

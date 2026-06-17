@@ -4,19 +4,10 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
-import bcrypt from "bcryptjs";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const profileSchema = z.object({
   name: z.string().min(1).max(100).trim().optional(),
-});
-
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: z.string().min(8).max(100).regex(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-    "Password must contain uppercase, lowercase and a number."
-  ),
 });
 
 // GET /api/auth/profile
@@ -40,7 +31,7 @@ export async function GET(req: NextRequest) {
 // PUT /api/auth/profile — update name
 export async function PUT(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -58,7 +49,7 @@ export async function PUT(req: NextRequest) {
     });
 
     await appendAuditLog({
-      orgId: user.id,
+      orgId: (token.orgId as string) ?? "SYSTEM",
       userId: token.id as string,
       event: "user.profile_updated",
       resourceId: token.id as string,

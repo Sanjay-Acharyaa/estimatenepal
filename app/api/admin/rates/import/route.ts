@@ -3,7 +3,8 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { appendAuditLog } from "@/lib/audit";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
-import { checkUploadRateLimit } from "@/lib/security";
+import { checkUploadRateLimit, getClientIp } from "@/lib/security";
+import { invalidateDudbcCaches } from "@/lib/rates";
 import ExcelJS from "exceljs";
 
 // POST /api/admin/rates/import
@@ -16,9 +17,13 @@ import ExcelJS from "exceljs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-function requireSuperAdmin(token: { isSuperAdmin?: unknown } | null) {
+async function requireSuperAdmin(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) throw unauthorized();
   if (!token.isSuperAdmin) throw forbidden();
+  const user = await prisma.user.findUnique({ where: { id: token.id as string }, select: { isSuperAdmin: true } });
+  if (!user?.isSuperAdmin) throw forbidden();
+  return token;
 }
 
 function cellStr(row: ExcelJS.Row, col: number): string {
@@ -89,12 +94,11 @@ type ParsedRow = {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkUploadRateLimit(ip);
     if (limited) return limited;
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    requireSuperAdmin(token);
+    const token = await requireSuperAdmin(req);
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -178,6 +182,8 @@ export async function POST(req: NextRequest) {
         data: toInsert.map(r => ({ ...r, source: "DUDBC" as const, isPublished: false })),
       });
     }
+
+    invalidateDudbcCaches().catch((e) => console.error("[admin/rates/import] Cache invalidation failed:", e));
 
     await appendAuditLog({
       orgId: "SYSTEM",

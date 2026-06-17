@@ -57,9 +57,9 @@ export function RateSelector({ value, onSelect, placeholder = "Search rates…" 
             {value.description}
           </span>
         ) : (
-          <span className="text-gray-400">{placeholder}</span>
+          <span className="text-gray-600">{placeholder}</span>
         )}
-        <span className="text-gray-400 flex-shrink-0">▾</span>
+        <span className="text-gray-600 flex-shrink-0">▾</span>
       </button>
 
       {open && (
@@ -82,9 +82,9 @@ export function RateSelector({ value, onSelect, placeholder = "Search rates…" 
                 ✕ Remove rate assignment
               </button>
             )}
-            {loading && <p className="text-center py-4 text-xs text-gray-400">Loading…</p>}
+            {loading && <p className="text-center py-4 text-xs text-gray-600">Loading…</p>}
             {!loading && rates.length === 0 && (
-              <p className="text-center py-4 text-xs text-gray-400">No rates found. Create one in the Rates catalog.</p>
+              <p className="text-center py-4 text-xs text-gray-600">No rates found. Create one in the Rates catalog.</p>
             )}
             {!loading && rates.map(r => (
               <button
@@ -105,7 +105,7 @@ export function RateSelector({ value, onSelect, placeholder = "Search rates…" 
                   <p className="text-xs font-semibold text-gray-800">
                     NRS {r.baseRate.toLocaleString("en-NP", { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-xs text-gray-400">/{r.unit}</p>
+                  <p className="text-xs text-gray-600">/{r.unit}</p>
                 </div>
               </button>
             ))}

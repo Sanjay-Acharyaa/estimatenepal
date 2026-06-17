@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { computeQuantity, effectiveScale, type ToolData, type AdditionalParams } from "@/lib/takeoff";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 
@@ -26,6 +27,10 @@ export async function GET(
   { params }: { params: { id: string; drawingId: string; pageId: string } }
 ) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -62,7 +67,7 @@ export async function POST(
   { params }: { params: { id: string; drawingId: string; pageId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -108,31 +113,32 @@ export async function POST(
       parsed.data.shapeType ?? null
     );
 
-    const last = await prisma.takeoffItem.findFirst({
-      where: { pageId: params.pageId },
-      orderBy: { sortOrder: "desc" },
-      select: { sortOrder: true },
-    });
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const item = await (prisma.takeoffItem.create as any)({
-      data: {
-        pageId: params.pageId,
-        groupId: parsed.data.groupId,
-        label: parsed.data.label,
-        toolType: parsed.data.toolType,
-        shapeType: parsed.data.shapeType,
-        toolData: parsed.data.toolData,
-        multiplier: parsed.data.multiplier,
-        isNegative: parsed.data.isNegative,
-        rawQuantity,
-        quantity,
-        unit,
-        scaleUsed,
-        sortOrder: parsed.data.sortOrder ?? (last?.sortOrder ?? 0) + 1,
-      },
-      include: { group: { select: { id: true, name: true, colour: true, type: true } } },
-    });
+    const item = await prisma.$transaction(async (tx) => {
+      const last = await tx.takeoffItem.findFirst({
+        where: { pageId: params.pageId },
+        orderBy: { sortOrder: "desc" },
+        select: { sortOrder: true },
+      });
+      return (tx.takeoffItem.create as any)({
+        data: {
+          pageId: params.pageId,
+          groupId: parsed.data.groupId,
+          label: parsed.data.label,
+          toolType: parsed.data.toolType,
+          shapeType: parsed.data.shapeType,
+          toolData: parsed.data.toolData,
+          multiplier: parsed.data.multiplier,
+          isNegative: parsed.data.isNegative,
+          rawQuantity,
+          quantity,
+          unit,
+          scaleUsed,
+          sortOrder: parsed.data.sortOrder ?? (last?.sortOrder ?? 0) + 1,
+        },
+        include: { group: { select: { id: true, name: true, colour: true, type: true } } },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return NextResponse.json(item, { status: 201 });
   } catch (err) {

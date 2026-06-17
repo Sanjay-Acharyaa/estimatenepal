@@ -6,7 +6,7 @@ import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/l
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { Prisma } from "@prisma/client";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const updateSchema = z.object({
   name: z.string().min(2).max(200).optional(),
@@ -42,11 +42,17 @@ async function getProject(id: string) {
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
-    const project = await getProject(params.id);
-    await withTenantGuard(token.id as string, project.orgId);
+    // Fetch orgId only first so tenant guard runs before full member/share data is loaded
+    const slim = await prisma.project.findUnique({ where: { id: params.id }, select: { orgId: true } });
+    if (!slim) throw notFound("Project");
+    await withTenantGuard(token.id as string, slim.orgId);
 
     const full = await prisma.project.findUnique({
       where: { id: params.id },
@@ -58,6 +64,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         _count: { select: { drawings: true, disciplines: true } },
       },
     });
+    if (!full) throw notFound("Project");
 
     return NextResponse.json(full);
   } catch (err) {
@@ -67,7 +74,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -100,7 +107,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

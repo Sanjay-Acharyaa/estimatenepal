@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { Prisma } from "@prisma/client";
 
 const updateSchema = z.object({
@@ -20,7 +20,7 @@ export async function PUT(
   { params }: { params: { id: string; drawingId: string; pageId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -43,11 +43,18 @@ export async function PUT(
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
     }
 
-    // Zod-validated payload — safe to cast JSON fields for Prisma
+    // Zod-validated payload — safe to cast JSON fields for Prisma.
+    // Maintain the denormalized hasAnnotations flag when annotationsJson is updated.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: any = { ...parsed.data };
+    if (parsed.data.annotationsJson !== undefined) {
+      const a = parsed.data.annotationsJson as any;
+      updateData.hasAnnotations = Array.isArray(a?.annotations) && a.annotations.length > 0;
+    }
+
     const updated = await prisma.drawingPage.update({
       where: { id: params.pageId },
-      data: parsed.data as any,
+      data: updateData,
     });
 
     return NextResponse.json(updated);

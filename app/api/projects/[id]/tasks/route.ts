@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { appendAuditLog } from "@/lib/audit";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 
@@ -17,6 +17,10 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -52,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -93,16 +97,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
     });
 
-    // Notify assignee
+    // Notify assignee — fire-and-forget, must not block response
     if (task.assignedToId && task.assignedToId !== token.id) {
-      await prisma.notification.create({
+      prisma.notification.create({
         data: {
           userId: task.assignedToId,
           type: "task_assigned",
           message: `You have been assigned a task: "${task.title}"`,
           link: `/dashboard/projects/${params.id}?tab=overview`,
         },
-      });
+      }).catch((err) => console.error("[tasks] notification failed:", err));
     }
 
     await appendAuditLog({

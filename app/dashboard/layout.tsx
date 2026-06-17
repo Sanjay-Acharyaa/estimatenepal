@@ -71,8 +71,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
         <div className="p-4 border-t border-gray-100">
           <div className="text-xs text-gray-500 mb-0.5 truncate">{session.user.name}</div>
-          <div className="text-xs text-gray-400 mb-1 truncate">{session.user.email}</div>
-          <div className="text-xs text-gray-400 mb-2">{session.user.role}</div>
+          <div className="text-xs text-gray-600 mb-1 truncate">{session.user.email}</div>
+          <div className="text-xs text-gray-600 mb-2">{session.user.role}</div>
           <Link href="/dashboard/settings" className="block text-xs text-blue-600 hover:underline mb-3">Settings</Link>
           <SignOutButton />
         </div>

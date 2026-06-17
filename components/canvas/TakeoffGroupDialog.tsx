@@ -72,6 +72,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
   const [tag, setTag] = useState(initial?.tag ?? "");
   const [multiplier, setMultiplier] = useState(String(initial?.multiplier ?? 1));
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; multiplier?: string }>({});
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -124,9 +125,13 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
       setError("Select a catalog item or choose 'Skip catalog'.");
       return;
     }
-    if (!name.trim()) { setError("Layer name is required."); return; }
+    const fe: typeof fieldErrors = {};
+    if (!name.trim()) fe.name = "Layer name is required.";
     const mult = parseFloat(multiplier);
-    if (!mult || mult <= 0) { setError("Multiplier must be > 0."); return; }
+    if (!mult || mult <= 0) fe.multiplier = "Multiplier must be greater than 0.";
+    if (Object.keys(fe).length) { setFieldErrors(fe); setError(""); return; }
+    setFieldErrors({});
+    setError("");
     onSave({
       name: name.trim(),
       type,
@@ -143,23 +148,29 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div
+        className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tgd-title"
+        onKeyDown={e => { if (e.key === "Escape") onCancel(); }}
+      >
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
 
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
-            <h3 className="text-base font-bold text-gray-900">{title}</h3>
-            <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            <h3 id="tgd-title" className="text-base font-bold text-gray-900">{title}</h3>
+            <button onClick={onCancel} aria-label="Close dialog" className="text-gray-600 hover:text-gray-600 text-xl leading-none">×</button>
           </div>
 
           <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-            {error && <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+            {error && <p role="alert" className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
             {/* ── Catalog Item (new layers only) ── */}
             {isNew && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-gray-700">
+                  <label htmlFor="tgd-catalog-search" className="text-xs font-semibold text-gray-700">
                     Catalog Item
                     {!skipCatalog && <span className="text-red-500 ml-0.5">*</span>}
                   </label>
@@ -186,7 +197,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                             NRS {NRS(catalogItem.baseRate)} / {catalogItem.unit}
                           </p>
                         </div>
-                        <button onClick={clearCatalog} className="text-gray-400 hover:text-red-500 text-sm flex-shrink-0">✕</button>
+                        <button onClick={clearCatalog} aria-label="Remove catalog item" className="text-gray-600 hover:text-red-500 text-sm flex-shrink-0">✕</button>
                       </div>
                     ) : (
                       // Search + browse
@@ -194,10 +205,14 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                         <div className="flex gap-2">
                           <div className="flex-1 relative">
                             <input
+                              id="tgd-catalog-search"
                               value={catalogSearch}
                               onChange={e => { setCatalogSearch(e.target.value); setShowDropdown(true); }}
                               onFocus={() => setShowDropdown(true)}
                               placeholder="Enter material name or search catalog…"
+                              aria-label="Search catalog"
+                              aria-autocomplete="list"
+                              aria-expanded={showDropdown && catalogSearch.length >= 2}
                               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
@@ -205,7 +220,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                             onClick={() => setShowBrowser(true)}
                             className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex-shrink-0 transition"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-3.5 h-3.5" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                             </svg>
                             Browse Catalog
@@ -215,7 +230,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                         {/* Inline dropdown results */}
                         {showDropdown && catalogSearch.length >= 2 && (
                           <div className="absolute z-50 left-0 right-12 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
-                            {catalogLoading && <p className="text-center py-3 text-xs text-gray-400">Searching…</p>}
+                            {catalogLoading && <p className="text-center py-3 text-xs text-gray-600">Searching…</p>}
                             {!catalogLoading && catalogResults.length === 0 && (
                               <div className="py-4 px-3 text-center">
                                 <p className="text-xs text-gray-500">No results for "{catalogSearch}"</p>
@@ -233,7 +248,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <p className="text-xs font-semibold text-gray-800">NRS {NRS(r.baseRate)}</p>
-                                  <p className="text-xs text-gray-400">/{r.unit}</p>
+                                  <p className="text-xs text-gray-600">/{r.unit}</p>
                                 </div>
                               </button>
                             ))}
@@ -254,18 +269,22 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
 
             {/* ── Layer Name ── */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label htmlFor="tgd-name" className="block text-xs font-medium text-gray-600 mb-1">
                 Layer Name <span className="text-red-500">*</span>
-                {catalogItem && !initial && <span className="text-gray-400 font-normal ml-1">(auto-filled from catalog)</span>}
+                {catalogItem && !initial && <span className="text-gray-600 font-normal ml-1">(auto-filled from catalog)</span>}
               </label>
               <input
+                id="tgd-name"
                 type="text"
                 value={name}
-                onChange={e => { setName(e.target.value); setNameManuallyEdited(true); setError(""); }}
+                onChange={e => { setName(e.target.value); setNameManuallyEdited(true); setFieldErrors(f => ({ ...f, name: undefined })); setError(""); }}
                 placeholder="e.g. Foundation Excavation — Block A"
                 autoFocus={!!initial || skipCatalog}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-describedby={fieldErrors.name ? "tgd-name-err" : undefined}
+                aria-invalid={!!fieldErrors.name}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.name ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
               />
+              {fieldErrors.name && <p id="tgd-name-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.name}</p>}
             </div>
 
             {/* ── Takeoff Type ── */}
@@ -283,7 +302,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                     }`}
                   >
                     <p className="font-semibold">{t.label}</p>
-                    <p className={`mt-0.5 ${type === t.value ? "text-blue-600" : "text-gray-400"}`}>{t.desc}</p>
+                    <p className={`mt-0.5 ${type === t.value ? "text-blue-600" : "text-gray-600"}`}>{t.desc}</p>
                   </button>
                 ))}
               </div>
@@ -292,14 +311,19 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
             {/* ── Color ── */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Color</label>
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Pick a color">
                 {PRESET_COLORS.map(c => (
-                  <button key={c} onClick={() => setColour(c)}
+                  <button
+                    key={c}
+                    onClick={() => setColour(c)}
+                    aria-label={`Color ${c}`}
+                    aria-pressed={colour === c}
                     className={`w-7 h-7 rounded-full border-2 transition ${colour === c ? "border-gray-800 scale-110" : "border-transparent"}`}
-                    style={{ backgroundColor: c }} />
+                    style={{ backgroundColor: c }}
+                  />
                 ))}
                 <input type="color" value={colour} onChange={e => setColour(e.target.value)}
-                  className="w-7 h-7 rounded cursor-pointer border border-gray-300" title="Custom color" />
+                  className="w-7 h-7 rounded cursor-pointer border border-gray-300" aria-label="Custom color picker" />
               </div>
             </div>
 
@@ -309,7 +333,11 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                 <label className="block text-xs font-medium text-gray-600 mb-2">Marker Shape</label>
                 <div className="flex gap-2">
                   {COUNT_SHAPES.map(s => (
-                    <button key={s.value} type="button" title={s.title}
+                    <button
+                      key={s.value}
+                      type="button"
+                      aria-label={s.title}
+                      aria-pressed={countShape === s.value}
                       onClick={() => setCountShape(s.value)}
                       style={{ color: countShape === s.value ? colour : undefined }}
                       className={`flex-1 py-2 text-base rounded-lg border-2 transition ${
@@ -318,7 +346,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
                           : "border-gray-200 hover:border-gray-300 text-gray-500"
                       }`}
                     >
-                      {s.label}
+                      <span aria-hidden="true">{s.label}</span>
                     </button>
                   ))}
                 </div>
@@ -339,16 +367,25 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
             {/* ── Tag + Multiplier ── */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Tag (optional)</label>
-                <input type="text" value={tag} onChange={e => setTag(e.target.value)}
+                <label htmlFor="tgd-tag" className="block text-xs font-medium text-gray-600 mb-1">Tag (optional)</label>
+                <input id="tgd-tag" type="text" value={tag} onChange={e => setTag(e.target.value)}
                   placeholder={'e.g. AFF 18\'-9"'}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Multiplier</label>
-                <input type="number" min="0.001" step="0.1" value={multiplier}
-                  onChange={e => setMultiplier(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label htmlFor="tgd-multiplier" className="block text-xs font-medium text-gray-600 mb-1">Multiplier</label>
+                <input
+                  id="tgd-multiplier"
+                  type="number"
+                  min="0.001"
+                  step="0.1"
+                  value={multiplier}
+                  onChange={e => { setMultiplier(e.target.value); setFieldErrors(f => ({ ...f, multiplier: undefined })); }}
+                  aria-describedby={fieldErrors.multiplier ? "tgd-multiplier-err" : undefined}
+                  aria-invalid={!!fieldErrors.multiplier}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.multiplier ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+                />
+                {fieldErrors.multiplier && <p id="tgd-multiplier-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.multiplier}</p>}
               </div>
             </div>
           </div>

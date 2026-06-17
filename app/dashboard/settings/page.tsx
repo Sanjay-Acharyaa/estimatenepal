@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const [pwdSaving, setPwdSaving] = useState(false);
   const [pwdMsg, setPwdMsg] = useState("");
   const [pwdError, setPwdError] = useState("");
+  const [pwdConfirmError, setPwdConfirmError] = useState("");
 
   // Org form
   const [orgForm, setOrgForm] = useState({ name: "", panNumber: "", logoUrl: "", address: "", phone: "" });
@@ -53,8 +54,8 @@ export default function SettingsPage() {
 
   async function changePassword(e: React.FormEvent) {
     e.preventDefault();
-    setPwdError(""); setPwdMsg("");
-    if (newPwd !== confirmPwd) { setPwdError("New passwords do not match."); return; }
+    setPwdError(""); setPwdMsg(""); setPwdConfirmError("");
+    if (newPwd !== confirmPwd) { setPwdConfirmError("Passwords do not match."); return; }
     setPwdSaving(true);
     const res = await fetch("/api/auth/change-password", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -89,16 +90,23 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-6 py-8">
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600">← Dashboard</Link>
+          <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-600">← Dashboard</Link>
           <span className="text-gray-300">/</span>
           <h1 className="text-xl font-bold text-gray-800">Settings</h1>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 mb-6">
+        <div className="flex border-b border-gray-200 mb-6" role="tablist" aria-label="Settings sections">
           {tabs.map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${activeTab === t.id ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={activeTab === t.id}
+              aria-controls={`tab-panel-${t.id}`}
+              id={`tab-${t.id}`}
+              onClick={() => setActiveTab(t.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${activeTab === t.id ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            >
               {t.label}
             </button>
           ))}
@@ -108,22 +116,34 @@ export default function SettingsPage() {
 
           {/* Profile tab */}
           {activeTab === "profile" && (
-            <form onSubmit={saveProfile} className="space-y-4">
+            <form
+              id="tab-panel-profile"
+              role="tabpanel"
+              aria-labelledby="tab-profile"
+              onSubmit={saveProfile}
+              className="space-y-4"
+            >
               <h2 className="font-semibold text-gray-800 mb-4">My Profile</h2>
+              {!profile && (
+                <div className="flex items-center gap-2 py-4" aria-label="Loading profile">
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" aria-hidden />
+                  <p className="text-sm text-gray-600">Loading…</p>
+                </div>
+              )}
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Full Name</label>
-                <input value={name} onChange={e => setName(e.target.value)} required className={inputCls} />
+                <label htmlFor="sp-name" className="block text-sm text-gray-700 mb-1">Full Name</label>
+                <input id="sp-name" value={name} onChange={e => setName(e.target.value)} required className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Email</label>
-                <input value={profile?.email ?? ""} disabled className={`${inputCls} bg-gray-50 text-gray-400`} />
-                <p className="text-xs text-gray-400 mt-1">Email cannot be changed.</p>
+                <label htmlFor="sp-email" className="block text-sm text-gray-700 mb-1">Email</label>
+                <input id="sp-email" value={profile?.email ?? ""} disabled className={`${inputCls} bg-gray-50 text-gray-600`} />
+                <p className="text-xs text-gray-600 mt-1">Email cannot be changed.</p>
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Role</label>
-                <input value={profile?.role ?? ""} disabled className={`${inputCls} bg-gray-50 text-gray-400`} />
+                <label htmlFor="sp-role" className="block text-sm text-gray-700 mb-1">Role</label>
+                <input id="sp-role" value={profile?.role ?? ""} disabled className={`${inputCls} bg-gray-50 text-gray-600`} />
               </div>
-              {profileMsg && <p className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{profileMsg}</p>}
+              {profileMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{profileMsg}</p>}
               <button type="submit" disabled={profileSaving}
                 className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 {profileSaving ? "Saving…" : "Save Profile"}
@@ -133,23 +153,40 @@ export default function SettingsPage() {
 
           {/* Password tab */}
           {activeTab === "password" && (
-            <form onSubmit={changePassword} className="space-y-4">
+            <form
+              id="tab-panel-password"
+              role="tabpanel"
+              aria-labelledby="tab-password"
+              onSubmit={changePassword}
+              className="space-y-4"
+            >
               <h2 className="font-semibold text-gray-800 mb-4">Change Password</h2>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Current Password</label>
-                <input type="password" required value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} className={inputCls} />
+                <label htmlFor="sp-current-pwd" className="block text-sm text-gray-700 mb-1">Current Password</label>
+                <input id="sp-current-pwd" type="password" required autoComplete="current-password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">New Password</label>
-                <input type="password" required value={newPwd} onChange={e => setNewPwd(e.target.value)} className={inputCls} />
-                <p className="text-xs text-gray-400 mt-1">Minimum 8 characters, must include uppercase, lowercase, and a number.</p>
+                <label htmlFor="sp-new-pwd" className="block text-sm text-gray-700 mb-1">New Password</label>
+                <input id="sp-new-pwd" type="password" required autoComplete="new-password" value={newPwd} onChange={e => setNewPwd(e.target.value)} className={inputCls} />
+                <p className="text-xs text-gray-600 mt-1">Minimum 8 characters, must include uppercase, lowercase, and a number.</p>
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Confirm New Password</label>
-                <input type="password" required value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} className={inputCls} />
+                <label htmlFor="sp-confirm-pwd" className="block text-sm text-gray-700 mb-1">Confirm New Password</label>
+                <input
+                  id="sp-confirm-pwd"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  value={confirmPwd}
+                  onChange={e => { setConfirmPwd(e.target.value); setPwdConfirmError(""); }}
+                  aria-describedby={pwdConfirmError ? "sp-confirm-pwd-err" : undefined}
+                  aria-invalid={!!pwdConfirmError}
+                  className={pwdConfirmError ? `${inputCls} border-red-500 focus:ring-red-500` : inputCls}
+                />
+                {pwdConfirmError && <p id="sp-confirm-pwd-err" role="alert" className="text-red-600 text-xs mt-1">{pwdConfirmError}</p>}
               </div>
-              {pwdError && <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{pwdError}</p>}
-              {pwdMsg && <p className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{pwdMsg}</p>}
+              {pwdError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{pwdError}</p>}
+              {pwdMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{pwdMsg}</p>}
               <button type="submit" disabled={pwdSaving}
                 className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 {pwdSaving ? "Updating…" : "Update Password"}
@@ -159,42 +196,48 @@ export default function SettingsPage() {
 
           {/* Org tab — OWNER only */}
           {activeTab === "org" && org && (
-            <form onSubmit={saveOrg} className="space-y-4">
+            <form
+              id="tab-panel-org"
+              role="tabpanel"
+              aria-labelledby="tab-org"
+              onSubmit={saveOrg}
+              className="space-y-4"
+            >
               <h2 className="font-semibold text-gray-800 mb-4">Organisation Settings</h2>
               <div className="flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 rounded px-3 py-2 mb-2">
                 Plan: <span className="font-bold">{org.plan}</span>
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Organisation Name</label>
-                <input required value={orgForm.name} onChange={e => setOrgForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
+                <label htmlFor="sp-org-name" className="block text-sm text-gray-700 mb-1">Organisation Name</label>
+                <input id="sp-org-name" required value={orgForm.name} onChange={e => setOrgForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">PAN Number</label>
-                  <input value={orgForm.panNumber} onChange={e => setOrgForm(f => ({ ...f, panNumber: e.target.value }))} placeholder="e.g. 123456789" className={inputCls} />
+                  <label htmlFor="sp-pan" className="block text-sm text-gray-700 mb-1">PAN Number</label>
+                  <input id="sp-pan" value={orgForm.panNumber} onChange={e => setOrgForm(f => ({ ...f, panNumber: e.target.value }))} placeholder="e.g. 123456789" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Phone</label>
-                  <input value={orgForm.phone} onChange={e => setOrgForm(f => ({ ...f, phone: e.target.value }))} placeholder="e.g. +977-1-XXXXXXX" className={inputCls} />
+                  <label htmlFor="sp-phone" className="block text-sm text-gray-700 mb-1">Phone</label>
+                  <input id="sp-phone" value={orgForm.phone} onChange={e => setOrgForm(f => ({ ...f, phone: e.target.value }))} placeholder="e.g. +977-1-XXXXXXX" className={inputCls} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Address</label>
-                <input value={orgForm.address} onChange={e => setOrgForm(f => ({ ...f, address: e.target.value }))} placeholder="e.g. Kathmandu, Nepal" className={inputCls} />
+                <label htmlFor="sp-address" className="block text-sm text-gray-700 mb-1">Address</label>
+                <input id="sp-address" value={orgForm.address} onChange={e => setOrgForm(f => ({ ...f, address: e.target.value }))} placeholder="e.g. Kathmandu, Nepal" className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Logo URL (for tender documents)</label>
-                <input type="url" value={orgForm.logoUrl} onChange={e => setOrgForm(f => ({ ...f, logoUrl: e.target.value }))} placeholder="https://..." className={inputCls} />
-                <p className="text-xs text-gray-400 mt-1">Used on tender bundle cover pages. Must be a publicly accessible URL.</p>
+                <label htmlFor="sp-logo" className="block text-sm text-gray-700 mb-1">Logo URL (for tender documents)</label>
+                <input id="sp-logo" type="url" value={orgForm.logoUrl} onChange={e => setOrgForm(f => ({ ...f, logoUrl: e.target.value }))} placeholder="https://..." className={inputCls} />
+                <p className="text-xs text-gray-600 mt-1">Used on tender bundle cover pages. Must be a publicly accessible URL.</p>
               </div>
               {orgForm.logoUrl && (
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <img src={orgForm.logoUrl} alt="Logo preview" className="h-10 w-10 object-contain rounded" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <img src={orgForm.logoUrl} alt="Organisation logo preview" className="h-10 w-10 object-contain rounded" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   <span className="text-xs text-gray-500">Logo preview</span>
                 </div>
               )}
-              {orgError && <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{orgError}</p>}
-              {orgMsg && <p className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{orgMsg}</p>}
+              {orgError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{orgError}</p>}
+              {orgMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{orgMsg}</p>}
               <button type="submit" disabled={orgSaving}
                 className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 {orgSaving ? "Saving…" : "Save Organisation Settings"}

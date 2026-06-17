@@ -7,6 +7,14 @@ const NRS = (n: number) =>
 const qty = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function sanitizeCell(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) ? " " + s : s;
+}
+
 // ─── Excel helpers ───────────────────────────────────────────────────────────
 
 function applyHeaderStyle(cell: ExcelJS.Cell) {
@@ -105,7 +113,7 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
 
   for (const disc of boq.disciplines) {
     // Discipline row
-    const dRow = summary.addRow([disc.name.toUpperCase()]);
+    const dRow = summary.addRow([sanitizeCell(disc.name.toUpperCase())]);
     summary.mergeCells(`A${dRow.number}:F${dRow.number}`);
     dRow.eachCell((c) => applyDisciplineStyle(c));
     dRow.height = 18;
@@ -113,7 +121,7 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
     let dSno = 1;
     for (const grp of disc.groups) {
       const grpLabel = `${sno}.${dSno}  ${grp.name}`;
-      const gRow = summary.addRow([`${sno}.${dSno}`, grp.name, grp.unit, +qty(grp.totalQuantity), grp.rate, grp.amount]);
+      const gRow = summary.addRow([`${sno}.${dSno}`, sanitizeCell(grp.name), grp.unit, +qty(grp.totalQuantity), grp.rate, grp.amount]);
       gRow.eachCell((c) => { applyGroupStyle(c); borderAll(c); });
 
       // Yellow for overridden rate
@@ -194,11 +202,11 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
     let lineNo = 1;
     for (const grp of disc.groups) {
       // Group header
-      const ghRow = ws.addRow([`${lineNo}`, grp.name]);
+      const ghRow = ws.addRow([`${lineNo}`, sanitizeCell(grp.name)]);
       ws.mergeCells(`B${ghRow.number}:J${ghRow.number}`);
       ghRow.eachCell((c) => applyGroupStyle(c));
       if (grp.preamble) {
-        const pRow = ws.addRow(["", grp.preamble]);
+        const pRow = ws.addRow(["", sanitizeCell(grp.preamble)]);
         ws.mergeCells(`B${pRow.number}:J${pRow.number}`);
         pRow.getCell(2).font = { italic: true, size: 9, color: { argb: "FF6B7280" } };
       }
@@ -225,7 +233,7 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
       // Group total row
       const totalQty = +qty(grp.totalQuantity);
       const tRow = ws.addRow([
-        "", `Total — ${grp.name}`, "", "", "", "",
+        "", `Total — ${sanitizeCell(grp.name)}`, "", "", "", "",
         totalQty, grp.unit, grp.rate, grp.amount,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
@@ -239,7 +247,7 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
     }
 
     // Discipline subtotal
-    const stRow = ws.addRow(["", `${disc.name} — Sub-Total`, "", "", "", "", "", "", "", disc.subtotal]);
+    const stRow = ws.addRow(["", `${sanitizeCell(disc.name)} — Sub-Total`, "", "", "", "", "", "", "", disc.subtotal]);
     ws.mergeCells(`A${stRow.number}:I${stRow.number}`);
     stRow.eachCell((c) => applyTotalStyle(c));
     stRow.getCell(10).numFmt = '#,##0.00';
@@ -286,12 +294,12 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
 
   let lineNo = 1;
   for (const disc of boq.disciplines) {
-    const dRow = ws.addRow([disc.name.toUpperCase()]);
+    const dRow = ws.addRow([sanitizeCell(disc.name.toUpperCase())]);
     ws.mergeCells(`A${dRow.number}:K${dRow.number}`);
     dRow.eachCell((c) => applyDisciplineStyle(c));
 
     for (const grp of disc.groups) {
-      const ghRow = ws.addRow([`${lineNo}`, grp.name]);
+      const ghRow = ws.addRow([`${lineNo}`, sanitizeCell(grp.name)]);
       ws.mergeCells(`B${ghRow.number}:K${ghRow.number}`);
       ghRow.eachCell((c) => applyGroupStyle(c));
 
@@ -355,7 +363,7 @@ export function buildBOQHtml(boq: BOQDocument): string {
         (item) => `
       <tr class="item-row">
         <td></td>
-        <td class="desc indent">${item.label}</td>
+        <td class="desc indent">${esc(item.label)}</td>
         <td class="num">${item.multiplier !== 1 ? item.multiplier : ""}</td>
         <td class="num">${item.length != null ? qty(item.length) : ""}</td>
         <td class="num">${item.breadth != null ? qty(item.breadth) : ""}</td>
@@ -371,7 +379,7 @@ export function buildBOQHtml(boq: BOQDocument): string {
     return `
     <tr class="group-row">
       <td>${sno}</td>
-      <td class="desc"><strong>${grp.name}</strong>${grp.preamble ? `<div class="preamble">${grp.preamble}</div>` : ""}</td>
+      <td class="desc"><strong>${esc(grp.name)}</strong>${grp.preamble ? `<div class="preamble">${esc(grp.preamble)}</div>` : ""}</td>
       <td colspan="5"></td>
       <td>${grp.unit}</td>
       ${rateCell}
@@ -387,11 +395,11 @@ export function buildBOQHtml(boq: BOQDocument): string {
         .join("");
       return `
     <tr class="discipline-row">
-      <td colspan="10">${disc.name.toUpperCase()}</td>
+      <td colspan="10">${esc(disc.name).toUpperCase()}</td>
     </tr>
     ${groups}
     <tr class="subtotal-row">
-      <td colspan="9" class="right"><strong>${disc.name} Sub-Total</strong></td>
+      <td colspan="9" class="right"><strong>${esc(disc.name)} Sub-Total</strong></td>
       <td class="num"><strong>NRS ${NRS(disc.subtotal)}</strong></td>
     </tr>
     <tr><td colspan="10" style="height:8px"></td></tr>`;
@@ -459,9 +467,9 @@ export function buildBOQHtml(boq: BOQDocument): string {
 <div class="page">
   <h1>BILL OF QUANTITIES</h1>
   <div class="subtitle">
-    ${boq.project.name}
-    ${boq.project.clientCompany ? ` — ${boq.project.clientCompany}` : ""}
-    ${boq.project.district ? ` | ${boq.project.district}` : ""}
+    ${esc(boq.project.name)}
+    ${boq.project.clientCompany ? ` — ${esc(boq.project.clientCompany)}` : ""}
+    ${boq.project.district ? ` | ${esc(boq.project.district)}` : ""}
     | Date: ${date}
   </div>
   <table>
@@ -499,7 +507,8 @@ export async function buildBOQPdf(boq: BOQDocument): Promise<Buffer> {
   });
   try {
     const page = await browser.newPage();
-    await page.setContent(buildBOQHtml(boq), { waitUntil: "load" });
+    await page.setJavaScriptEnabled(false);
+    await page.setContent(buildBOQHtml(boq), { waitUntil: "domcontentloaded" });
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,

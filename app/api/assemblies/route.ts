@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized } from "@/lib/errors";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const groupSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
@@ -30,6 +30,10 @@ const createSchema = z.object({
 // GET /api/assemblies?page=&limit=&search=&category=&source=platform|org|all
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -82,7 +86,7 @@ export async function GET(req: NextRequest) {
 // POST /api/assemblies — create org assembly
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

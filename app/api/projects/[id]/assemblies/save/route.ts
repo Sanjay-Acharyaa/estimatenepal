@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withTenantGuard } from "@/lib/auth";
 
 const schema = z.object({
@@ -18,7 +18,7 @@ const schema = z.object({
 // Saves selected TakeoffGroups (categories + their layers) as a new org Assembly.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -84,10 +84,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         },
       });
 
-      for (let ci = 0; ci < grp.children.length; ci++) {
-        const child = grp.children[ci] as any;
-        await prisma.assemblyGroup.create({
-          data: {
+      // Batch-create all children for this parent in one query
+      if (grp.children.length > 0) {
+        await prisma.assemblyGroup.createMany({
+          data: grp.children.map((child: any, ci: number) => ({
             assemblyId: assembly.id,
             parentId: parent.id,
             name: child.name,
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             additionalParams: child.additionalParams as any ?? undefined,
             rateCode: child.rateItemId ? rateCodeMap.get(child.rateItemId) ?? null : null,
             sortOrder: ci,
-          },
+          })),
         });
       }
     }

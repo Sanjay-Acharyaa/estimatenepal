@@ -2,8 +2,10 @@ import { NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
+import { redis } from "./redis";
 import { z } from "zod";
 import { ApiException } from "./errors";
+import { isLoginRateLimited } from "./security";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -29,7 +31,10 @@ export const authOptions: NextAuthOptions = {
         if (!parsed.success) return null;
 
         const ip =
-          (req?.headers?.["x-forwarded-for"] as string | undefined) ?? "unknown";
+          (req?.headers?.["x-forwarded-for"] as string | undefined)
+            ?.split(",")[0].trim() ?? "unknown";
+
+        if (await isLoginRateLimited(ip)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
@@ -75,21 +80,19 @@ export const authOptions: NextAuthOptions = {
         if ((user as any).orgId) {
           const org = await prisma.org.findUnique({
             where: { id: (user as any).orgId },
-            select: { trialEndsAt: true },
+            select: { name: true, trialEndsAt: true },
           });
+          token.orgName = org?.name ?? null;
           token.trialEndsAt = org?.trialEndsAt?.toISOString() ?? null;
         }
       } else if (token.id) {
-        // On every request after login: check if password was changed after token issued
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          select: { passwordChangedAt: true },
-        });
-        if (dbUser?.passwordChangedAt) {
-          const changedAt = dbUser.passwordChangedAt.getTime();
+        // Redis key written on every password change — avoids a DB query on every request.
+        // TTL matches max JWT lifetime so the key auto-expires when no active tokens remain.
+        const changedAtStr = await redis.get(`pw_changed:${token.id}`);
+        if (changedAtStr) {
+          const changedAt = parseInt(changedAtStr, 10);
           const issuedAt = ((token.iat as number) ?? 0) * 1000;
           if (changedAt > issuedAt) {
-            // Password was changed after this token was issued — invalidate
             return { ...token, invalidated: true };
           }
         }
@@ -134,11 +137,37 @@ export async function getSession() {
   return getServerSession(authOptions);
 }
 
-// Verifies the calling user owns or belongs to the resource's org
+const TENANT_CACHE_TTL = 60; // seconds
+
+// Verifies the calling user owns or belongs to the resource's org.
+// User identity fields (orgId, role, isSuperAdmin) are Redis-cached for 60s to
+// avoid a DB roundtrip on every authenticated request.
 export async function withTenantGuard(userId: string, resourceOrgId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const cacheKey = `user_identity:${userId}`;
+  let user: { id: string; orgId: string | null; role: string; isSuperAdmin: boolean; name: string } | null = null;
+
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    user = JSON.parse(cached);
+  } else {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, orgId: true, role: true, isSuperAdmin: true, name: true },
+    });
+    if (dbUser) {
+      user = dbUser;
+      // Fire-and-forget — cache miss latency only paid once per 60s window
+      redis.set(cacheKey, JSON.stringify(dbUser), "EX", TENANT_CACHE_TTL).catch(() => {});
+    }
+  }
+
   if (!user) throw new ApiException("UNAUTHORIZED", "Authentication required.", 401);
-  if (user.isSuperAdmin) return user;
+  if (user.isSuperAdmin) return user as any;
   if (user.orgId !== resourceOrgId) throw new ApiException("FORBIDDEN", "You do not have permission to do this.", 403);
-  return user;
+  return user as any;
+}
+
+// Call this after any role/org mutation so the cache doesn't serve stale data
+export async function invalidateUserCache(userId: string) {
+  await redis.del(`user_identity:${userId}`);
 }

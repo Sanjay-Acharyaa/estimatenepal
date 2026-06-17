@@ -69,7 +69,7 @@ export default function ProgressPage() {
           <h1 className="text-xl font-bold text-gray-900">Progress Billing</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track completion % per discipline to generate running account bills</p>
         </div>
-        <Link href={`/dashboard/projects/${projectId}`} className="text-sm text-gray-400 hover:text-gray-600">← Back</Link>
+        <Link href={`/dashboard/projects/${projectId}`} className="text-sm text-gray-600 hover:text-gray-600">← Back</Link>
       </div>
 
       {/* Overall progress */}
@@ -80,9 +80,9 @@ export default function ProgressPage() {
             <p className="text-3xl font-bold text-blue-600 mt-0.5">{overallPct.toFixed(1)}%</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-400">Completed Value</p>
+            <p className="text-xs text-gray-600">Completed Value</p>
             <p className="text-lg font-semibold text-green-600">NRS {NRS(completedValue)}</p>
-            <p className="text-xs text-gray-400 mt-0.5">of NRS {NRS(totalValue)}</p>
+            <p className="text-xs text-gray-600 mt-0.5">of NRS {NRS(totalValue)}</p>
           </div>
         </div>
         <div className="w-full bg-gray-100 rounded-full h-3">
@@ -96,7 +96,7 @@ export default function ProgressPage() {
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Discipline Breakdown</p>
         </div>
         {loading && (
-          <div className="p-6 text-center text-gray-400 text-sm">Loading…</div>
+          <div className="p-6 text-center text-gray-600 text-sm">Loading…</div>
         )}
         {!loading && disciplines.map(d => {
           const boqItem = boq.find(b => b.disciplineId === d.id);
@@ -121,7 +121,7 @@ export default function ProgressPage() {
                     <span className="text-sm font-mono font-semibold text-gray-700 w-10 text-right">{pct}%</span>
                   </div>
                   <button onClick={() => saveProgress(d.id)} disabled={!changed || saving === d.id}
-                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${changed ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-gray-100 text-gray-400"} disabled:opacity-50`}>
+                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${changed ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-gray-100 text-gray-600"} disabled:opacity-50`}>
                     {saving === d.id ? "Saving…" : "Save"}
                   </button>
                 </div>
@@ -130,13 +130,13 @@ export default function ProgressPage() {
                 <div className="bg-blue-400 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
               </div>
               {boqItem && (
-                <p className="text-xs text-gray-400 mt-1">BOQ Value: NRS {NRS(boqItem.total)}</p>
+                <p className="text-xs text-gray-600 mt-1">BOQ Value: NRS {NRS(boqItem.total)}</p>
               )}
             </div>
           );
         })}
         {!loading && disciplines.length === 0 && (
-          <p className="p-6 text-center text-gray-400 text-sm">No disciplines found. Add disciplines in the Takeoff tab first.</p>
+          <p className="p-6 text-center text-gray-600 text-sm">No disciplines found. Add disciplines in the Takeoff tab first.</p>
         )}
       </div>
 

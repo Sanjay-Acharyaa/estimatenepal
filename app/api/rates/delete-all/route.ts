@@ -3,7 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 
 // DELETE /api/rates/delete-all?batchId=xxx   → delete all rates in a specific batch
@@ -12,7 +12,7 @@ import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 
 export async function DELETE(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 

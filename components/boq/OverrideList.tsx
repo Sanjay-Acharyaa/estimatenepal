@@ -106,7 +106,7 @@ export function OverrideList({ projectId, isAdmin }: Props) {
       </div>
 
       {loading && (
-        <div className="text-center py-8 text-gray-400 text-sm">Loading…</div>
+        <div className="text-center py-8 text-gray-600 text-sm">Loading…</div>
       )}
 
       {error && (
@@ -114,7 +114,7 @@ export function OverrideList({ projectId, isAdmin }: Props) {
       )}
 
       {!loading && !error && overrides.length === 0 && (
-        <div className="text-center py-12 text-gray-400 text-sm">
+        <div className="text-center py-12 text-gray-600 text-sm">
           {statusFilter === "all"
             ? "No overrides proposed yet."
             : `No ${statusFilter.toLowerCase()} overrides.`}
@@ -138,22 +138,22 @@ export function OverrideList({ projectId, isAdmin }: Props) {
 
               <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-600">
                 <span>
-                  <span className="text-gray-400">Field: </span>
+                  <span className="text-gray-600">Field: </span>
                   <span className="font-medium capitalize">{ov.field}</span>
                 </span>
                 <span>
-                  <span className="text-gray-400">Original: </span>
+                  <span className="text-gray-600">Original: </span>
                   <span>NRS {parseFloat(ov.originalValue).toLocaleString("en-NP", { minimumFractionDigits: 2 })}</span>
                 </span>
                 <span>
-                  <span className="text-gray-400">Proposed: </span>
+                  <span className="text-gray-600">Proposed: </span>
                   <span className="font-semibold text-blue-700">
                     NRS {parseFloat(ov.proposedValue).toLocaleString("en-NP", { minimumFractionDigits: 2 })}
                   </span>
                 </span>
                 {ov.approvedValue && (
                   <span>
-                    <span className="text-gray-400">Approved: </span>
+                    <span className="text-gray-600">Approved: </span>
                     <span className="font-semibold text-green-700">
                       NRS {parseFloat(ov.approvedValue).toLocaleString("en-NP", { minimumFractionDigits: 2 })}
                     </span>
@@ -183,7 +183,7 @@ export function OverrideList({ projectId, isAdmin }: Props) {
             )}
           </div>
 
-          <div className="mt-2 flex gap-4 text-xs text-gray-400">
+          <div className="mt-2 flex gap-4 text-xs text-gray-600">
             <span>Proposed: {new Date(ov.createdAt).toLocaleDateString("en-NP")}</span>
             {ov.resolvedAt && (
               <span>Resolved: {new Date(ov.resolvedAt).toLocaleDateString("en-NP")}</span>

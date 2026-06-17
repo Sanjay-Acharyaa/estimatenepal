@@ -62,7 +62,7 @@ export default async function DrawingViewerPage({
       <header className="flex items-center gap-3 px-4 py-2 bg-gray-800 border-b border-gray-700 flex-shrink-0">
         <a
           href={`/dashboard/projects/${params.id}?tab=documents`}
-          className="text-gray-400 hover:text-white text-sm transition"
+          className="text-gray-600 hover:text-white text-sm transition"
         >
           ← {project.name}
         </a>
@@ -106,6 +106,8 @@ export default async function DrawingViewerPage({
             preamble: g.preamble,
             rateItemId: g.rateItemId,
             rateItem: (g as any).rateItem ?? null,
+            assemblyId: g.assemblyId ?? null,
+            assembly: (g as any).assembly ?? null,
             multiplier: g.multiplier,
             additionalParams: g.additionalParams as Record<string, unknown> | null,
             parentId: g.parentId,

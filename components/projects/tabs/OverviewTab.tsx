@@ -58,7 +58,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <div className="flex items-center gap-2 mb-1">
         <label className="block text-xs font-medium text-gray-600">{label}</label>
-        {hint && <span className="text-xs text-gray-400 italic">{hint}</span>}
+        {hint && <span className="text-xs text-gray-600 italic">{hint}</span>}
       </div>
       {children}
     </div>
@@ -66,7 +66,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 function inputCls(disabled = false) {
-  return `w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? "bg-gray-50 text-gray-400 cursor-not-allowed" : ""}`;
+  return `w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}`;
 }
 
 export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props) {
@@ -253,7 +253,7 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
               <input type="date" value={bidDueDate} onChange={e => setBidDueDate(e.target.value)}
                 disabled={!isAdmin} className={inputCls(!isAdmin)} />
               {bidDueDate && (
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-600 mt-0.5">
                   BS: {formatBS(new Date(bidDueDate))}
                 </p>
               )}

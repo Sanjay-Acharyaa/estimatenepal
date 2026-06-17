@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
-import { checkApiRateLimit } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, unauthorized, notFound, apiError } from "@/lib/errors";
 import { OverrideStatus } from "@prisma/client";
@@ -18,6 +18,10 @@ const proposeSchema = z.object({
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -27,7 +31,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const sp = req.nextUrl.searchParams;
     const { page, limit, skip } = parsePagination(sp);
-    const statusFilter = sp.get("status") as OverrideStatus | null;
+    const VALID_OVERRIDE_STATUSES: OverrideStatus[] = ["PENDING", "APPROVED", "REJECTED"];
+    const rawStatus = sp.get("status");
+    const statusFilter: OverrideStatus | null =
+      rawStatus && (VALID_OVERRIDE_STATUSES as string[]).includes(rawStatus)
+        ? (rawStatus as OverrideStatus)
+        : null;
 
     const where = {
       projectId: params.id,
@@ -53,7 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
@@ -107,14 +116,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       select: { id: true },
     });
     if (admins.length > 0) {
-      await prisma.notification.createMany({
+      prisma.notification.createMany({
         data: admins.map(a => ({
           userId: a.id,
           type: "override_proposed",
           message: `A BOQ rate override was proposed and needs your review.`,
           link: `/dashboard/projects/${params.id}?tab=estimating`,
         })),
-      });
+      }).catch((err) => console.error("[boq/overrides] notification failed:", err));
     }
 
     return NextResponse.json(override, { status: 201 });

@@ -52,7 +52,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
 
   if (loading) {
     return (
-      <div className="text-center py-16 text-gray-400 text-sm">
+      <div className="text-center py-16 text-gray-600 text-sm">
         <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
         Generating BOQ…
       </div>
@@ -61,7 +61,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
 
   if (error) {
     return (
-      <div className="text-center py-10">
+      <div role="alert" className="text-center py-10">
         <p className="text-red-500 text-sm mb-3">{error}</p>
         <button onClick={load} className="text-sm text-blue-600 underline">Retry</button>
       </div>
@@ -75,7 +75,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
   return (
     <div className="overflow-x-auto">
       {!hasAnyItems && (
-        <div className="text-center py-12 text-gray-400 text-sm">
+        <div className="text-center py-12 text-gray-600 text-sm">
           No takeoff items yet. Add items on the drawing canvas first.
         </div>
       )}
@@ -232,8 +232,8 @@ function GroupRows({
         {grp.rateItemId && !isAdmin && (
           <button
             onClick={onProposeOverride}
-            className="ml-1 text-gray-400 hover:text-blue-600 text-xs"
-            title="Propose override"
+            className="ml-1 text-gray-600 hover:text-blue-600 text-xs"
+            aria-label="Propose override"
           >
             ✎
           </button>
@@ -241,8 +241,8 @@ function GroupRows({
         {grp.rateItemId && isAdmin && (
           <button
             onClick={onProposeOverride}
-            className="ml-1 text-gray-400 hover:text-blue-600 text-xs"
-            title="Override rate"
+            className="ml-1 text-gray-600 hover:text-blue-600 text-xs"
+            aria-label="Override rate"
           >
             ✎
           </button>
@@ -258,18 +258,23 @@ function GroupRows({
       <tr
         className="bg-blue-50 hover:bg-blue-100 cursor-pointer border-b border-blue-100"
         onClick={onToggle}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+        tabIndex={0}
+        role="button"
+        aria-expanded={expanded}
+        aria-label={`${grp.name} — click to ${expanded ? "collapse" : "expand"}`}
       >
         <td className="px-3 py-2 text-gray-500 text-xs">{sno}</td>
         <td className="px-3 py-2">
           <div className="flex items-start gap-1">
-            <span className="text-gray-400 mt-0.5 text-xs">{expanded ? "▼" : "▶"}</span>
+            <span className="text-gray-600 mt-0.5 text-xs" aria-hidden>{expanded ? "▼" : "▶"}</span>
             <div>
               <div className="font-semibold text-gray-800">{grp.name}</div>
               {grp.preamble && (
                 <div className="text-xs text-gray-500 italic mt-0.5">{grp.preamble}</div>
               )}
               {grp.rateCode && (
-                <div className="text-xs text-gray-400 mt-0.5">Code: {grp.rateCode}</div>
+                <div className="text-xs text-gray-600 mt-0.5">Code: {grp.rateCode}</div>
               )}
             </div>
           </div>
@@ -302,7 +307,7 @@ function GroupRows({
             </td>
             <td className="px-3 py-1 text-right font-medium">{qty(item.quantity)}</td>
             <td className="px-3 py-1 text-center">{item.unit}</td>
-            <td colSpan={2} className="px-3 py-1 text-gray-400 text-xs">
+            <td colSpan={2} className="px-3 py-1 text-gray-600 text-xs">
               {item.siteLocation && <span className="mr-2">📍 {item.siteLocation}</span>}
               {item.notes && <span>📝 {item.notes}</span>}
             </td>

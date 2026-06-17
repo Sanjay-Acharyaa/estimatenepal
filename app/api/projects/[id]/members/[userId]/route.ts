@@ -4,13 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; userId: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -21,8 +24,10 @@ export async function DELETE(
 
     const member = await prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId: params.id, userId: params.userId } },
+      include: { user: { select: { orgId: true } } },
     });
     if (!member) throw notFound("Member");
+    if (member.user.orgId !== project.orgId) throw forbidden();
 
     await prisma.projectMember.delete({
       where: { projectId_userId: { projectId: params.id, userId: params.userId } },

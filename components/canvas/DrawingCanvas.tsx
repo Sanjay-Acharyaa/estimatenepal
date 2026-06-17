@@ -1671,7 +1671,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   // ─── Viewport culling: scale zones ────────────────────────────────────
   if (!currentPage) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-900 text-gray-400 text-sm">
+      <div className="flex h-full items-center justify-center bg-gray-900 text-gray-600 text-sm">
         This drawing has no pages. Try re-uploading the file.
       </div>
     );
@@ -1792,7 +1792,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
               title="Switch drawing"
             >
               <span className="truncate">{drawing.fileName}</span>
-              <svg className="w-3 h-3 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              <svg className="w-3 h-3 flex-shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </button>
             {showDrawingSelector && (
               <>
@@ -1850,22 +1850,22 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
           {/* Page nav */}
           <div className="flex items-center gap-1 mr-2">
             <button onClick={() => setCurrentPageIdx((i) => Math.max(0, i - 1))} disabled={currentPageIdx === 0}
-              className="text-gray-400 hover:text-white disabled:opacity-30 px-1 py-0.5 rounded text-sm">‹</button>
+              className="text-gray-600 hover:text-white disabled:opacity-30 px-1 py-0.5 rounded text-sm">‹</button>
             <span className="text-xs text-gray-300 min-w-[72px] text-center">
               {currentPage.label || `Page ${currentPage.pageNumber}`} / {pages.length}
             </span>
             <button onClick={() => setCurrentPageIdx((i) => Math.min(pages.length - 1, i + 1))} disabled={currentPageIdx === pages.length - 1}
-              className="text-gray-400 hover:text-white disabled:opacity-30 px-1 py-0.5 rounded text-sm">›</button>
+              className="text-gray-600 hover:text-white disabled:opacity-30 px-1 py-0.5 rounded text-sm">›</button>
           </div>
 
           <div className="h-4 w-px bg-gray-600 mx-0.5" />
 
           {/* Zoom */}
-          <button onClick={() => setScale((s) => Math.min(s * 1.2, 8))} className="text-gray-400 hover:text-white text-sm px-1.5 py-0.5 rounded hover:bg-gray-700">+</button>
-          <span className="text-xs text-gray-400 min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale((s) => Math.max(s / 1.2, 0.05))} className="text-gray-400 hover:text-white text-sm px-1.5 py-0.5 rounded hover:bg-gray-700">−</button>
+          <button onClick={() => setScale((s) => Math.min(s * 1.2, 8))} className="text-gray-600 hover:text-white text-sm px-1.5 py-0.5 rounded hover:bg-gray-700">+</button>
+          <span className="text-xs text-gray-600 min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
+          <button onClick={() => setScale((s) => Math.max(s / 1.2, 0.05))} className="text-gray-600 hover:text-white text-sm px-1.5 py-0.5 rounded hover:bg-gray-700">−</button>
           <button onClick={() => pdfImage && fitToStage(pdfDims.width, pdfDims.height)}
-            className="text-xs text-gray-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-gray-700">Fit</button>
+            className="text-xs text-gray-600 hover:text-white px-1.5 py-0.5 rounded hover:bg-gray-700">Fit</button>
 
           <div className="h-4 w-px bg-gray-600 mx-0.5" />
 
@@ -1883,7 +1883,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                 setLinearPts([]); setAreaRect(null);
                 setMeasureAnchor(null);
               }}
-              className={`text-xs px-2 py-1 rounded transition ${mode === m ? `${color} text-white` : "text-gray-400 hover:text-white hover:bg-gray-700"}`}
+              className={`text-xs px-2 py-1 rounded transition ${mode === m ? `${color} text-white` : "text-gray-600 hover:text-white hover:bg-gray-700"}`}
             >
               {label}
             </button>
@@ -1921,7 +1921,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                   className={`text-xs px-2 py-1 rounded transition flex items-center gap-1 ${
                     mode === m && !locked ? "bg-blue-600 text-white" :
                     disabled ? "text-gray-600 cursor-not-allowed opacity-50" :
-                    "text-gray-400 hover:text-white hover:bg-gray-700"
+                    "text-gray-600 hover:text-white hover:bg-gray-700"
                   }`}
                 >
                   <span>{icon}</span>{label}
@@ -1931,8 +1931,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
             {/* Undo/redo */}
             <div className="h-4 w-px bg-gray-600 mx-0.5" />
-            <button onClick={undo} title="Undo (Ctrl+Z)" className="text-gray-400 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-gray-700">↩</button>
-            <button onClick={redo} title="Redo (Ctrl+Y)" className="text-gray-400 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-gray-700">↪</button>
+            <button onClick={undo} aria-label="Undo (Ctrl+Z)" className="text-gray-600 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-gray-700">↩</button>
+            <button onClick={redo} aria-label="Redo (Ctrl+Y)" className="text-gray-600 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-gray-700">↪</button>
 
             {/* Markup tools */}
             <div className="h-4 w-px bg-gray-600 mx-0.5" />
@@ -1944,9 +1944,9 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             { m: "arrow" as Mode, icon: "↗", title: "Arrow — drag to draw" },
             { m: "xline" as Mode, icon: "↔", title: "XLine — infinite construction line (Shift = 45° snap)" },
           ]).map(({ m, icon, title }) => (
-            <button key={m} title={title}
+            <button key={m} aria-label={title}
               onClick={() => { setMode(m); resetDrawingState(); setMeasureAnchor(null); setTextInput(null); }}
-              className={`text-xs px-2 py-1 rounded transition ${mode === m ? "bg-purple-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-700"}`}
+              className={`text-xs px-2 py-1 rounded transition ${mode === m ? "bg-purple-600 text-white" : "text-gray-600 hover:text-white hover:bg-gray-700"}`}
             >
               {icon}
             </button>
@@ -1956,7 +1956,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
               {/* Color swatches */}
               <div className="flex items-center gap-1">
                 {["#EF4444", "#F97316", "#FBBF24", "#22C55E", "#3B82F6", "#A855F7", "#1F2937"].map(c => (
-                  <button key={c} onClick={() => setMarkupColor(c)} title={c}
+                  <button key={c} onClick={() => setMarkupColor(c)} aria-label={`Set markup color to ${c}`}
                     className={`w-4 h-4 rounded-full border-2 transition-transform ${markupColor === c ? "border-white scale-125" : "border-transparent"}`}
                     style={{ backgroundColor: c }}
                   />
@@ -1967,7 +1967,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                 <div className="flex items-center gap-1 border-l border-gray-600 pl-1.5">
                   <span className="text-xs text-gray-500">Thickness:</span>
                   {[1, 2, 4, 6, 10].map(w => (
-                    <button key={w} onClick={() => setMarkupStrokeWidth(w)} title={`${w}px`}
+                    <button key={w} onClick={() => setMarkupStrokeWidth(w)} aria-label={`${w}px stroke width`}
                       className={`flex items-center justify-center w-6 h-5 rounded transition ${markupStrokeWidth === w ? "bg-gray-500" : "hover:bg-gray-700"}`}
                     >
                       <div className="bg-white rounded-full" style={{ width: Math.min(w, 6) * 2.5, height: Math.min(w, 6) * 2.5 }} />
@@ -2005,7 +2005,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             {selectedGroupId && (() => {
               const activeGrp = takeoffGroups.find((g) => g.id === selectedGroupId);
               return (
-                <span className="flex items-center gap-1.5 text-gray-400">
+                <span className="flex items-center gap-1.5 text-gray-600">
                   Layer:
                   <span style={{ color: activeGrp?.colour ?? "#fff" }} className="font-medium">
                     {activeGrp?.name ?? ""}
@@ -2052,7 +2052,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
         {/* Canvas */}
         <div ref={containerRef} className="flex-1 relative overflow-hidden bg-gray-900" style={{ cursor }}>
           {pdfLoading && (
-            <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+            <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-sm">
               <div className="text-center">
                 <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                 Rendering PDF…
@@ -2684,7 +2684,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 bg-gray-900/80 rounded-lg px-3 py-2 backdrop-blur-sm">
               {pages.map((p, i) => (
                 <button key={p.id} onClick={() => setCurrentPageIdx(i)}
-                  className={`w-7 h-7 text-xs rounded transition ${i === currentPageIdx ? "bg-blue-500 text-white" : "bg-gray-700 text-gray-400 hover:bg-gray-600"}`}>
+                  className={`w-7 h-7 text-xs rounded transition ${i === currentPageIdx ? "bg-blue-500 text-white" : "bg-gray-700 text-gray-600 hover:bg-gray-600"}`}>
                   {p.pageNumber}
                 </button>
               ))}

@@ -113,14 +113,14 @@ export function EstimateTabBar({
     <div className="flex items-stretch bg-gray-900 border-t border-gray-700 flex-shrink-0 h-[52px]">
       {confirmDialog}
       {error && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-red-900 text-red-200 text-xs px-3 py-1.5 rounded shadow-lg z-50 whitespace-nowrap">
+        <div role="alert" className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-red-900 text-red-200 text-xs px-3 py-1.5 rounded shadow-lg z-50 whitespace-nowrap">
           {error}
-          <button onClick={() => setError("")} className="ml-2 text-red-400 hover:text-red-200">×</button>
+          <button onClick={() => setError("")} aria-label="Dismiss error" className="ml-2 text-red-400 hover:text-red-200">×</button>
         </div>
       )}
 
       {/* Scrollable tab list */}
-      <div className="flex items-stretch overflow-x-auto" style={{ maxWidth: "calc(100% - 44px)" }}>
+      <div role="tablist" aria-label="Discipline tabs" className="flex items-stretch overflow-x-auto max-w-[calc(100%-44px)]">
         {disciplines.map((d) => {
           const isActive = d.id === activeDisciplineId;
           const isRenaming = renamingId === d.id;
@@ -136,6 +136,7 @@ export function EstimateTabBar({
                 <input
                   ref={renameRef}
                   value={renameValue}
+                  aria-label={`Rename discipline — currently ${d.name}`}
                   onChange={e => setRenameValue(e.target.value)}
                   onBlur={() => handleRename(d.id)}
                   onKeyDown={e => {
@@ -146,19 +147,22 @@ export function EstimateTabBar({
                 />
               ) : (
                 <button
+                  role="tab"
+                  aria-selected={isActive}
                   onClick={() => onSwitch(d.id)}
                   onDoubleClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}
                   className={`px-3 py-1 text-left whitespace-nowrap transition flex flex-col justify-center ${
-                    isActive ? "text-white" : "text-gray-400 hover:text-gray-200"
+                    isActive ? "text-white" : "text-gray-600 hover:text-gray-200"
                   }`}
                 >
                   <span className="text-xs font-medium leading-tight">
                     {d.name}
-                    {d.isPrimary && <span className="ml-1 text-blue-400">★</span>}
+                    {d.isPrimary && <span aria-hidden="true" className="ml-1 text-blue-400">★</span>}
+                    {d.isPrimary && <span className="sr-only"> (primary)</span>}
                   </span>
                   {disciplineTotals[d.id] !== undefined ? (
                     <span className={`text-[10px] font-semibold leading-tight mt-0.5 ${
-                      isActive ? "text-emerald-400" : "text-gray-500 group-hover:text-gray-400"
+                      isActive ? "text-emerald-400" : "text-gray-500 group-hover:text-gray-600"
                     }`}>
                       {NRS(disciplineTotals[d.id])}
                     </span>
@@ -172,10 +176,10 @@ export function EstimateTabBar({
                 onClick={e => openMenu(e, d.id)}
                 className={`px-1.5 py-2 transition ${
                   isActive
-                    ? "text-gray-400 hover:text-white"
-                    : "text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100"
+                    ? "text-gray-600 hover:text-white"
+                    : "text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                 }`}
-                title="Tab options"
+                aria-label={`Options for ${d.name}`}
               >
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
@@ -192,6 +196,7 @@ export function EstimateTabBar({
           <input
             ref={newNameRef}
             value={newName}
+            aria-label="New discipline name"
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => {
               if (e.key === "Enter") handleCreate();
@@ -202,13 +207,13 @@ export function EstimateTabBar({
             className="w-28 px-2 py-1 text-xs bg-gray-700 text-white border border-blue-500 rounded outline-none"
           />
           <button onClick={handleCreate} className="text-blue-400 hover:text-blue-300 text-xs font-semibold">Add</button>
-          <button onClick={() => { setCreating(false); setNewName(""); }} className="text-gray-500 hover:text-gray-300 text-xs">✕</button>
+          <button onClick={() => { setCreating(false); setNewName(""); }} aria-label="Cancel new tab" className="text-gray-500 hover:text-gray-300 text-xs">✕</button>
         </div>
       ) : (
         <button
           onClick={() => setCreating(true)}
-          title="New tab"
-          className="w-11 flex items-center justify-center border-l border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700 transition text-xl flex-shrink-0"
+          aria-label="New tab"
+          className="w-11 flex items-center justify-center border-l border-gray-700 text-gray-600 hover:text-white hover:bg-gray-700 transition text-xl flex-shrink-0"
         >
           +
         </button>
