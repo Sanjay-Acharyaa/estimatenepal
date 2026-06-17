@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 function escapeHtml(str: string): string {
   return str
@@ -19,13 +19,7 @@ function safeUrl(url: string): string {
   }
 }
 
-const smtpPort = Number(process.env.SMTP_PORT ?? 1025);
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST ?? "localhost",
-  port: smtpPort,
-  secure: smtpPort === 465,
-  requireTLS: process.env.NODE_ENV === "production",
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendEmail({
   to,
@@ -36,7 +30,7 @@ export async function sendEmail({
   subject: string;
   html: string;
 }) {
-  await transporter.sendMail({
+  await resend.emails.send({
     from: process.env.EMAIL_FROM ?? "noreply@nepaliestimate.com",
     to,
     subject,
