@@ -10,13 +10,13 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const updateSchema = z.object({
   name: z.string().min(2).max(200).optional(),
-  description: z.string().max(5000).optional(),
-  district: z.string().max(100).optional(),
-  seismicZone: z.string().max(50).optional(),
+  description: z.string().max(5000).nullable().optional(),
+  district: z.string().max(100).nullable().optional(),
+  seismicZone: z.string().max(50).nullable().optional(),
   unitSystem: z.enum(["METRIC", "IMPERIAL"]).optional(),
   dateFormat: z.enum(["AD", "BS"]).optional(),
-  contingencyPct: z.number().min(0).max(100).optional(),
-  provisionalSum: z.number().min(0).optional(),
+  contingencyPct: z.number().min(0).max(100).nullable().optional(),
+  provisionalSum: z.number().min(0).nullable().optional(),
   vatEnabled: z.boolean().optional(),
   vatRate: z.number().min(0).max(100).optional(),
   tdsEnabled: z.boolean().optional(),

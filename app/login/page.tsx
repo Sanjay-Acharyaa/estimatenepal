@@ -12,6 +12,22 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendMsg, setResendMsg] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+
+  async function handleResend(e: React.FormEvent) {
+    e.preventDefault();
+    setResendLoading(true);
+    await fetch("/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: resendEmail }),
+    });
+    setResendLoading(false);
+    setResendMsg("If this email is registered and unverified, a new verification link has been sent.");
+  }
 
   const verified = params.get("verified");
   // Restrict to same-origin paths only — prevents open redirect via crafted callbackUrl
@@ -26,6 +42,8 @@ function LoginForm() {
     setLoading(false);
     if (res?.error) {
       setError("Invalid credentials or unverified account.");
+      setShowResend(true);
+      setResendEmail(email);
     } else {
       router.push(callbackUrl);
     }
@@ -44,6 +62,30 @@ function LoginForm() {
       {error && (
         <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
           {error}
+        </div>
+      )}
+      {showResend && !resendMsg && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-sm">
+          <p className="text-amber-800 mb-2">Account not verified? Resend the verification email.</p>
+          <form onSubmit={handleResend} className="flex gap-2">
+            <input
+              type="email"
+              required
+              value={resendEmail}
+              onChange={e => setResendEmail(e.target.value)}
+              placeholder="your@email.com"
+              className="flex-1 border border-amber-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+            />
+            <button type="submit" disabled={resendLoading}
+              className="px-3 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-700 disabled:opacity-50">
+              {resendLoading ? "Sending…" : "Resend"}
+            </button>
+          </form>
+        </div>
+      )}
+      {resendMsg && (
+        <div role="status" className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">
+          {resendMsg}
         </div>
       )}
 
