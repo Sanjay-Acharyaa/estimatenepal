@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw conflict("Email already registered.");
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, 10);
     const verifyToken = crypto.randomBytes(32).toString("hex");
 
     const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);

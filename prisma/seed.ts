@@ -381,7 +381,7 @@ async function main() {
   const email = "admin@nepaliestimate.com";
   const existing = await prisma.user.findUnique({ where: { email } });
   if (!existing) {
-    const passwordHash = await bcrypt.hash("Admin@1234", 12);
+    const passwordHash = await bcrypt.hash("Admin@1234", 10);
     await prisma.user.create({
       data: {
         name: "Super Admin",

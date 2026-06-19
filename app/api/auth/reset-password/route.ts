@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const userId = await redis.get(`reset:${token}`);
     if (!userId) return apiError("VALIDATION_ERROR", "Invalid or expired reset token.", 400);
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, 10);
     const now = new Date();
     await prisma.user.update({
       where: { id: userId },

@@ -58,6 +58,14 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        // Opportunistically re-hash to BCRYPT_COST if stored hash used a higher cost
+        const BCRYPT_COST = 10;
+        if (bcrypt.getRounds(user.passwordHash) > BCRYPT_COST) {
+          bcrypt.hash(parsed.data.password, BCRYPT_COST).then(newHash =>
+            prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } })
+          ).catch(() => {});
+        }
+
         return {
           id: user.id,
           name: user.name,

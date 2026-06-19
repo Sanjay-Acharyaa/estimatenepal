@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         return apiError("CONFLICT", "An account with this email already exists. Please log in and accept the invite.", 409);
       }
 
-      const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+      const passwordHash = await bcrypt.hash(parsed.data.password, 10);
       // Invited users are auto-verified (email ownership proven by invite link click)
       const newUser = await prisma.user.create({
         data: {
