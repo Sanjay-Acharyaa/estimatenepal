@@ -180,13 +180,64 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       const rateItemId = layer.rateItemId ?? null;
       const rateItem = rateItemId ? rateMap.get(rateItemId) : undefined;
 
-      // Negative items (voids) reduce the quantity
-      const itemsTotal = layer.items.reduce(
-        (s, i) => s + (i.isNegative ? -i.quantity : i.quantity),
-        0
-      );
-      const totalQuantity = itemsTotal * layer.multiplier;
-      const unit = layer.items[0]?.unit ?? "";
+      const ap = layer.additionalParams as {
+        volumeMethod?: string;
+        height?: { ft: number; in: number };
+        breadth?: { ft: number; in: number };
+        wall?: { enabled: boolean; heightFt: number; heightIn: number };
+        spacing?: { ft: number; in: number };
+      } | null;
+
+      // Compute total from rawQuantity so group.multiplier is never baked into items
+      let totalQuantity: number;
+      let unit: string;
+
+      if (layer.type === "VOLUME") {
+        const method = ap?.volumeMethod ?? "area_x_h";
+        const h = ap?.height ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12 : 0;
+        const rawTotal = layer.items.reduce((s, i) => {
+          const isLength = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || !i.shapeType;
+          const isArea = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
+          if (method === "lbh" && !isLength) return s;
+          if (method !== "lbh" && !isArea) return s;
+          return s + (i.isNegative ? -i.rawQuantity : i.rawQuantity);
+        }, 0);
+        if (method === "lbh") {
+          const b = ap?.breadth ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12 : 0;
+          totalQuantity = rawTotal * b * h * layer.multiplier;
+          unit = b > 0 && h > 0 ? "cu ft" : "sq ft";
+        } else {
+          totalQuantity = rawTotal * h * layer.multiplier;
+          unit = h > 0 ? "cu ft" : "sq ft";
+        }
+      } else if (layer.type === "VERTICAL_WALL_AREA") {
+        const wallH = ap?.wall?.enabled ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12 : 0;
+        const rawTotal = layer.items.reduce((s, i) => s + (i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
+        totalQuantity = wallH > 0 ? rawTotal * wallH * layer.multiplier : 0;
+        unit = wallH > 0 ? "sq ft" : "ft";
+      } else if (layer.type === "COUNT_BY_DISTANCE") {
+        const sp = ap?.spacing;
+        const spacingFt = sp ? (sp.ft ?? 0) + (sp.in ?? 0) / 12 : 0;
+        if (spacingFt > 0) {
+          // Per-item count so multiple polylines don't aggregate incorrectly
+          const countTotal = layer.items.reduce((s, i) => {
+            const raw = i.isNegative ? -i.rawQuantity : i.rawQuantity;
+            return s + (Math.floor(raw / spacingFt) + 1);
+          }, 0);
+          totalQuantity = countTotal * layer.multiplier;
+          unit = "each";
+        } else {
+          const rawTotal = layer.items.reduce((s, i) => s + (i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
+          totalQuantity = rawTotal * layer.multiplier;
+          unit = (layer.items[0]?.unit ?? "ft").replace(/ \(set [^)]+\)/g, "").trim();
+        }
+      } else {
+        // COUNT, LINEAR, AREA — use rawQuantity directly, apply group multiplier once
+        const rawTotal = layer.items.reduce((s, i) => s + (i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
+        totalQuantity = rawTotal * layer.multiplier;
+        // Strip any "(set X)" hint suffixes that leaked into unit strings
+        unit = (layer.items[0]?.unit ?? "").replace(/ \(set [^)]+\)/g, "").trim();
+      }
 
       // Start with base rate; upgrade to computed rate if analysis says so
       const analysis = rateItemId ? analysisMap.get(rateItemId) : undefined;

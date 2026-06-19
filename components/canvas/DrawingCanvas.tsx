@@ -6,6 +6,7 @@ import { Stage, Layer, Image as KonvaImage, Rect, Line, Text, Group, Circle, Pat
 import Konva from "konva";
 import * as pdfjsLib from "pdfjs-dist";
 import { computeScale, scaleLabel } from "@/lib/scale";
+import { effectiveScale } from "@/lib/takeoff";
 import { DrawingScalePanel } from "./DrawingScalePanel";
 import { ScaleZonePanel } from "./ScaleZonePanel";
 import { TakeoffPanel, type TakeoffGroup } from "./TakeoffPanel";
@@ -110,6 +111,11 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   const [zoneRect, setZoneRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [showZonePanel, setShowZonePanel] = useState(false);
   const zoneDragStart = useRef<Point | null>(null);
+
+  // Manual pan (right/middle button in any mode, left button in select mode)
+  const isPanningRef = useRef(false);
+  const panStartClientRef = useRef<{ x: number; y: number } | null>(null);
+  const panStartStagePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Disciplines (tabs)
   // Persist last-visited drawing so TakeoffTabRedirect can restore it
@@ -438,7 +444,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       .catch(() => {});
   }
 
-  useEffect(() => { refreshAllPageTotals(); refreshDisciplineTotals(); refreshDisciplineTotals(); }, []); // eslint-disable-line
+  useEffect(() => { refreshAllPageTotals(); refreshDisciplineTotals(); }, []); // eslint-disable-line
 
   useEffect(() => {
     if (!currentPage) return;
@@ -887,10 +893,20 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     setTakeoffItems(items);
   }
 
-  function undo() {
+  async function undo() {
     if (historyIdxRef.current <= 0) return;
+    const cur = historyRef.current[historyIdxRef.current];
+    const prev = historyRef.current[historyIdxRef.current - 1];
+    // Items added in this step → delete from server so they don't reappear on refresh
+    const toDelete = cur.filter(c => !prev.some(p => p.id === c.id));
+    if (toDelete.length > 0 && currentPage) {
+      await Promise.all(toDelete.map(item =>
+        fetch(`/api/projects/${projectId}/drawings/${drawing.id}/pages/${currentPage.id}/takeoff-items/${item.id}`, { method: "DELETE" }).catch(() => {})
+      ));
+    }
     historyIdxRef.current--;
     setTakeoffItems(historyRef.current[historyIdxRef.current]);
+    if (toDelete.length > 0) { refreshAllPageTotals(); refreshDisciplineTotals(); }
   }
 
   function redo() {
@@ -917,7 +933,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             toolType,
             shapeType,
             toolData: { points },
-            multiplier: group.multiplier ?? 1,
+            multiplier: 1,
           }),
         }
       );
@@ -1096,6 +1112,15 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   }
 
   function handleStageMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
+    // Right or middle button → manual pan in ALL modes (even mid-polygon)
+    if (e.evt.button === 1 || e.evt.button === 2) {
+      e.evt.preventDefault();
+      isPanningRef.current = true;
+      panStartClientRef.current = { x: e.evt.clientX, y: e.evt.clientY };
+      panStartStagePosRef.current = { ...stagePos };
+      return;
+    }
+
     const r = getPosFromEvent(e);
     if (!r) return;
     const { imgPos, snapped } = r;
@@ -1193,12 +1218,19 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       } else {
         setSelectedItemIds(new Set());
         setSelectedMeasurementIds(new Set());
+        // Left-click drag on empty space → pan (replacing Konva draggable)
+        isPanningRef.current = true;
+        panStartClientRef.current = { x: e.evt.clientX, y: e.evt.clientY };
+        panStartStagePosRef.current = { ...stagePos };
       }
     }
   }
 
   // onClick — polyline: single click adds point, double-click finishes; arc: 3 clicks; measure: 2 clicks
   function handleStageClick(e: Konva.KonvaEventObject<MouseEvent>) {
+    // Only left-click should trigger drawing or selection actions
+    if (e.evt.button !== 0) return;
+
     if (mode === "markup-text") {
       const pos = e.target.getStage()?.getPointerPosition();
       if (!pos) return;
@@ -1241,7 +1273,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       if (isDouble) {
         const pts = [...linearPointsRef.current];
         if (pts.length >= 2) {
-          saveItem(group?.type ?? "LINEAR", "POLYLINE", pts).then(ok => {
+          const isClosed = group?.type === "AREA" || group?.type === "VOLUME";
+          saveItem(group?.type ?? "LINEAR", isClosed ? "POLYGON" : "POLYLINE", pts).then(ok => {
             if (ok) { linearPointsRef.current = []; setLinearPoints([]); setMousePos(null); }
           });
         }
@@ -1288,6 +1321,18 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   }
 
   function handleStageMouseMove(e: Konva.KonvaEventObject<MouseEvent>) {
+    // Manual pan in progress — move stage directly for zero-lag panning
+    if (isPanningRef.current && panStartClientRef.current) {
+      const dx = e.evt.clientX - panStartClientRef.current.x;
+      const dy = e.evt.clientY - panStartClientRef.current.y;
+      const newX = panStartStagePosRef.current.x + dx;
+      const newY = panStartStagePosRef.current.y + dy;
+      const stage = e.target.getStage();
+      if (stage) { stage.x(newX); stage.y(newY); }
+      setStagePos({ x: newX, y: newY });
+      return;
+    }
+
     const pos = e.target.getStage()?.getPointerPosition();
     if (!pos) return;
     const imgPos = stageToImage(pos.x, pos.y);
@@ -1384,6 +1429,13 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   }
 
   function handleStageMouseUp(e: Konva.KonvaEventObject<MouseEvent>) {
+    // End manual pan (right/middle or left in select mode)
+    if (isPanningRef.current) {
+      isPanningRef.current = false;
+      panStartClientRef.current = null;
+      return;
+    }
+
     if (mode === "zone" && zoneDragStart.current) {
       if (zoneRect && zoneRect.width > 10 && zoneRect.height > 10) setShowZonePanel(true);
       else setZoneRect(null);
@@ -1619,7 +1671,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
       case "VERTICAL_WALL_AREA": {
         const wObj = ap?.wall as Record<string, unknown> | undefined;
-        const wallH = wObj?.enabled ? (Number(wObj.heightFt ?? 0) + Number(wObj.heightIn ?? 0) / 12) : 8;
+        const wallH = wObj?.enabled ? (Number(wObj.heightFt ?? 0) + Number(wObj.heightIn ?? 0) / 12) : 0;
         if (!wallH) return { qty: raw * mult, unit: `${su} (set wall height)` };
         return { qty: raw * wallH * mult, unit: su === "ft" ? "sq ft" : "sq m" };
       }
@@ -1628,7 +1680,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
         const spObj = ap?.spacing as Record<string, unknown> | undefined;
         const spacing = spObj ? (Number(spObj.ft ?? 0) + Number(spObj.in ?? 0) / 12) : 0;
         if (!spacing) return { qty: raw * mult, unit: `${su} (set spacing)` };
-        return { qty: Math.ceil(raw / spacing) * mult, unit: "each" };
+        return { qty: (Math.floor(raw / spacing) + 1) * mult, unit: "each" };
       }
 
       case "VOLUME": {
@@ -1697,23 +1749,24 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   // ─── Client-side quantity preview ─────────────────────────────────────
   function previewLength(points: Point[]): string {
     if (points.length < 2) return "";
-    const pageScale = currentPage.scale;
-    if (!pageScale) return `${points.length - 1} seg`;
+    const sr = effectiveScale(points, currentPage.scale, currentPage.scaleUnit, currentPage.scaleZones);
+    if (!sr) return `${points.length - 1} seg`;
     let totalPx = 0;
     for (let i = 1; i < points.length; i++) {
       const dx = points[i].x - points[i - 1].x;
       const dy = points[i].y - points[i - 1].y;
       totalPx += Math.sqrt(dx * dx + dy * dy);
     }
-    const real = totalPx * pageScale;
-    return currentPage.scaleUnit === "ft" ? ftToFeetIn(real) : `${real.toFixed(2)} ${currentPage.scaleUnit}`;
+    const real = totalPx * sr.scale;
+    return sr.scaleUnit === "ft" ? ftToFeetIn(real) : `${real.toFixed(2)} ${sr.scaleUnit}`;
   }
 
-  function previewArea(rect: { width: number; height: number }): string {
-    const pageScale = currentPage.scale;
-    if (!pageScale) return "";
-    const area = rect.width * rect.height * pageScale * pageScale;
-    const unit = currentPage.scaleUnit === "ft" ? "sq ft" : "sq m";
+  function previewArea(rect: { x: number; y: number; width: number; height: number }): string {
+    const center = [{ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }];
+    const sr = effectiveScale(center, currentPage.scale, currentPage.scaleUnit, currentPage.scaleZones);
+    if (!sr) return "";
+    const area = rect.width * rect.height * sr.scale * sr.scale;
+    const unit = sr.scaleUnit === "ft" ? "sq ft" : "sq m";
     return `${area.toFixed(2)} ${unit}`;
   }
 
@@ -1730,10 +1783,10 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
       const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
       if ((method === "lbh" && isLengthShape) || (method !== "lbh" && isAreaShape)) {
-        groupTotals[item.groupId].rawQty += (item.rawQuantity ?? item.quantity);
+        groupTotals[item.groupId].rawQty += item.rawQuantity;
       }
     } else {
-      groupTotals[item.groupId].rawQty += (item.rawQuantity ?? item.quantity);
+      groupTotals[item.groupId].rawQty += item.rawQuantity;
     }
   }
 
@@ -2083,20 +2136,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
               onMouseMove={handleStageMouseMove}
               onMouseUp={handleStageMouseUp}
               onClick={handleStageClick}
-              draggable={mode === "select"}
-              onDragMove={(e) => {
-                // While rubber-banding, prevent the stage from panning
-                if (isRubberBandingRef.current) {
-                  e.target.x(stagePos.x);
-                  e.target.y(stagePos.y);
-                }
-              }}
-              onDragEnd={(e) => {
-                // Don't update stagePos when the drag was a rubber-band (not a real pan)
-                if (!isRubberBandingRef.current) {
-                  setStagePos({ x: e.target.x(), y: e.target.y() });
-                }
-              }}
+              onContextMenu={(e) => e.evt.preventDefault()}
             >
               {/* Layer 0: PDF background */}
               <Layer>

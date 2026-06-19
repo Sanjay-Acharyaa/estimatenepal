@@ -93,9 +93,8 @@ export async function POST(
     const group = await prisma.takeoffGroup.findUnique({ where: { id: parsed.data.groupId } });
     if (!group || group.projectId !== params.id) throw notFound("Takeoff group");
 
-    // Resolve scale — reject if none is set, so quantity is never silently 0
-    const firstPt = parsed.data.toolData.points[0];
-    const scaleResult = effectiveScale(firstPt, page.scale, page.scaleUnit, page.scaleZones);
+    // Resolve scale using centroid of all points (handles shapes crossing zone boundaries)
+    const scaleResult = effectiveScale(parsed.data.toolData.points, page.scale, page.scaleUnit, page.scaleZones);
     if (!scaleResult) {
       return apiError("VALIDATION_ERROR", "No scale is set for this page. Set a drawing scale or add a scale zone before taking off.", 400);
     }

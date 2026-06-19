@@ -651,6 +651,7 @@ enum TakeoffTool {
 enum ShapeType {
   RECTANGLE
   POLYLINE
+  POLYGON
   CIRCLE
   ARC
 }

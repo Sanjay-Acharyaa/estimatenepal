@@ -137,7 +137,7 @@ export function computeQuantity(
         // No spacing set — show raw length with hint so user knows to set it
         return { rawQuantity: lengthReal, quantity: lengthReal * multiplier, unit: `${scaleUnit} (set spacing)` };
       }
-      const count = Math.ceil(lengthReal / spacingFt);
+      const count = Math.floor(lengthReal / spacingFt) + 1;
       return { rawQuantity: lengthReal, quantity: count * multiplier, unit: "each" };
     }
 
@@ -167,7 +167,7 @@ export function computeQuantity(
       }
       const perimeterReal = perimPx * scale;
       const wall = additionalParams?.wall;
-      const wallH = wall?.enabled ? (wall.heightFt ?? 0) + (wall.heightIn ?? 0) / 12 : 8;
+      const wallH = wall?.enabled ? (wall.heightFt ?? 0) + (wall.heightIn ?? 0) / 12 : 0;
       if (!wallH) {
         return { rawQuantity: perimeterReal, quantity: perimeterReal * multiplier, unit: `${scaleUnit} (set wall height)` };
       }
@@ -221,19 +221,24 @@ export function computeQuantity(
   }
 }
 
-/** Find the effective scale for a point on a page.
- *  Checks scale zones first (most specific), then falls back to the page scale. */
+/** Find the effective scale for a set of points on a page.
+ *  Uses the centroid of all points for zone lookup so shapes crossing boundaries are handled correctly.
+ *  Falls back to the page scale when no zone contains the centroid. */
 export function effectiveScale(
-  point: Point,
+  points: Point[],
   pageScale: number | null,
   pageScaleUnit: string,
   scaleZones: Array<{ x: number; y: number; width: number; height: number; scale: number; scaleUnit: string }>
 ): { scale: number; scaleUnit: string } | null {
+  if (points.length === 0) {
+    if (pageScale && pageScale > 0) return { scale: pageScale, scaleUnit: pageScaleUnit };
+    return null;
+  }
+  // Centroid of all points
+  const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
+  const cy = points.reduce((s, p) => s + p.y, 0) / points.length;
   for (const z of scaleZones) {
-    if (
-      point.x >= z.x && point.x <= z.x + z.width &&
-      point.y >= z.y && point.y <= z.y + z.height
-    ) {
+    if (cx >= z.x && cx <= z.x + z.width && cy >= z.y && cy <= z.y + z.height) {
       return { scale: z.scale, scaleUnit: z.scaleUnit };
     }
   }

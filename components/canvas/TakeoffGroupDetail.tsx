@@ -206,7 +206,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
       return { qty: raw * currentH * currentMult, unit: currentH > 0 ? "cu ft" : "(set height)" };
     }
     if (group.type === "COUNT_BY_DISTANCE") {
-      if (currentSpacing > 0) return { qty: Math.ceil(raw / currentSpacing) * currentMult, unit: "each" };
+      if (currentSpacing > 0) return { qty: (Math.floor(raw / currentSpacing) + 1) * currentMult, unit: "each" };
       return { qty: raw * currentMult, unit: "(set spacing)" };
     }
     if (group.type === "VERTICAL_WALL_AREA") {

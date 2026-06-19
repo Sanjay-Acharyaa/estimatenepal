@@ -78,7 +78,7 @@ function countByDistanceDisplay(group: TakeoffGroup, rawLengthFt: number): { qty
   const spObj = ap?.spacing as Record<string, unknown> | undefined;
   const spacing = spObj ? getNum(spObj.ft) + getNum(spObj.in) / 12 : 0;
   if (!spacing) return { qty: rawLengthFt * group.multiplier, unit: "ft (set spacing)" };
-  return { qty: Math.ceil(rawLengthFt / spacing) * group.multiplier, unit: "each" };
+  return { qty: (Math.floor(rawLengthFt / spacing) + 1) * group.multiplier, unit: "each" };
 }
 
 function wallAreaDisplay(group: TakeoffGroup, rawPerimFt: number): { qty: number; unit: string } {

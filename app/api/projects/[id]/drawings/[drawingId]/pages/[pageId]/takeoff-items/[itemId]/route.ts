@@ -107,10 +107,9 @@ export async function PUT(
       }
       const toolData = (parsed.data.toolData ?? item.toolData) as ToolData;
       const multiplier = parsed.data.multiplier ?? item.multiplier;
-      const firstPt = toolData.points[0];
-      const scaleResult = effectiveScale(firstPt, page.scale, page.scaleUnit, page.scaleZones);
+      const scaleResult = effectiveScale(toolData.points, page.scale, page.scaleUnit, page.scaleZones);
       const scaleUsed = scaleResult?.scale ?? item.scaleUsed;
-      const scaleUnit = scaleResult?.scaleUnit ?? item.unit;
+      const scaleUnit = scaleResult?.scaleUnit ?? page.scaleUnit;
       const group = await prisma.takeoffGroup.findUnique({ where: { id: item.groupId } });
       if (!group) return apiError("NOT_FOUND", "Takeoff group not found.", 404);
       const { quantity, rawQuantity, unit } = computeQuantity(
