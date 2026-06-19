@@ -40,13 +40,13 @@ const apiLimiter = new RateLimiterRedis({
   insuranceLimiter: new RateLimiterMemory({ points: 15, duration: 60 }),
 });
 
-// Upload: 5 per hour
+// Upload: 30 per hour
 const uploadLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: "rl_upload",
-  points: 5,
+  points: 30,
   duration: 3600,
-  insuranceLimiter: new RateLimiterMemory({ points: 1, duration: 3600 }),
+  insuranceLimiter: new RateLimiterMemory({ points: 5, duration: 3600 }),
 });
 
 // Returns true when rate-limited (caller should reject the request), false otherwise.
