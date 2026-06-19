@@ -110,7 +110,7 @@ export function EstimateTabBar({
   const openDiscipline = openMenuId ? disciplines.find(d => d.id === openMenuId) ?? null : null;
 
   return (
-    <div className="flex items-stretch bg-gray-900 border-t border-gray-700 flex-shrink-0 h-[52px]">
+    <div className="flex items-stretch bg-gray-900 border-t border-gray-700 flex-shrink-0 h-[34px]">
       {confirmDialog}
       {error && (
         <div role="alert" className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-red-900 text-red-200 text-xs px-3 py-1.5 rounded shadow-lg z-50 whitespace-nowrap">
@@ -143,7 +143,7 @@ export function EstimateTabBar({
                     if (e.key === "Enter") handleRename(d.id);
                     if (e.key === "Escape") setRenamingId(null);
                   }}
-                  className="w-28 px-2 py-1 mx-1 text-xs bg-gray-600 text-white border border-blue-500 rounded outline-none"
+                  className="w-28 px-2 py-0.5 mx-1 text-xs bg-gray-600 text-white border border-blue-500 rounded outline-none"
                 />
               ) : (
                 <button
@@ -151,24 +151,22 @@ export function EstimateTabBar({
                   aria-selected={isActive}
                   onClick={() => onSwitch(d.id)}
                   onDoubleClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}
-                  className={`px-3 py-1 text-left whitespace-nowrap transition flex flex-col justify-center ${
-                    isActive ? "text-white" : "text-gray-600 hover:text-gray-200"
+                  className={`px-3 h-full flex items-center gap-2 whitespace-nowrap transition ${
+                    isActive ? "text-white" : "text-gray-500 hover:text-gray-200"
                   }`}
                 >
-                  <span className="text-xs font-medium leading-tight">
+                  <span className="text-xs font-medium leading-none">
                     {d.name}
                     {d.isPrimary && <span aria-hidden="true" className="ml-1 text-blue-400">★</span>}
                     {d.isPrimary && <span className="sr-only"> (primary)</span>}
                   </span>
                   {disciplineTotals[d.id] !== undefined ? (
-                    <span className={`text-[10px] font-semibold leading-tight mt-0.5 ${
-                      isActive ? "text-emerald-400" : "text-gray-500 group-hover:text-gray-600"
+                    <span className={`text-[10px] font-semibold leading-none ${
+                      isActive ? "text-emerald-400" : "text-gray-600 group-hover:text-gray-500"
                     }`}>
                       {NRS(disciplineTotals[d.id])}
                     </span>
-                  ) : (
-                    <span className="text-[10px] leading-tight mt-0.5 text-gray-600">—</span>
-                  )}
+                  ) : null}
                 </button>
               )}
 
@@ -204,7 +202,7 @@ export function EstimateTabBar({
             }}
             onBlur={() => { if (!newName.trim()) { setCreating(false); setNewName(""); } }}
             placeholder="Tab name…"
-            className="w-28 px-2 py-1 text-xs bg-gray-700 text-white border border-blue-500 rounded outline-none"
+            className="w-28 px-2 py-0.5 text-xs bg-gray-700 text-white border border-blue-500 rounded outline-none"
           />
           <button onClick={handleCreate} className="text-blue-400 hover:text-blue-300 text-xs font-semibold">Add</button>
           <button onClick={() => { setCreating(false); setNewName(""); }} aria-label="Cancel new tab" className="text-gray-500 hover:text-gray-300 text-xs">✕</button>

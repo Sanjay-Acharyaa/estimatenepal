@@ -59,7 +59,7 @@ export default async function DrawingViewerPage({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-900 overflow-hidden">
       {/* Top bar */}
-      <header className="flex items-center gap-3 px-4 py-2 bg-gray-800 border-b border-gray-700 flex-shrink-0">
+      <header className="flex items-center gap-3 px-4 py-1 bg-gray-800 border-b border-gray-700 flex-shrink-0">
         <a
           href={`/dashboard/projects/${params.id}?tab=documents`}
           className="text-gray-600 hover:text-white text-sm transition"

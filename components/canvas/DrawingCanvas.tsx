@@ -1783,7 +1783,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       {/* ── Main canvas area ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex-wrap">
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex-wrap">
           {/* Drawing selector dropdown */}
           <div className="relative mr-1">
             <button

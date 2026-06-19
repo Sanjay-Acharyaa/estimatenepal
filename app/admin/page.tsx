@@ -28,10 +28,14 @@ export default async function SuperAdminPage() {
 
       <div className="p-8 space-y-8">
         {/* Quick links */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Link href="/admin/rates"
             className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
             📋 DUDBC Rate Database
+          </Link>
+          <Link href="/admin/coupons"
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+            🎟️ Coupon Management
           </Link>
         </div>
 

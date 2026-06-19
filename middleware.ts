@@ -24,7 +24,8 @@ export async function middleware(req: NextRequest) {
     res.headers.set(key, value);
   }
 
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  // Root is the public landing page — allow unauthenticated access
+  const isPublic = pathname === "/" || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   if (isPublic) return res;
 
   const token = await getToken({
@@ -48,11 +49,38 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  // Trial enforcement — block dashboard access when trial has expired (non-super-admins only)
-  if (pathname.startsWith("/dashboard") && !token.isSuperAdmin && token.trialEndsAt) {
-    const trialEnd = new Date(token.trialEndsAt as string);
-    if (trialEnd < new Date()) {
+  // ── Trial enforcement ────────────────────────────────────────────────────────
+  // Applies to non-super-admins whose org has a trialEndsAt set.
+  // Orgs created before trial enforcement (trialEndsAt = null) are unaffected.
+
+  const isTrialExpired =
+    !token.isSuperAdmin &&
+    !!token.trialEndsAt &&
+    new Date(token.trialEndsAt as string) < new Date();
+
+  if (isTrialExpired) {
+    // Dashboard pages → redirect to the trial-expired UI
+    if (pathname.startsWith("/dashboard")) {
       return NextResponse.redirect(new URL("/trial-expired", req.url));
+    }
+
+    // API calls → return 403 JSON.
+    // /api/auth and /api/invite are already public (handled above, never reach here).
+    // /api/coupons/redeem must stay open — it is how an expired user regains access.
+    // /api/admin is covered by the !token.isSuperAdmin condition above.
+    if (
+      pathname.startsWith("/api/") &&
+      !pathname.startsWith("/api/coupons/redeem")
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "TRIAL_EXPIRED",
+            message: "Your free trial has ended. Please contact us to continue.",
+          },
+        },
+        { status: 403 }
+      );
     }
   }
 

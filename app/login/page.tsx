@@ -30,6 +30,7 @@ function LoginForm() {
   }
 
   const verified = params.get("verified");
+  const couponRedeemed = params.get("coupon") === "redeemed";
   // Restrict to same-origin paths only — prevents open redirect via crafted callbackUrl
   const rawCallback = params.get("callbackUrl") ?? "";
   const callbackUrl = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/dashboard";
@@ -57,6 +58,11 @@ function LoginForm() {
       {verified && (
         <div role="status" className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">
           Email verified! You can now log in.
+        </div>
+      )}
+      {couponRedeemed && (
+        <div role="status" className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">
+          Access code applied! Sign in to continue with your extended access.
         </div>
       )}
       {error && (
