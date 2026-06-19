@@ -5,8 +5,6 @@ import { prisma } from "./prisma";
 import { redis } from "./redis";
 import { z } from "zod";
 import { ApiException } from "./errors";
-import { isLoginRateLimited } from "./security";
-
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -33,8 +31,6 @@ export const authOptions: NextAuthOptions = {
         const ip =
           (req?.headers?.["x-forwarded-for"] as string | undefined)
             ?.split(",")[0].trim() ?? "unknown";
-
-        if (await isLoginRateLimited(ip)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },

@@ -57,7 +57,9 @@ export async function isLoginRateLimited(ip: string): Promise<boolean> {
     return false;
   } catch (e) {
     if (e instanceof RateLimiterRes) return true;
-    throw e;
+    // Redis error — fail open so an outage doesn't lock everyone out
+    console.error("[rate-limit] isLoginRateLimited error:", (e as Error).message);
+    return false;
   }
 }
 
@@ -72,7 +74,9 @@ export async function checkLoginRateLimit(ip: string) {
         { status: 429 }
       );
     }
-    throw e;
+    // Redis error — fail open
+    console.error("[rate-limit] checkLoginRateLimit error:", (e as Error).message);
+    return null;
   }
 }
 
