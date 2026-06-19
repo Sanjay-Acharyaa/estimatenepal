@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { sendEmail, passwordResetEmailHtml } from "@/lib/email";
-import { checkLoginRateLimit, getClientIp } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { apiError, handleApiError } from "@/lib/errors";
 
 const schema = z.object({ email: z.string().email() });
@@ -14,7 +14,7 @@ const SUCCESS_MSG = "If that email is registered, a reset link has been sent.";
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
-    const limited = await checkLoginRateLimit(ip);
+    const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
     const body = await req.json();

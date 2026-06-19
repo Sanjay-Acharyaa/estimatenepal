@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { apiError, handleApiError } from "@/lib/errors";
-import { checkLoginRateLimit, getClientIp } from "@/lib/security";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const schema = z.object({
   token: z.string().min(1),
@@ -21,7 +21,7 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
-    const limited = await checkLoginRateLimit(ip);
+    const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
     const body = await req.json();
