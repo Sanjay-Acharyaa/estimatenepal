@@ -15,7 +15,7 @@ const createSchema = z.object({
   groupId: z.string(),
   label: z.string().min(1).max(200),
   toolType: z.enum(["COUNT", "LINEAR", "COUNT_BY_DISTANCE", "AREA", "VOLUME", "VERTICAL_WALL_AREA"]),
-  shapeType: z.enum(["RECTANGLE", "POLYLINE", "CIRCLE", "ARC"]).optional(),
+  shapeType: z.enum(["RECTANGLE", "POLYLINE", "POLYGON", "CIRCLE", "ARC"]).optional(),
   toolData: z.object({ points: z.array(pointSchema).min(1) }),
   multiplier: z.number().positive().default(1),
   isNegative: z.boolean().default(false),

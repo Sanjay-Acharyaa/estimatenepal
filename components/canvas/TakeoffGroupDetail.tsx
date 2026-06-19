@@ -187,7 +187,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   const totalRaw = detail?.items?.reduce((s, i) => {
     if (group.type === "VOLUME") {
       const isLengthShape = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || i.shapeType === null;
-      const isAreaShape = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE";
+      const isAreaShape = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
       if (volumeMethod === "lbh" && isLengthShape) return s + (i.rawQuantity ?? 0);
       if (volumeMethod !== "lbh" && isAreaShape) return s + (i.rawQuantity ?? 0);
       return s;

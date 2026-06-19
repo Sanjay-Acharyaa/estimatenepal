@@ -180,9 +180,9 @@ export function computeQuantity(
     }
 
     case "VOLUME": {
-      // rawQuantity always stores the shape's intrinsic measurement so params can change later:
-      //   POLYLINE / ARC → length (ft)
-      //   RECTANGLE / CIRCLE → area (sq ft)
+      // rawQuantity stores the shape's intrinsic measurement:
+      //   POLYLINE / ARC  → length (ft)    — used by lbh method (L × B × H)
+      //   POLYGON / RECTANGLE / CIRCLE → area (sq ft) — used by area_x_h method
       const isLengthShape = shapeType === "POLYLINE" || shapeType === "ARC" || !shapeType;
       let rawQty: number;
       if (isLengthShape) {
@@ -191,6 +191,7 @@ export function computeQuantity(
         const r = circleRadiusPx(pts);
         rawQty = Math.PI * r * r * scale * scale;
       } else {
+        // RECTANGLE and POLYGON both use polygon area
         rawQty = polygonArea(pts) * scale * scale;
       }
 

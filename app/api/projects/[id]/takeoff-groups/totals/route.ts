@@ -46,7 +46,7 @@ export async function GET(
         const ap = grp.additionalParams as { volumeMethod?: string } | null;
         const method = ap?.volumeMethod ?? "area_x_h";
         const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
-        const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE";
+        const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
         if ((method === "lbh" && isLengthShape) || (method !== "lbh" && isAreaShape)) {
           totals[item.groupId].rawQty += item.rawQuantity;
         }

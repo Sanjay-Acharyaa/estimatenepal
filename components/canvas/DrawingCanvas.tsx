@@ -1277,7 +1277,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     const pts = linearPointsRef.current;
     const group = takeoffGroups.find(g => g.id === selectedGroupId);
     if (selectedGroupId && pts.length >= 2) {
-      const ok = await saveItem(group?.type ?? "LINEAR", "POLYLINE", [...pts]);
+      const isClosed = group?.type === "AREA" || group?.type === "VOLUME";
+      const ok = await saveItem(group?.type ?? "LINEAR", isClosed ? "POLYGON" : "POLYLINE", [...pts]);
       if (ok) {
         linearPointsRef.current = [];
         setLinearPoints([]);
@@ -1727,7 +1728,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       const method = (ap?.volumeMethod as string) ?? "area_x_h";
       // lbh method uses polyline (length-based); area_x_h uses rectangle/polygon (area-based)
       const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
-      const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE";
+      const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
       if ((method === "lbh" && isLengthShape) || (method !== "lbh" && isAreaShape)) {
         groupTotals[item.groupId].rawQty += (item.rawQuantity ?? item.quantity);
       }
@@ -2295,10 +2296,10 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                     );
                   }
 
-                  // POLYLINE / RECTANGLE shapes
+                  // POLYLINE / POLYGON / RECTANGLE shapes
                   {
                     const isFilled = groupType === "AREA" || groupType === "VOLUME";
-                    const isClosed = isFilled || shape === "RECTANGLE";
+                    const isClosed = isFilled || shape === "RECTANGLE" || shape === "POLYGON";
                     const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
                     const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
                     const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
