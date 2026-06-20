@@ -59,55 +59,169 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-3/5 relative bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 flex-col justify-between p-12 overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-        </div>
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-32 -left-16 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl" />
 
+      {/* ── LEFT PANEL — Blueprint Aesthetic ── */}
+      <div
+        className="hidden lg:flex lg:w-1/2 xl:w-3/5 relative flex-col justify-between p-12 overflow-hidden"
+        style={{ backgroundColor: "#0f172a" }}
+      >
+        {/* Two-level blueprint grid */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="bp-fine" width="24" height="24" patternUnits="userSpaceOnUse">
+              <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(59,130,246,0.06)" strokeWidth="0.5"/>
+            </pattern>
+            <pattern id="bp-major" width="120" height="120" patternUnits="userSpaceOnUse">
+              <rect width="120" height="120" fill="url(#bp-fine)"/>
+              <path d="M 120 0 L 0 0 0 120" fill="none" stroke="rgba(59,130,246,0.13)" strokeWidth="1"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#bp-major)"/>
+        </svg>
+
+        {/* Building elevation drawing — right-side decoration */}
+        <svg
+          className="absolute right-0 top-0 h-full pointer-events-none"
+          style={{ width: "210px", opacity: 0.07 }}
+          viewBox="0 0 200 720"
+          preserveAspectRatio="xMaxYMid meet"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {/* Centre column construction line */}
+          <line x1="100" y1="25" x2="100" y2="670" stroke="#60a5fa" strokeWidth="0.5" strokeDasharray="6,4"/>
+          {/* Gable roof */}
+          <polyline points="20,80 100,28 180,80" fill="none" stroke="#60a5fa" strokeWidth="1.5"/>
+          <line x1="20" y1="80" x2="180" y2="80" stroke="#60a5fa" strokeWidth="1"/>
+          {/* 7 floors */}
+          {Array.from({ length: 7 }).map((_, f) => {
+            const top = 80 + f * 82;
+            return (
+              <g key={f}>
+                <rect x="20" y={top} width="160" height="82" fill="none" stroke="#60a5fa" strokeWidth="1.5"/>
+                <rect x="35" y={top + 14} width="30" height="52" fill="none" stroke="#60a5fa" strokeWidth="1"/>
+                <rect x="85" y={top + 14} width="30" height="52" fill="none" stroke="#60a5fa" strokeWidth="1"/>
+                <rect x="135" y={top + 14} width="30" height="52" fill="none" stroke="#60a5fa" strokeWidth="1"/>
+              </g>
+            );
+          })}
+          {/* Foundation slab */}
+          <rect x="8" y="654" width="184" height="18" fill="none" stroke="#60a5fa" strokeWidth="2"/>
+          {/* Dimension line — left */}
+          <line x1="5" y1="80" x2="5" y2="654" stroke="#60a5fa" strokeWidth="0.5"/>
+          <line x1="0" y1="80" x2="10" y2="80" stroke="#60a5fa" strokeWidth="0.5"/>
+          <line x1="0" y1="654" x2="10" y2="654" stroke="#60a5fa" strokeWidth="0.5"/>
+        </svg>
+
+        {/* Nepal mountain silhouette — bottom */}
+        <svg
+          className="absolute bottom-0 left-0 right-0 w-full pointer-events-none"
+          style={{ opacity: 0.13 }}
+          viewBox="0 0 900 130"
+          preserveAspectRatio="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M0,130 L0,90 L70,55 L130,75 L200,28 L270,58 L340,8 L415,48 L470,26 L540,54 L600,33 L660,58 L720,40 L790,63 L850,46 L900,56 L900,130 Z"
+            fill="#3b82f6" opacity="0.5"
+          />
+          <path
+            d="M0,130 L0,102 L80,78 L150,92 L230,66 L300,86 L370,52 L440,77 L500,61 L570,80 L640,57 L710,82 L780,64 L850,82 L900,70 L900,130 Z"
+            fill="#1e40af" opacity="0.6"
+          />
+          {/* Snow caps */}
+          <polygon points="333,8 347,8 361,22 352,17 340,22" fill="white" opacity="0.55"/>
+          <polygon points="463,26 477,26 489,38 481,33 470,38" fill="white" opacity="0.45"/>
+          <polygon points="193,28 207,28 219,40 211,35 200,40" fill="white" opacity="0.45"/>
+        </svg>
+
+        {/* Blueprint grid coordinate labels */}
+        {["A","B","C","D","E"].map((l, i) => (
+          <span key={l} className="absolute top-3 font-mono text-[10px] select-none pointer-events-none"
+            style={{ left: `${8 + i * 17}%`, color: "rgba(59,130,246,0.18)" }}>{l}</span>
+        ))}
+        {["1","2","3","4","5"].map((n, i) => (
+          <span key={n} className="absolute left-3 font-mono text-[10px] select-none pointer-events-none"
+            style={{ top: `${15 + i * 16}%`, color: "rgba(59,130,246,0.18)" }}>{n}</span>
+        ))}
+
+        {/* Logo */}
         <div className="relative z-10">
           <Logo white size={36} src={logoUrl || null} name={siteName} />
         </div>
 
-        <div className="relative z-10 flex-1 flex flex-col justify-center">
-          <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-5 whitespace-pre-line">
+        {/* Main content */}
+        <div className="relative z-10 flex-1 flex flex-col justify-center max-w-lg">
+
+          {/* Blueprint section label */}
+          <div className="flex items-center gap-3 mb-8">
+            <div className="h-px flex-1" style={{ backgroundColor: "rgba(59,130,246,0.2)" }} />
+            <span className="font-mono text-xs tracking-[0.2em] uppercase" style={{ color: "rgba(96,165,250,0.45)" }}>
+              Construction Platform · Nepal
+            </span>
+            <div className="h-px w-8" style={{ backgroundColor: "rgba(59,130,246,0.2)" }} />
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-3xl xl:text-[2.5rem] font-bold text-white leading-tight mb-4">
             {headline}
           </h1>
-          <p className="text-blue-200 text-lg mb-10 max-w-sm leading-relaxed">{subtext}</p>
+          <p className="text-base mb-12 leading-relaxed max-w-sm" style={{ color: "rgba(147,197,253,0.6)" }}>
+            {subtext}
+          </p>
 
-          <div className="space-y-4">
-            {[
-              { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", label: "Instant BOQ generation with rate catalog" },
-              { icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z", label: "Team collaboration & role management" },
-              { icon: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z", label: "Export to PDF, Excel, Tender & MB" },
-            ].map(({ icon, label }) => (
-              <div key={label} className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/15">
-                  <svg className="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
-                  </svg>
+          {/* Process flow — blueprint style */}
+          <div className="relative mb-12">
+            {/* Dashed connector line */}
+            <div className="absolute top-5 left-5 right-16 h-px border-t border-dashed pointer-events-none"
+              style={{ borderColor: "rgba(59,130,246,0.22)" }} />
+            <div className="flex items-start">
+              {(["Estimate", "Bid", "Award", "Build"] as const).map((step, i) => (
+                <div key={step} className="flex-1 flex flex-col items-center">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center relative z-10 mb-2.5"
+                    style={{ backgroundColor: "#0f172a", border: "1px solid rgba(59,130,246,0.4)" }}
+                  >
+                    <span className="font-mono font-bold text-xs" style={{ color: "rgba(147,197,253,0.9)" }}>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <span className="font-mono text-xs tracking-widest uppercase" style={{ color: "rgba(147,197,253,0.6)" }}>
+                    {step}
+                  </span>
                 </div>
-                <span className="text-blue-100 text-sm">{label}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-6 pt-6"
+            style={{ borderTop: "1px solid rgba(59,130,246,0.1)" }}>
+            {[
+              { val: "10×", label: "Faster than manual" },
+              { val: "50+", label: "Trade categories" },
+              { val: "5", label: "Export formats" },
+            ].map(({ val, label }) => (
+              <div key={label}>
+                <div className="text-2xl font-bold text-white font-mono">{val}</div>
+                <div className="font-mono text-xs mt-0.5 leading-tight" style={{ color: "rgba(96,165,250,0.45)" }}>{label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative z-10 text-blue-300/60 text-xs">
-          Trusted by construction professionals across Nepal
+        {/* Blueprint title block — bottom */}
+        <div className="relative z-10 flex items-end justify-between">
+          <div className="font-mono text-xs space-y-0.5" style={{ color: "rgba(59,130,246,0.22)", lineHeight: "1.5" }}>
+            <div>PROJECT: NepaliEstimate</div>
+            <div>SHEET: LOGIN · REV 2.0</div>
+          </div>
+          <div className="font-mono text-xs text-right" style={{ color: "rgba(59,130,246,0.22)" }}>
+            estimatenepal.com
+          </div>
         </div>
       </div>
 
-      {/* Right panel — form */}
+      {/* ── RIGHT PANEL — Form ── */}
       <div className="w-full lg:w-1/2 xl:w-2/5 flex items-center justify-center bg-white px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
@@ -185,6 +299,7 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
           </p>
         </div>
       </div>
+
     </div>
   );
 }
