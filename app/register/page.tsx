@@ -11,7 +11,7 @@ export default async function RegisterPage() {
 
   return (
     <RegisterForm
-      siteName={siteName || "NepaliEstimate"}
+      siteName={siteName || "Estimate Nepal"}
       logoUrl={logoUrl || ""}
       headline={headline || "Nepal's Complete Construction Marketplace"}
       subtext={subtext || "From quantity takeoff to contractor selection — manage every phase of your construction project."}

@@ -65,7 +65,7 @@ function borderAll(cell: ExcelJS.Cell) {
 
 export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "NepaliEstimate";
+  wb.creator = "Estimate Nepal";
   wb.created = new Date();
 
   // ── Summary Sheet ──────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
 
 export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "NepaliEstimate";
+  wb.creator = "Estimate Nepal";
   wb.created = new Date();
 
   const ws = wb.addWorksheet("Measurement Book");

@@ -212,7 +212,7 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
         {/* Blueprint title block — bottom */}
         <div className="relative z-10 flex items-end justify-between">
           <div className="font-mono text-xs space-y-0.5" style={{ color: "rgba(59,130,246,0.22)", lineHeight: "1.5" }}>
-            <div>PROJECT: NepaliEstimate</div>
+            <div>PROJECT: Estimate Nepal</div>
             <div>SHEET: LOGIN · REV 2.0</div>
           </div>
           <div className="font-mono text-xs text-right" style={{ color: "rgba(59,130,246,0.22)" }}>

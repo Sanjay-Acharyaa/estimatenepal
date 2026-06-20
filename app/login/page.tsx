@@ -19,7 +19,7 @@ export default async function LoginPage() {
       </div>
     }>
       <LoginForm
-        siteName={siteName || "NepaliEstimate"}
+        siteName={siteName || "Estimate Nepal"}
         logoUrl={logoUrl || ""}
         headline={headline || "Nepal's Smart Construction Estimator"}
         subtext={subtext || "Create accurate BOQs, manage tenders, and collaborate with your team — all in one place."}

@@ -12,7 +12,7 @@ export default async function TrialExpiredPage() {
   const freeMonths = parseInt(cfg.annual_free_months, 10) || 2;
   const contactEmail = cfg.contact_email || "hello@estimatenepal.com";
   const contactWa = cfg.contact_whatsapp || "+977XXXXXXXXX";
-  const waMsg = encodeURIComponent(cfg.whatsapp_message || "Hi, I am interested in NepaliEstimate. Please share pricing details.");
+  const waMsg = encodeURIComponent(cfg.whatsapp_message || "Hi, I am interested in Estimate Nepal. Please share pricing details.");
   const waHref = `https://wa.me/${contactWa.replace(/\D/g, "")}?text=${waMsg}`;
 
   const fmt = (n: number) => `NPR ${n.toLocaleString("en-NP")}`;
@@ -31,7 +31,7 @@ export default async function TrialExpiredPage() {
           <div className="text-5xl mb-4">⏰</div>
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Your {trialDays}-Day Free Trial Has Ended</h1>
           <p className="text-gray-500 text-sm max-w-sm mx-auto">
-            Choose a plan below to continue accessing NepaliEstimate and all your project data.
+            Choose a plan below to continue accessing Estimate Nepal and all your project data.
           </p>
         </div>
 
@@ -84,7 +84,7 @@ export default async function TrialExpiredPage() {
               WhatsApp Us
             </a>
             <a
-              href={`mailto:${contactEmail}?subject=NepaliEstimate%20Upgrade&body=Hi%2C%20my%20trial%20has%20ended%20and%20I%20would%20like%20to%20subscribe.`}
+              href={`mailto:${contactEmail}?subject=Estimate Nepal%20Upgrade&body=Hi%2C%20my%20trial%20has%20ended%20and%20I%20would%20like%20to%20subscribe.`}
               className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-semibold transition"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden>

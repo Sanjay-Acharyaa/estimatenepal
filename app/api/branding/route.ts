@@ -19,7 +19,7 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      siteName: siteName || "NepaliEstimate",
+      siteName: siteName || "Estimate Nepal",
       logoUrl: logoUrl || "",
       faviconUrl: faviconUrl || "",
       loginHeadline: loginHeadline || "Nepal's Smart Construction Estimator",

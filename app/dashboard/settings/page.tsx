@@ -299,7 +299,7 @@ export default function SettingsPage() {
             >
               <h2 className="font-semibold text-gray-800 mb-1">Leave a Review</h2>
               <p className="text-xs text-gray-500 mb-4">
-                Your review will appear on the NepaliEstimate website after our team approves it.
+                Your review will appear on the Estimate Nepal website after our team approves it.
               </p>
 
               <div>
@@ -327,7 +327,7 @@ export default function SettingsPage() {
                   required
                   value={review.content}
                   onChange={e => setReview(r => ({ ...r, content: e.target.value }))}
-                  placeholder="Tell us how NepaliEstimate has helped your work…"
+                  placeholder="Tell us how Estimate Nepal has helped your work…"
                   className={inputCls + " resize-none"}
                 />
                 <p className="text-xs text-gray-400 mt-0.5">{review.content.length}/1000 — minimum 20 characters</p>

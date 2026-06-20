@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await sendEmail({
       to: parsed.data.to,
       subject: `Project Proposal: ${project.name}`,
-      html: proposalEmailHtml(shareUrl, project.name, project.org?.name ?? "NepaliEstimate", caller.name),
+      html: proposalEmailHtml(shareUrl, project.name, project.org?.name ?? "Estimate Nepal", caller.name),
     });
 
     // Save client email on the link

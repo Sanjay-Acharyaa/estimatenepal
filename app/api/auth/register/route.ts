@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     // The verify token is already committed to Redis; the user can request a resend if email fails.
     sendEmail({
       to: email,
-      subject: "Verify your NepaliEstimate account",
+      subject: "Verify your Estimate Nepal account",
       html: verificationEmailHtml(verifyUrl, name),
     }).catch((emailErr) => {
       console.error("[register] Failed to send verification email:", { email, emailErr });

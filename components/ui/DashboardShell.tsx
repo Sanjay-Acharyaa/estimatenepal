@@ -46,7 +46,7 @@ export function DashboardShell({ sidebar, announcement, trialBanner, children }:
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span className="font-bold text-blue-700 text-sm">NepaliEstimate</span>
+          <span className="font-bold text-blue-700 text-sm">Estimate Nepal</span>
         </div>
 
         {announcement}

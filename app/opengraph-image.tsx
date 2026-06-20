@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "NepaliEstimate — Nepal's Smart Construction Platform";
+export const alt = "Estimate Nepal — Nepal's Smart Construction Platform";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -36,7 +36,7 @@ export default function Image() {
           </svg>
         </div>
         <span style={{ color: "white", fontSize: 32, fontWeight: 700, letterSpacing: "-0.5px" }}>
-          Nepali<span style={{ color: "#93c5fd" }}>Estimate</span>
+          Estimate<span style={{ color: "#93c5fd" }}> Nepal</span>
         </span>
       </div>
 

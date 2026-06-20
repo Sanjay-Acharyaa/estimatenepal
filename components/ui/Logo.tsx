@@ -10,9 +10,9 @@ interface LogoProps {
 }
 
 export function Logo({ variant = "full", white = false, size = 36, className = "", src, name }: LogoProps) {
-  const siteName = name || "NepaliEstimate";
-  const brandName = siteName === "NepaliEstimate"
-    ? <><span className={white ? "text-white" : "text-gray-900"}>Nepali</span><span className={white ? "text-blue-300" : "text-blue-600"}>Estimate</span></>
+  const siteName = name || "Estimate Nepal";
+  const brandName = siteName === "Estimate Nepal"
+    ? <><span className={white ? "text-white" : "text-gray-900"}>Estimate</span><span className={white ? "text-blue-300" : "text-blue-600"}> Nepal</span></>
     : <span className={white ? "text-white" : "text-gray-900"}>{siteName}</span>;
 
   // Custom logo image uploaded by admin — show as <img>

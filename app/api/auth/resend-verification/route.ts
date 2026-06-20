@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${verifyToken}`;
     sendEmail({
       to: user.email,
-      subject: "Verify your NepaliEstimate account",
+      subject: "Verify your Estimate Nepal account",
       html: verificationEmailHtml(verifyUrl, user.name),
     }).catch((emailErr) => {
       console.error("[resend-verification] Failed to send email:", { email: user.email, emailErr });

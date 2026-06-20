@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     if (!token) throw unauthorized();
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = "NepaliEstimate";
+    wb.creator = "Estimate Nepal";
     const ws = wb.addWorksheet("Rate Import Template");
 
     // Column widths
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     ];
 
     // Row 1 — Title
-    const titleRow = ws.addRow(["NepaliEstimate — Rate Item Import Template"]);
+    const titleRow = ws.addRow(["Estimate Nepal — Rate Item Import Template"]);
     ws.mergeCells(`A1:E1`);
     titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E3A5F" } };
     titleRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": 'attachment; filename="NepaliEstimate_Rate_Import_Template.xlsx"',
+        "Content-Disposition": 'attachment; filename="EstimateNepal_Rate_Import_Template.xlsx"',
       },
     });
   } catch (err) {

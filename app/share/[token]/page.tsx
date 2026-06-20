@@ -49,7 +49,7 @@ export default async function SharePage({ params }: { params: { token: string } 
         {/* Header */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <span className="font-bold text-lg text-blue-700">NepaliEstimate</span>
+            <span className="font-bold text-lg text-blue-700">Estimate Nepal</span>
             <span className="text-gray-300">|</span>
             <span className="text-sm text-gray-500">Project Proposal</span>
           </div>
@@ -123,7 +123,7 @@ export default async function SharePage({ params }: { params: { token: string } 
           <ShareApprovalForm token={params.token} clientEmail={link.clientEmail} />
         )}
 
-        <p className="text-xs text-gray-600 text-center">Shared via NepaliEstimate</p>
+        <p className="text-xs text-gray-600 text-center">Shared via Estimate Nepal</p>
       </div>
     </div>
   );

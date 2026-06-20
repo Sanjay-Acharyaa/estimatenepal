@@ -6,15 +6,15 @@ import { getAllConfigs } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
-  title: "NepaliEstimate — Construction Estimating Software for Nepal",
+  title: "Estimate Nepal — Construction Estimating Software for Nepal",
   description:
     "Generate BOQ, analyse DUDBC rates, export tender documents, and measure directly on PDF drawings. Built for Nepali construction professionals.",
   openGraph: {
-    title: "NepaliEstimate — Construction Estimating Software",
+    title: "Estimate Nepal — Construction Estimating Software",
     description:
       "The fastest way to estimate construction costs in Nepal. DUDBC rates, BOQ, drawings — all in one platform.",
     url: "https://estimatenepal.com",
-    siteName: "NepaliEstimate",
+    siteName: "Estimate Nepal",
     type: "website",
   },
   keywords: [
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     "BOQ software Nepal",
     "tender document Nepal",
     "quantity takeoff Nepal",
-    "NepaliEstimate",
+    "Estimate Nepal",
   ],
   alternates: { canonical: "https://estimatenepal.com" },
 };
@@ -93,7 +93,7 @@ export default async function LandingPage() {
   const freeMonths = parseInt(cfg.annual_free_months, 10) || 2;
   const contactEmail = cfg.contact_email || "hello@estimatenepal.com";
   const contactWa = cfg.contact_whatsapp || "+977XXXXXXXXX";
-  const waMsg = encodeURIComponent(cfg.whatsapp_message || "Hi, I am interested in NepaliEstimate. Please share pricing details.");
+  const waMsg = encodeURIComponent(cfg.whatsapp_message || "Hi, I am interested in Estimate Nepal. Please share pricing details.");
 
   const PLANS = [
     {
@@ -154,7 +154,7 @@ export default async function LandingPage() {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">NE</span>
             </div>
-            <span className="font-bold text-gray-900 text-lg">NepaliEstimate</span>
+            <span className="font-bold text-gray-900 text-lg">Estimate Nepal</span>
           </div>
           <nav className="flex items-center gap-3">
             <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
@@ -221,7 +221,7 @@ export default async function LandingPage() {
             </div>
             <div className="flex h-64 sm:h-80">
               <div className="w-44 bg-blue-900 p-3 space-y-1 shrink-0">
-                <div className="text-xs text-blue-400 uppercase tracking-wider px-3 py-1 mb-2">NepaliEstimate</div>
+                <div className="text-xs text-blue-400 uppercase tracking-wider px-3 py-1 mb-2">Estimate Nepal</div>
                 {["Dashboard", "Projects", "Rates", "Assemblies", "Team"].map((item, i) => (
                   <div key={item} className={`px-3 py-2 rounded-lg text-xs font-medium ${i === 1 ? "bg-blue-600 text-white" : "text-blue-300 hover:bg-blue-800"}`}>
                     {item}
@@ -454,12 +454,12 @@ export default async function LandingPage() {
       <footer className="border-t border-gray-100 py-3 px-6 bg-gray-50">
         <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-x-6 gap-y-1">
           <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span className="font-semibold text-gray-700">NepaliEstimate</span>
+            <span className="font-semibold text-gray-700">Estimate Nepal</span>
             <a href={`mailto:${contactEmail}`} className="hover:text-gray-900 transition">{contactEmail}</a>
             <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
             <Link href="/register" className="hover:text-gray-900 transition">Register</Link>
           </div>
-          <p className="text-xs text-gray-400">© {new Date().getFullYear()} NepaliEstimate</p>
+          <p className="text-xs text-gray-400">© {new Date().getFullYear()} Estimate Nepal</p>
         </div>
       </footer>
     </div>

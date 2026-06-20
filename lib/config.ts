@@ -8,7 +8,7 @@ const PREFIX = "siteconfig:";
 // and as the fallback if DB/Redis are unavailable
 export const CONFIG_DEFAULTS: Record<string, string> = {
   // Branding
-  site_name: "NepaliEstimate",
+  site_name: "Estimate Nepal",
   site_logo_url: "",
   site_favicon_url: "",
   login_headline: "Nepal's Smart Construction Estimator",
@@ -30,7 +30,7 @@ export const CONFIG_DEFAULTS: Record<string, string> = {
   // Contact
   contact_email: "hello@estimatenepal.com",
   contact_whatsapp: "+977XXXXXXXXX",
-  whatsapp_message: "Hi, I am interested in NepaliEstimate. Please share pricing details.",
+  whatsapp_message: "Hi, I am interested in Estimate Nepal. Please share pricing details.",
   // Access Control
   maintenance_mode: "false",
   registration_enabled: "true",

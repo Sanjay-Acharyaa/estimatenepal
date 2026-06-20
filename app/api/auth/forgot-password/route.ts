@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     // Fire-and-forget — reset tokens are already in Redis; SMTP latency must not block the response.
     sendEmail({
       to: user.email,
-      subject: "Reset your NepaliEstimate password",
+      subject: "Reset your Estimate Nepal password",
       html: passwordResetEmailHtml(resetUrl),
     }).catch((emailErr) => {
       console.error("[forgot-password] Failed to send reset email:", { email: user.email, emailErr });

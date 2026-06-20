@@ -28,7 +28,7 @@ export async function GET() {
       annualFreeMonths: 2,
       contactEmail: "hello@estimatenepal.com",
       contactWhatsapp: "+977XXXXXXXXX",
-      whatsappMessage: "Hi, I am interested in NepaliEstimate. Please share pricing details.",
+      whatsappMessage: "Hi, I am interested in Estimate Nepal. Please share pricing details.",
     });
   }
 }

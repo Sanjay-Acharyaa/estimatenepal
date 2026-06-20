@@ -53,7 +53,7 @@ function emailBase(content: string): string {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>NepaliEstimate</title>
+<title>Estimate Nepal</title>
 </head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 16px">
@@ -66,7 +66,7 @@ function emailBase(content: string): string {
           <td style="vertical-align:middle">${LOGO_ICON}</td>
           <td style="vertical-align:middle;padding-left:10px">
             <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px">
-              Nepali<span style="color:#93c5fd">Estimate</span>
+              Estimate<span style="color:#93c5fd"> Nepal</span>
             </span>
           </td>
         </tr></table>
@@ -80,7 +80,7 @@ function emailBase(content: string): string {
       <!-- Footer -->
       <tr><td style="padding:24px 0;text-align:center">
         <p style="color:#94a3b8;font-size:12px;margin:0">
-          &copy; 2026 NepaliEstimate &mdash; estimatenepal.com<br/>
+          &copy; 2026 Estimate Nepal &mdash; estimatenepal.com<br/>
           <span style="color:#cbd5e1">Nepal&apos;s Smart Construction Platform</span>
         </p>
       </td></tr>
@@ -106,12 +106,12 @@ export function verificationEmailHtml(url: string, name: string) {
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Verify your email address</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 8px">
-      Welcome to NepaliEstimate! Click the button below to verify your email address and activate your workspace.
+      Welcome to Estimate Nepal! Click the button below to verify your email address and activate your workspace.
     </p>
     <p style="color:#94a3b8;font-size:13px;margin:0 0 4px">This link expires in <strong>24 hours</strong>.</p>
     ${ctaButton(url, "Verify Email Address →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      If you didn&apos;t create a NepaliEstimate account, you can safely ignore this email.
+      If you didn&apos;t create a Estimate Nepal account, you can safely ignore this email.
     </p>
   `);
 }
@@ -123,11 +123,11 @@ export function inviteEmailHtml(inviteUrl: string, orgName: string, inviterName:
   return emailBase(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 20px">You&apos;ve been invited</h2>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      <strong>${safeInviterName}</strong> has invited you to join <strong>${safeOrgName}</strong> on NepaliEstimate as a <strong>${safeRole}</strong>.
+      <strong>${safeInviterName}</strong> has invited you to join <strong>${safeOrgName}</strong> on Estimate Nepal as a <strong>${safeRole}</strong>.
     </p>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 8px">
       <p style="color:#475569;font-size:14px;margin:0">
-        NepaliEstimate is Nepal&apos;s smart construction platform for BOQ generation, tendering, and project management.
+        Estimate Nepal is Nepal&apos;s smart construction platform for BOQ generation, tendering, and project management.
       </p>
     </div>
     <p style="color:#94a3b8;font-size:13px;margin:8px 0 4px">This invitation expires in <strong>72 hours</strong>.</p>
@@ -165,7 +165,7 @@ export function passwordResetEmailHtml(url: string) {
   return emailBase(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 20px">Reset your password</h2>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 8px">
-      We received a request to reset the password for your NepaliEstimate account.
+      We received a request to reset the password for your Estimate Nepal account.
     </p>
     <p style="color:#94a3b8;font-size:13px;margin:0 0 4px">This link expires in <strong>1 hour</strong>.</p>
     ${ctaButton(url, "Reset Password →")}

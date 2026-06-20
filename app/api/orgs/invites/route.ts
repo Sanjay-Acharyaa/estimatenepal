@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const orgName = (token.orgName as string | null) ?? "NepaliEstimate";
+    const orgName = (token.orgName as string | null) ?? "Estimate Nepal";
     const inviteUrl = `${process.env.NEXTAUTH_URL}/invite/${inviteToken}`;
 
     // Fire-and-forget — invite record is in DB; SMTP latency must not hold the response

@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = "NepaliEstimate";
+    wb.creator = "Estimate Nepal";
 
     const ws = wb.addWorksheet("Procurement Schedule");
 
