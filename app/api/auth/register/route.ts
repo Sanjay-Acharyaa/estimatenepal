@@ -11,6 +11,11 @@ import { getConfigNum, getConfigBool } from "@/lib/config";
 const schema = z.object({
   name: z.string().min(2).max(100).trim(),
   email: z.string().email().toLowerCase().trim(),
+  phone: z.string()
+    .min(9, "Phone number must be at least 9 digits.")
+    .max(15)
+    .regex(/^(\+977[-\s]?)?[0-9]{9,10}$/, "Enter a valid Nepal mobile number (e.g. 9812345678).")
+    .transform(p => p.replace(/\s/g, "")),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters.")
@@ -34,7 +39,7 @@ export async function POST(req: NextRequest) {
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
     }
 
-    const { name, email, password, orgName } = parsed.data;
+    const { name, email, phone, password, orgName } = parsed.data;
 
     // Check registration gate before touching the DB
     const registrationEnabled = await getConfigBool("registration_enabled");
@@ -54,7 +59,7 @@ export async function POST(req: NextRequest) {
     const { org, user } = await prisma.$transaction(async (tx) => {
       const org = await tx.org.create({ data: { name: orgName, trialEndsAt } });
       const user = await tx.user.create({
-        data: { name, email, passwordHash, role: "OWNER", orgId: org.id },
+        data: { name, email, phone, passwordHash, role: "OWNER", orgId: org.id },
       });
       return { org, user };
     });

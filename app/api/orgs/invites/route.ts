@@ -64,6 +64,29 @@ export async function POST(req: NextRequest) {
     const parsed = inviteSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
 
+    // Enforce plan member limit
+    const org = await prisma.org.findUnique({
+      where: { id: token.orgId as string },
+      select: { planTier: true, _count: { select: { users: true } } },
+    });
+    if (org) {
+      const PLAN_LIMITS: Record<string, number> = {
+        TRIAL: 3, SOLO: 1, TEAM_3: 3, TEAM_5: 5, ENTERPRISE: 999,
+      };
+      const maxMembers = PLAN_LIMITS[org.planTier] ?? 3;
+      if (org._count.users >= maxMembers) {
+        const planLabel: Record<string, string> = {
+          TRIAL: "Trial (3 members)", SOLO: "Solo (1 member)",
+          TEAM_3: "Team of 3", TEAM_5: "Team of 5",
+        };
+        return apiError(
+          "PLAN_LIMIT",
+          `Your ${planLabel[org.planTier] ?? org.planTier} plan allows a maximum of ${maxMembers} member${maxMembers === 1 ? "" : "s"}. Contact us to upgrade.`,
+          403
+        );
+      }
+    }
+
     // Check if email already belongs to a user in this org
     const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
     if (existing && existing.orgId === (token.orgId as string)) {

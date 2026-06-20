@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { OrgPlanSetter } from "@/components/ui/OrgPlanSetter";
 
 export default async function SuperAdminPage() {
   const [orgs, users] = await Promise.all([
@@ -62,8 +63,9 @@ export default async function SuperAdminPage() {
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Name</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Plan</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">Users</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">Members</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Projects</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">Trial Ends</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Created</th>
                 </tr>
               </thead>
@@ -72,12 +74,13 @@ export default async function SuperAdminPage() {
                   <tr key={org.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{org.name}</td>
                     <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                        {org.plan}
-                      </span>
+                      <OrgPlanSetter orgId={org.id} current={(org as any).planTier ?? "TRIAL"} />
                     </td>
                     <td className="px-4 py-3 text-gray-600">{org._count.users}</td>
                     <td className="px-4 py-3 text-gray-600">{org._count.projects}</td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      {org.trialEndsAt ? new Date(org.trialEndsAt).toLocaleDateString() : "—"}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">
                       {new Date(org.createdAt).toLocaleDateString()}
                     </td>
@@ -106,6 +109,7 @@ export default async function SuperAdminPage() {
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Name</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Email</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">Phone</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Org</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Role</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Verified</th>
@@ -123,6 +127,13 @@ export default async function SuperAdminPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{user.email}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {(user as any).phone ? (
+                        <a href={`tel:${(user as any).phone}`} className="text-blue-600 hover:underline text-xs">
+                          {(user as any).phone}
+                        </a>
+                      ) : <span className="text-gray-300 text-xs">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-gray-500">{user.org?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-500">{user.role}</td>
                     <td className="px-4 py-3">
