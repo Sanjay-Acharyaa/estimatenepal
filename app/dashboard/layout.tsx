@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SignOutButton } from "@/components/ui/SignOutButton";
 import { NotificationBell } from "@/components/ui/NotificationBell";
 import { DashboardShell } from "@/components/ui/DashboardShell";
+import { Logo } from "@/components/ui/Logo";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -31,9 +32,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const sidebarContent = (
     <>
-      <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
         <Link href="/dashboard">
-          <span className="font-bold text-lg text-blue-700 hover:text-blue-800">NepaliEstimate</span>
+          <Logo size={28} />
         </Link>
         <NotificationBell />
       </div>

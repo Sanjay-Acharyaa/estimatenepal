@@ -12,13 +12,28 @@ const FB_PIXEL_ID = process.env.NEXT_PUBLIC_FB_PIXEL_ID;
 
 export const metadata: Metadata = {
   title: {
-    default: "NepaliEstimate",
+    default: "NepaliEstimate — Nepal's Smart Construction Platform",
     template: "%s | NepaliEstimate",
   },
-  description: "Construction takeoff and cost estimating for Nepal",
+  description: "Nepal's smart construction platform. Create accurate BOQs, manage tenders, submit bids, and collaborate with your team — all in one place.",
+  keywords: ["construction estimating Nepal", "BOQ software Nepal", "quantity survey", "tender preparation", "contractor bidding", "cost estimation"],
+  authors: [{ name: "NepaliEstimate" }],
+  metadataBase: new URL("https://estimatenepal.com"),
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://estimatenepal.com",
+    title: "NepaliEstimate — Nepal's Smart Construction Platform",
+    description: "Create accurate BOQs, manage tenders, bid on projects, and collaborate with your team. Nepal's leading construction platform.",
+    siteName: "NepaliEstimate",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "NepaliEstimate — Nepal's Smart Construction Platform",
+    description: "Create accurate BOQs, manage tenders, and bid on projects. Nepal's leading construction platform.",
+  },
   icons: {
     icon: "/icon.svg",
-    apple: "/apple-icon.svg",
   },
 };
 
