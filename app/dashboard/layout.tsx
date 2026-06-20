@@ -11,7 +11,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const siteAnnouncement = await getConfig("site_announcement");
+  const [siteAnnouncement, siteName, logoUrl] = await Promise.all([
+    getConfig("site_announcement"),
+    getConfig("site_name"),
+    getConfig("site_logo_url"),
+  ]);
 
   // Trial banner: show when <= 5 days remain and trial hasn't yet expired
   // (middleware redirects to /trial-expired when it's actually past)
@@ -34,7 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <>
       <div className="p-4 border-b border-gray-100 flex items-center justify-between">
         <Link href="/dashboard">
-          <Logo size={28} />
+          <Logo size={28} src={logoUrl || null} name={siteName || null} />
         </Link>
         <NotificationBell />
       </div>
