@@ -4,6 +4,19 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+
+async function requireSuperAdmin(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) throw unauthorized();
+  if (!token.isSuperAdmin) throw forbidden();
+  const user = await prisma.user.findUnique({
+    where: { id: token.id as string },
+    select: { isSuperAdmin: true },
+  });
+  if (!user?.isSuperAdmin) throw forbidden();
+  return token;
+}
 
 const patchSchema = z.object({
   action: z.enum(["approve", "reject"]),
@@ -15,9 +28,11 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) throw unauthorized();
-    if (!token.isSuperAdmin) throw forbidden();
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    await requireSuperAdmin(req);
 
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);
@@ -52,9 +67,11 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) throw unauthorized();
-    if (!token.isSuperAdmin) throw forbidden();
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    await requireSuperAdmin(req);
 
     await prisma.testimonial.delete({ where: { id: params.id } }).catch(() => {});
     redis.del("testimonials:approved").catch(() => {});

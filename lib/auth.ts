@@ -33,6 +33,11 @@ export const authOptions: NextAuthOptions = {
           (req?.headers?.["x-forwarded-for"] as string | undefined)
             ?.split(",")[0].trim() ?? "unknown";
 
+        // Enforce per-IP login rate limit before touching the DB
+        const { isLoginRateLimited } = await import("./security");
+        const rateLimited = await isLoginRateLimited(ip);
+        if (rateLimited) return null;
+
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
         });

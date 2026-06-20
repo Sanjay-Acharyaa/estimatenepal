@@ -6,10 +6,10 @@ import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { getUploadUrl } from "@/lib/upload";
+import { getConfigNum } from "@/lib/config";
 import { randomUUID } from "crypto";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-const STORAGE_LIMIT = BigInt(10 * 1024 * 1024 * 1024); // 10 GB
 
 const schema = z.object({
   fileName: z.string().min(1).max(255),
@@ -36,7 +36,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
     }
 
-    // Enforce per-org 10 GB storage limit
+    // Enforce per-org storage limit (admin-configurable, defaults to 10 GB)
+    const storageLimitGb = await getConfigNum("storage_limit_solo_gb");
+    const STORAGE_LIMIT = BigInt(storageLimitGb * 1024 * 1024 * 1024);
     const org = await prisma.org.findUnique({
       where: { id: project.orgId },
       select: { storageUsedBytes: true },
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (org && org.storageUsedBytes + BigInt(parsed.data.fileSize) > STORAGE_LIMIT) {
       return apiError(
         "STORAGE_LIMIT_EXCEEDED",
-        "Storage limit of 10 GB reached. Delete old drawings or upgrade your plan.",
+        `Storage limit of ${storageLimitGb} GB reached. Delete old drawings or upgrade your plan.`,
         400
       );
     }

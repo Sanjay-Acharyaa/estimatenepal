@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
       to: user.email,
       subject: "Verify your NepaliEstimate account",
       html: verificationEmailHtml(verifyUrl, user.name),
-    }).catch(() => {});
+    }).catch((emailErr) => {
+      console.error("[resend-verification] Failed to send email:", { email: user.email, emailErr });
+    });
 
     return NextResponse.json({ message: "If this email exists and is unverified, a new link has been sent." });
   } catch (err) {

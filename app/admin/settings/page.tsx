@@ -13,18 +13,26 @@ type ConfigEntry = {
 export default function AdminSettingsPage() {
   const [entries, setEntries] = useState<ConfigEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/admin/config")
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Failed to load config (${r.status})`);
+        return r.json();
+      })
       .then((data: ConfigEntry[]) => {
         setEntries(data);
         const initial: Record<string, string> = {};
         data.forEach(e => { initial[e.key] = e.value; });
         setEditing(initial);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        setLoadError(err.message ?? "Failed to load settings.");
         setLoading(false);
       });
   }, []);
@@ -62,6 +70,8 @@ export default function AdminSettingsPage() {
       <div className="p-8 max-w-3xl mx-auto">
         {loading ? (
           <p className="text-gray-500 text-sm">Loading config…</p>
+        ) : loadError ? (
+          <p role="alert" className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">{loadError}</p>
         ) : (
           <div className="space-y-4">
             {entries.map(entry => {

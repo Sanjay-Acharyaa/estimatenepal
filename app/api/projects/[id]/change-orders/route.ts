@@ -6,6 +6,7 @@ import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { appendAuditLog } from "@/lib/audit";
+import { parsePagination, paginatedResponse } from "@/lib/pagination";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200).trim(),
@@ -26,11 +27,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
-    const orders = await prisma.changeOrder.findMany({
-      where: { projectId: params.id },
-      orderBy: { number: "asc" },
-    });
-    return NextResponse.json(orders);
+    const { page, limit, skip } = parsePagination(req.nextUrl.searchParams);
+    const [total, orders] = await Promise.all([
+      prisma.changeOrder.count({ where: { projectId: params.id } }),
+      prisma.changeOrder.findMany({
+        where: { projectId: params.id },
+        orderBy: { number: "asc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return NextResponse.json(paginatedResponse(orders, total, page, limit));
   } catch (err) { return handleApiError(err); }
 }
 

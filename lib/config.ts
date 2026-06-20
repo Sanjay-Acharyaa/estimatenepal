@@ -68,6 +68,10 @@ export async function getConfigBool(key: string): Promise<boolean> {
 }
 
 export async function setConfig(key: string, value: string): Promise<void> {
+  // Guard: only known keys are allowed to prevent arbitrary key injection via direct calls
+  if (!(key in CONFIG_DEFAULTS)) {
+    throw new Error(`[config] Unknown config key: ${key}`);
+  }
   await prisma.siteConfig.upsert({
     where: { key },
     update: { value },

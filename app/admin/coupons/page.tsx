@@ -55,9 +55,11 @@ export default function AdminCouponsPage() {
     setListLoading(true);
     setLoadError("");
     try {
-      const res = await fetch("/api/admin/coupons");
+      const res = await fetch("/api/admin/coupons?limit=100");
       if (!res.ok) throw new Error("Failed to load coupons");
-      setCoupons(await res.json());
+      const data = await res.json();
+      // API returns paginated response { data: [...], pagination: {...} }
+      setCoupons(Array.isArray(data) ? data : (data.data ?? []));
     } catch {
       setLoadError("Failed to load coupons. Refresh to try again.");
     } finally {

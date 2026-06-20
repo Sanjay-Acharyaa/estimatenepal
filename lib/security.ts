@@ -105,7 +105,7 @@ export async function checkUploadRateLimit(ip: string) {
   } catch (e) {
     if (e instanceof RateLimiterRes) {
       return NextResponse.json(
-        { error: "Upload limit reached. Max 5 uploads per hour." },
+        { error: "Upload limit reached. Max 30 uploads per hour." },
         { status: 429 }
       );
     }

@@ -13,6 +13,10 @@ const profileSchema = z.object({
 // GET /api/auth/profile
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 

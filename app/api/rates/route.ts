@@ -32,14 +32,18 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const { page, limit, skip } = parsePagination(sp);
     const search = (sp.get("search") ?? "").slice(0, 200);
-    const source = sp.get("source") ?? "";
+    // Whitelist source values to prevent arbitrary enum injection into Prisma
+    const VALID_SOURCES = ["DUDBC", "CUSTOM"] as const;
+    type ValidSource = typeof VALID_SOURCES[number];
+    const rawSource = sp.get("source") ?? "";
+    const source: ValidSource | "" = VALID_SOURCES.includes(rawSource as ValidSource) ? rawSource as ValidSource : "";
     const batchId = sp.get("batchId") ?? "";
 
     const where = {
       AND: [
         // Org sees its own CUSTOM rates + global DUDBC rates
         { OR: [{ orgId: token.orgId as string }, { orgId: null }] },
-        ...(source ? [{ source: source as any }] : []),
+        ...(source ? [{ source }] : []),
         ...(batchId === "none" ? [{ batchId: null }] : batchId ? [{ batchId }] : []),
         ...(search
           ? [{

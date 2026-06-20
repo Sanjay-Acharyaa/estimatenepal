@@ -19,13 +19,21 @@ type Testimonial = {
 export default function AdminTestimonialsPage() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
 
   async function load() {
     setLoading(true);
+    setLoadError("");
     const res = await fetch("/api/admin/testimonials");
-    if (res.ok) setTestimonials(await res.json());
+    if (res.ok) {
+      const data = await res.json();
+      // Handle both paginated and raw array responses
+      setTestimonials(Array.isArray(data) ? data : (data.data ?? []));
+    } else {
+      setLoadError("Failed to load testimonials.");
+    }
     setLoading(false);
   }
 
@@ -75,6 +83,8 @@ export default function AdminTestimonialsPage() {
 
         {loading ? (
           <p className="text-gray-500 text-sm">Loading…</p>
+        ) : loadError ? (
+          <p role="alert" className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">{loadError}</p>
         ) : (
           <>
             {/* Pending */}

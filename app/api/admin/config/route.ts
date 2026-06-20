@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
+import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { getAllConfigs, setConfig, CONFIG_DESCRIPTIONS, CONFIG_DEFAULTS } from "@/lib/config";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
+
+async function requireSuperAdmin(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) throw unauthorized();
+  if (!token.isSuperAdmin) throw forbidden();
+  // Re-verify in DB — guards against stale JWT after isSuperAdmin was revoked
+  const user = await prisma.user.findUnique({
+    where: { id: token.id as string },
+    select: { isSuperAdmin: true },
+  });
+  if (!user?.isSuperAdmin) throw forbidden();
+  return token;
+}
 
 const patchSchema = z.object({
   key: z.string().min(1),
@@ -12,9 +27,11 @@ const patchSchema = z.object({
 // Superadmin: get all config values with metadata
 export async function GET(req: NextRequest) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) throw unauthorized();
-    if (!token.isSuperAdmin) throw forbidden();
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    await requireSuperAdmin(req);
 
     const values = await getAllConfigs();
 
@@ -35,9 +52,11 @@ export async function GET(req: NextRequest) {
 // Superadmin: update a single config value
 export async function PATCH(req: NextRequest) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) throw unauthorized();
-    if (!token.isSuperAdmin) throw forbidden();
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+
+    await requireSuperAdmin(req);
 
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);

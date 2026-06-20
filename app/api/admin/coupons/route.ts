@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { parsePagination, paginatedResponse } from "@/lib/pagination";
 
 // Unambiguous characters — excludes 0/O, 1/I to avoid confusion when read aloud
 const COUPON_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -31,9 +32,14 @@ export async function GET(req: NextRequest) {
     if (!token) throw unauthorized();
     if (!token.isSuperAdmin) throw forbidden();
 
-    const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: "desc" } });
+    const { page, limit, skip } = parsePagination(req.nextUrl.searchParams);
 
-    return NextResponse.json(coupons);
+    const [total, coupons] = await Promise.all([
+      prisma.coupon.count(),
+      prisma.coupon.findMany({ orderBy: { createdAt: "desc" }, skip, take: limit }),
+    ]);
+
+    return NextResponse.json(paginatedResponse(coupons, total, page, limit));
   } catch (err) {
     return handleApiError(err);
   }
