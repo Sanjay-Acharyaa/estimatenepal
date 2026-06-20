@@ -451,24 +451,15 @@ export default async function LandingPage() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-gray-100 py-6 px-4 bg-gray-50">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-blue-600 rounded-md flex items-center justify-center">
-              <span className="text-white font-bold text-xs">NE</span>
-            </div>
-            <span className="font-semibold text-gray-700 text-sm">NepaliEstimate</span>
-          </div>
-          <div className="flex gap-6 text-sm text-gray-500">
-            <a href={`mailto:${contactEmail}`} className="hover:text-gray-900 transition">
-              {contactEmail}
-            </a>
+      <footer className="border-t border-gray-100 py-3 px-6 bg-gray-50">
+        <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-x-6 gap-y-1">
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <span className="font-semibold text-gray-700">NepaliEstimate</span>
+            <a href={`mailto:${contactEmail}`} className="hover:text-gray-900 transition">{contactEmail}</a>
             <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
             <Link href="/register" className="hover:text-gray-900 transition">Register</Link>
           </div>
-          <p className="text-xs text-gray-400">
-            © {new Date().getFullYear()} NepaliEstimate. All rights reserved.
-          </p>
+          <p className="text-xs text-gray-400">© {new Date().getFullYear()} NepaliEstimate</p>
         </div>
       </footer>
     </div>
