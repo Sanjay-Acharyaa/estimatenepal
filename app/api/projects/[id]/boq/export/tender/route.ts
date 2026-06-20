@@ -6,6 +6,7 @@ import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
+import { trackEvent } from "@/lib/analytics";
 
 const NRS = (n: number) => n.toLocaleString("en-NP", { minimumFractionDigits: 2 });
 
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
+    trackEvent("tender_export", { orgId: project.orgId, userId: token.id as string, meta: { projectId: params.id } });
 
     const boq = await generateBOQ(params.id);
     const org = project.org;

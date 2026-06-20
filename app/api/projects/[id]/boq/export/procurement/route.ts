@@ -7,6 +7,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import ExcelJS from "exceljs";
+import { trackEvent } from "@/lib/analytics";
 
 // GET /api/projects/[id]/boq/export/procurement
 // Generates a Material Procurement Schedule Excel.
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
+    trackEvent("procurement_export", { orgId: project.orgId, userId: token.id as string, meta: { projectId: params.id } });
 
     const boq = await generateBOQ(params.id);
 

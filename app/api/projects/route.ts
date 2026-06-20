@@ -7,6 +7,7 @@ import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withTenantGuard } from "@/lib/auth";
+import { trackEvent } from "@/lib/analytics";
 
 const VALID_SORT_FIELDS = ["name", "createdAt", "bidDueDate", "status", "estimatedValue"] as const;
 type SortField = typeof VALID_SORT_FIELDS[number];
@@ -158,6 +159,8 @@ export async function POST(req: NextRequest) {
     }).catch((err) => {
       console.error("[projects] Failed to create project notifications:", err);
     });
+
+    trackEvent("project_created", { orgId: token.orgId as string, userId: token.id as string, meta: { projectId: project.id } });
 
     return NextResponse.json(project, { status: 201 });
   } catch (err) {

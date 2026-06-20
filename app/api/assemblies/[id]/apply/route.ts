@@ -8,6 +8,7 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withTenantGuard } from "@/lib/auth";
 import { getLatestDudbcFY } from "@/lib/rates";
 import { randomUUID } from "crypto";
+import { trackEvent } from "@/lib/analytics";
 
 const schema = z.object({
   projectId: z.string().min(1),
@@ -131,6 +132,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ipAddress: ip,
     });
 
+    trackEvent("assembly_applied", { orgId: project.orgId, userId: token.id as string, meta: { assemblyId: params.id, projectId } });
     return NextResponse.json({ applied: assembly.name, created, targetFY: targetFY ?? null });
   } catch (err) {
     return handleApiError(err);

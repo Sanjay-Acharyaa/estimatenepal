@@ -7,6 +7,7 @@ import { buildBOQExcel } from "@/lib/export";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
+import { trackEvent } from "@/lib/analytics";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -23,6 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
+    trackEvent("excel_export", { orgId: project.orgId, userId: token.id as string, meta: { projectId: params.id } });
 
     const boq = await generateBOQ(params.id);
 

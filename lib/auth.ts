@@ -5,6 +5,7 @@ import { prisma } from "./prisma";
 import { redis } from "./redis";
 import { z } from "zod";
 import { ApiException } from "./errors";
+import { trackEvent } from "./analytics";
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -61,6 +62,10 @@ export const authOptions: NextAuthOptions = {
             prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } })
           ).catch(() => {});
         }
+
+        // Update last login timestamp + fire analytics event (fire-and-forget)
+        prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
+        trackEvent("user_login", { userId: user.id, orgId: user.orgId });
 
         return {
           id: user.id,
