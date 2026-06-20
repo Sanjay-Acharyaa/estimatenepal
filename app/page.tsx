@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { getAllConfigs } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
+import { Logo } from "@/components/ui/Logo";
 
 export const metadata: Metadata = {
   title: "Estimate Nepal — Construction Estimating Software for Nepal",
@@ -150,12 +151,9 @@ export default async function LandingPage() {
       {/* ── Nav ── */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">NE</span>
-            </div>
-            <span className="font-bold text-gray-900 text-lg">Estimate Nepal</span>
-          </div>
+          <Link href="/">
+            <Logo size={32} name={cfg.site_name || "Estimate Nepal"} src={cfg.site_logo_url || null} />
+          </Link>
           <nav className="flex items-center gap-3">
             <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
               Pricing
@@ -454,7 +452,7 @@ export default async function LandingPage() {
       <footer className="border-t border-gray-100 py-3 px-6 bg-gray-50">
         <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-x-6 gap-y-1">
           <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span className="font-semibold text-gray-700">Estimate Nepal</span>
+            <Logo size={22} name={cfg.site_name || "Estimate Nepal"} src={cfg.site_logo_url || null} />
             <a href={`mailto:${contactEmail}`} className="hover:text-gray-900 transition">{contactEmail}</a>
             <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
             <Link href="/register" className="hover:text-gray-900 transition">Register</Link>
