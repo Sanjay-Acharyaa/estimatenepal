@@ -129,7 +129,7 @@ export async function DELETE(
 
     const drawing = await prisma.drawing.findUnique({
       where: { id: params.drawingId },
-      include: { pages: { select: { id: true } } },
+      select: { id: true, projectId: true, fileUrl: true, fileName: true, fileSizeBytes: true, pages: { select: { id: true } } },
     });
     if (!drawing || drawing.projectId !== params.id) throw notFound("Drawing");
 
@@ -147,6 +147,14 @@ export async function DELETE(
       await deleteFile(drawing.fileUrl);
     } catch {
       console.error(`Failed to delete storage file: ${drawing.fileUrl}`);
+    }
+
+    // Decrement org storage counter (best-effort — don't fail if update errors)
+    if (drawing.fileSizeBytes > 0) {
+      prisma.org.update({
+        where: { id: project.orgId },
+        data: { storageUsedBytes: { decrement: BigInt(drawing.fileSizeBytes) } },
+      }).catch(() => {});
     }
 
     await appendAuditLog({

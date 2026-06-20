@@ -199,9 +199,19 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     }
     return 224;
   });
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    if (typeof window !== "undefined") return window.innerWidth >= 768;
+    return true;
+  });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const sidebarResizeStartX = useRef(0);
   const sidebarResizeStartW = useRef(224);
+
+  // Touch pan/zoom refs
+  const touchStartDistRef = useRef<number | null>(null);
+  const touchStartScaleRef = useRef(1);
+  const touchStartMidRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   function handleSidebarResizeStart(e: React.MouseEvent) {
     e.preventDefault();
@@ -221,6 +231,66 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+  }
+
+  function handleTouchStart(e: Konva.KonvaEventObject<TouchEvent>) {
+    const touches = e.evt.touches;
+    if (touches.length === 2) {
+      // Pinch-zoom: record initial finger distance and stage state
+      const dx = touches[1].clientX - touches[0].clientX;
+      const dy = touches[1].clientY - touches[0].clientY;
+      touchStartDistRef.current = Math.hypot(dx, dy);
+      touchStartScaleRef.current = scale;
+      touchStartMidRef.current = {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2,
+      };
+      touchStartPosRef.current = { ...stagePos };
+    } else if (touches.length === 1) {
+      // Single-finger pan
+      isPanningRef.current = true;
+      panStartClientRef.current = { x: touches[0].clientX, y: touches[0].clientY };
+      panStartStagePosRef.current = { ...stagePos };
+    }
+  }
+
+  function handleTouchMove(e: Konva.KonvaEventObject<TouchEvent>) {
+    e.evt.preventDefault();
+    const touches = e.evt.touches;
+    const stage = e.target.getStage();
+    if (!stage) return;
+
+    if (touches.length === 2 && touchStartDistRef.current !== null && touchStartMidRef.current) {
+      const dx = touches[1].clientX - touches[0].clientX;
+      const dy = touches[1].clientY - touches[0].clientY;
+      const dist = Math.hypot(dx, dy);
+      const newScale = Math.max(0.05, Math.min(20, touchStartScaleRef.current * (dist / touchStartDistRef.current)));
+      const mid = touchStartMidRef.current;
+      const container = containerRef.current?.getBoundingClientRect();
+      if (container) {
+        const stageX = mid.x - container.left;
+        const stageY = mid.y - container.top;
+        const newX = stageX - (stageX - touchStartPosRef.current.x) * (newScale / touchStartScaleRef.current);
+        const newY = stageY - (stageY - touchStartPosRef.current.y) * (newScale / touchStartScaleRef.current);
+        setScale(newScale);
+        setStagePos({ x: newX, y: newY });
+        stage.x(newX); stage.y(newY); stage.scaleX(newScale); stage.scaleY(newScale);
+      }
+    } else if (touches.length === 1 && isPanningRef.current && panStartClientRef.current) {
+      const dx = touches[0].clientX - panStartClientRef.current.x;
+      const dy = touches[0].clientY - panStartClientRef.current.y;
+      const newX = panStartStagePosRef.current.x + dx;
+      const newY = panStartStagePosRef.current.y + dy;
+      setStagePos({ x: newX, y: newY });
+      stage.x(newX); stage.y(newY);
+    }
+  }
+
+  function handleTouchEnd() {
+    isPanningRef.current = false;
+    panStartClientRef.current = null;
+    touchStartDistRef.current = null;
+    touchStartMidRef.current = null;
   }
 
   // Ref mirrors — keyboard/event handlers must never read stale closures
@@ -1796,24 +1866,45 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
   }
 
   // ─── Render ───────────────────────────────────────────────────────────
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
   return (
     <div className={`flex h-full overflow-hidden${isResizingSidebar ? " select-none cursor-col-resize" : ""}`}>
       {/* ── Left sidebar ── */}
+      {/* On mobile: overlay (absolute) so it doesn't squeeze the canvas */}
       <aside
-        className="relative bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 overflow-hidden"
-        style={{ width: sidebarWidth, "--sidebar-w": `${sidebarWidth}px` } as React.CSSProperties}
+        className={`bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200 ${
+          isMobile
+            ? `absolute left-0 top-0 bottom-0 z-40 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`
+            : sidebarOpen ? "relative" : "w-0"
+        }`}
+        style={
+          isMobile
+            ? { width: Math.min(sidebarWidth, 320) }
+            : sidebarOpen
+            ? ({ width: sidebarWidth, "--sidebar-w": `${sidebarWidth}px` } as React.CSSProperties)
+            : { width: 0 }
+        }
       >
-        {/* ── Resize handle ── */}
-        <div
-          onMouseDown={handleSidebarResizeStart}
-          className="absolute right-0 top-0 bottom-0 w-1 z-50 cursor-col-resize group flex items-center justify-center"
-          title="Drag to resize"
-        >
-          <div className="w-0.5 h-10 rounded-full bg-gray-600 group-hover:bg-blue-400 group-hover:h-16 transition-all duration-150" />
-        </div>
-        {/* Sidebar header — Takeoff only (Drawings navigation moved to toolbar dropdown) */}
-        <div className="flex border-b border-gray-700 text-xs font-medium flex-shrink-0">
+        {/* ── Resize handle (desktop only) ── */}
+        {!isMobile && sidebarOpen && (
+          <div
+            onMouseDown={handleSidebarResizeStart}
+            className="absolute right-0 top-0 bottom-0 w-1 z-50 cursor-col-resize group flex items-center justify-center"
+            title="Drag to resize"
+          >
+            <div className="w-0.5 h-10 rounded-full bg-gray-600 group-hover:bg-blue-400 group-hover:h-16 transition-all duration-150" />
+          </div>
+        )}
+        {/* Sidebar header */}
+        <div className="flex items-center border-b border-gray-700 text-xs font-medium flex-shrink-0">
           <div className="flex-1 py-2 text-center text-white font-semibold text-xs bg-gray-700">Takeoff</div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="px-2 py-2 text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 transition"
+            title="Collapse sidebar"
+            aria-label="Collapse takeoff panel"
+          >✕</button>
         </div>
 
         <TakeoffPanel
@@ -1828,16 +1919,36 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             groupTotals={groupTotals}
             liveItemCounts={liveItemCounts}
             allPageGroupTotals={allPageGroupTotals}
-            sidebarWidth={sidebarWidth}
+            sidebarWidth={isMobile ? Math.min(sidebarWidth, 320) : sidebarWidth}
             onRefreshItems={() => { refreshItems(); refreshAllPageTotals(); refreshDisciplineTotals(); }}
             onItemsAppended={appendCopiedItems}
           />
       </aside>
 
+      {/* Mobile backdrop — tap outside to close sidebar */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* ── Main canvas area ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Toolbar */}
         <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex-wrap">
+          {/* Sidebar toggle */}
+          {!sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition flex-shrink-0"
+              title="Show takeoff panel"
+              aria-label="Open takeoff panel"
+            >
+              <span className="text-base leading-none">☰</span>
+              <span className="hidden sm:inline">Takeoff</span>
+            </button>
+          )}
           {/* Drawing selector dropdown */}
           <div className="relative mr-1">
             <button
@@ -2137,6 +2248,9 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
               onMouseUp={handleStageMouseUp}
               onClick={handleStageClick}
               onContextMenu={(e) => e.evt.preventDefault()}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             >
               {/* Layer 0: PDF background */}
               <Layer>

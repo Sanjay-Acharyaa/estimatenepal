@@ -37,6 +37,14 @@ export default async function SuperAdminPage() {
             className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
             🎟️ Coupon Management
           </Link>
+          <Link href="/admin/testimonials"
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+            ⭐ Testimonials
+          </Link>
+          <Link href="/admin/settings"
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+            ⚙️ Site Settings
+          </Link>
         </div>
 
         {/* Orgs */}

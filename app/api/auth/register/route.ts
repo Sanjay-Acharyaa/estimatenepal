@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail, verificationEmailHtml } from "@/lib/email";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { apiError, handleApiError, conflict } from "@/lib/errors";
+import { getConfigNum, getConfigBool } from "@/lib/config";
 
 const schema = z.object({
   name: z.string().min(2).max(100).trim(),
@@ -35,13 +36,20 @@ export async function POST(req: NextRequest) {
 
     const { name, email, password, orgName } = parsed.data;
 
+    // Check registration gate before touching the DB
+    const registrationEnabled = await getConfigBool("registration_enabled");
+    if (!registrationEnabled) {
+      return apiError("FORBIDDEN", "New registrations are temporarily paused. Please try again later.", 403);
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw conflict("Email already registered.");
 
     const passwordHash = await bcrypt.hash(password, 10);
     const verifyToken = crypto.randomBytes(32).toString("hex");
 
-    const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const trialDays = await getConfigNum("trial_days");
+    const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
 
     const { org, user } = await prisma.$transaction(async (tx) => {
       const org = await tx.org.create({ data: { name: orgName, trialEndsAt } });

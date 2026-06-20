@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
+import { getAllConfigs } from "@/lib/config";
+import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
   title: "NepaliEstimate — Construction Estimating Software for Nepal",
@@ -60,29 +62,91 @@ const FEATURES = [
 ];
 
 const STEPS = [
-  {
-    n: "1",
-    title: "Upload Your Drawings",
-    desc: "Upload project PDFs. Each page is processed for digital measurement.",
-  },
-  {
-    n: "2",
-    title: "Measure & Apply Rates",
-    desc: "Trace measurements on drawings and link them to DUDBC or your custom rates.",
-  },
-  {
-    n: "3",
-    title: "Export & Win Bids",
-    desc: "Generate BOQ, rate analysis, and tender documents in one click.",
-  },
+  { n: "1", title: "Upload Your Drawings", desc: "Upload project PDFs. Each page is processed for digital measurement." },
+  { n: "2", title: "Measure & Apply Rates", desc: "Trace measurements on drawings and link them to DUDBC or your custom rates." },
+  { n: "3", title: "Export & Win Bids", desc: "Generate BOQ, rate analysis, and tender documents in one click." },
 ];
+
+function fmt(n: number) {
+  return `NPR ${n.toLocaleString("en-NP")}`;
+}
 
 export default async function LandingPage() {
   const session = await getSession();
   if (session) redirect("/dashboard");
 
+  const [cfg, testimonials] = await Promise.all([
+    getAllConfigs(),
+    prisma.testimonial.findMany({
+      where: { isApproved: true },
+      orderBy: { submittedAt: "desc" },
+      take: 6,
+      select: { id: true, authorName: true, authorRole: true, company: true, content: true, rating: true },
+    }),
+  ]);
+
+  const trialDays = parseInt(cfg.trial_days, 10) || 14;
+  const priceSolo = parseInt(cfg.price_solo_monthly, 10) || 999;
+  const priceTeam3 = parseInt(cfg.price_team3_monthly, 10) || 1999;
+  const priceTeam5 = parseInt(cfg.price_team5_monthly, 10) || 3000;
+  const pricePerSeat = parseInt(cfg.price_per_seat_enterprise, 10) || 550;
+  const freeMonths = parseInt(cfg.annual_free_months, 10) || 2;
+  const contactEmail = cfg.contact_email || "hello@estimatenepal.com";
+  const contactWa = cfg.contact_whatsapp || "+977XXXXXXXXX";
+  const waMsg = encodeURIComponent(cfg.whatsapp_message || "Hi, I am interested in NepaliEstimate. Please share pricing details.");
+
+  const PLANS = [
+    {
+      name: "Solo",
+      price: priceSolo,
+      users: "1 user",
+      storage: `${cfg.storage_limit_solo_gb || "10"} GB storage`,
+      features: ["All core features", "DUDBC rate catalog", "PDF & Excel export", "Drawing takeoff"],
+      cta: "Start Free Trial",
+      href: "/register",
+      highlight: false,
+    },
+    {
+      name: "Team of 3",
+      price: priceTeam3,
+      users: "Up to 3 users",
+      storage: `${cfg.storage_limit_team_gb || "20"} GB storage`,
+      features: ["Everything in Solo", "3 team members", "Role-based access", "Shared project library"],
+      cta: "Start Free Trial",
+      href: "/register",
+      highlight: true,
+    },
+    {
+      name: "Team of 5",
+      price: priceTeam5,
+      users: "Up to 5 users",
+      storage: `${cfg.storage_limit_team_gb || "20"} GB storage`,
+      features: ["Everything in Team 3", "5 team members", "Priority support", "Custom assembly library"],
+      cta: "Start Free Trial",
+      href: "/register",
+      highlight: false,
+    },
+    {
+      name: "Enterprise",
+      price: null,
+      users: "6+ users",
+      storage: "Custom storage",
+      features: [`From ${fmt(pricePerSeat)}/seat`, "Custom onboarding", "Dedicated support", "Volume discounts"],
+      cta: "Contact Us",
+      href: `https://wa.me/${contactWa.replace(/\D/g, "")}?text=${waMsg}`,
+      highlight: false,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-white font-sans">
+      {/* ── Site announcement banner (empty = hidden) ── */}
+      {cfg.site_announcement && (
+        <div className="bg-blue-600 text-white text-center py-2 px-4 text-sm font-medium">
+          {cfg.site_announcement}
+        </div>
+      )}
+
       {/* ── Nav ── */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
@@ -93,6 +157,9 @@ export default async function LandingPage() {
             <span className="font-bold text-gray-900 text-lg">NepaliEstimate</span>
           </div>
           <nav className="flex items-center gap-3">
+            <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
+              Pricing
+            </a>
             <Link
               href="/login"
               className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium"
@@ -114,7 +181,7 @@ export default async function LandingPage() {
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-blue-700/50 border border-blue-600 rounded-full px-4 py-1.5 text-sm text-blue-200 mb-8">
             <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-            3-Day Free Trial — No Credit Card Required
+            {trialDays}-Day Free Trial — No Credit Card Required
           </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight mb-6 tracking-tight">
             Nepal&apos;s Fastest<br />
@@ -130,7 +197,7 @@ export default async function LandingPage() {
               href="/register"
               className="px-8 py-4 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-xl font-bold text-lg shadow-lg transition"
             >
-              Start 3-Day Free Trial →
+              Start {trialDays}-Day Free Trial →
             </Link>
             <Link
               href="/login"
@@ -142,7 +209,6 @@ export default async function LandingPage() {
 
           {/* Mock dashboard preview */}
           <div className="mt-16 mx-auto max-w-4xl rounded-2xl shadow-2xl overflow-hidden border border-blue-700/30 text-left">
-            {/* Browser chrome */}
             <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-red-500" />
@@ -153,29 +219,16 @@ export default async function LandingPage() {
                 <span className="text-xs text-gray-400">estimatenepal.com/dashboard</span>
               </div>
             </div>
-            {/* App layout */}
             <div className="flex h-64 sm:h-80">
-              {/* Sidebar */}
               <div className="w-44 bg-blue-900 p-3 space-y-1 shrink-0">
-                <div className="text-xs text-blue-400 uppercase tracking-wider px-3 py-1 mb-2">
-                  NepaliEstimate
-                </div>
+                <div className="text-xs text-blue-400 uppercase tracking-wider px-3 py-1 mb-2">NepaliEstimate</div>
                 {["Dashboard", "Projects", "Rates", "Assemblies", "Team"].map((item, i) => (
-                  <div
-                    key={item}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium ${
-                      i === 1
-                        ? "bg-blue-600 text-white"
-                        : "text-blue-300 hover:bg-blue-800"
-                    }`}
-                  >
+                  <div key={item} className={`px-3 py-2 rounded-lg text-xs font-medium ${i === 1 ? "bg-blue-600 text-white" : "text-blue-300 hover:bg-blue-800"}`}>
                     {item}
                   </div>
                 ))}
               </div>
-              {/* Content */}
               <div className="flex-1 bg-gray-50 p-4 overflow-hidden">
-                {/* Stats row */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {[
                     { label: "Active Projects", value: "12", bg: "bg-blue-50", text: "text-blue-700" },
@@ -188,29 +241,18 @@ export default async function LandingPage() {
                     </div>
                   ))}
                 </div>
-                {/* Project list */}
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="grid grid-cols-4 px-3 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    <span>Project</span>
-                    <span>Status</span>
-                    <span>Value</span>
-                    <span>Bid Due</span>
+                    <span>Project</span><span>Status</span><span>Value</span><span>Bid Due</span>
                   </div>
                   {[
                     { name: "School Building, Lalitpur", val: "NPR 24.5M", due: "2026-08-15" },
                     { name: "Road Upgrade, Pokhara", val: "NPR 38.2M", due: "2026-09-01" },
                     { name: "Bridge, Chitwan", val: "NPR 55.0M", due: "2026-09-20" },
                   ].map((p, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-4 px-3 py-2.5 border-b border-gray-50 text-xs text-gray-700 items-center"
-                    >
+                    <div key={i} className="grid grid-cols-4 px-3 py-2.5 border-b border-gray-50 text-xs text-gray-700 items-center">
                       <span className="font-medium truncate">{p.name}</span>
-                      <span>
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                          Active
-                        </span>
-                      </span>
+                      <span><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">Active</span></span>
                       <span className="text-gray-600">{p.val}</span>
                       <span className="text-gray-400">{p.due}</span>
                     </div>
@@ -236,10 +278,7 @@ export default async function LandingPage() {
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="bg-gray-50 border border-gray-100 rounded-2xl p-6 hover:border-blue-200 hover:bg-blue-50/30 transition group"
-              >
+              <div key={f.title} className="bg-gray-50 border border-gray-100 rounded-2xl p-6 hover:border-blue-200 hover:bg-blue-50/30 transition">
                 <div className="text-3xl mb-4">{f.icon}</div>
                 <h3 className="font-bold text-gray-900 text-base mb-2">{f.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{f.desc}</p>
@@ -271,39 +310,149 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* ── Trial CTA ── */}
+      {/* ── Pricing ── */}
+      <section id="pricing" className="py-20 px-4 bg-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4">
+              Simple, transparent pricing
+            </h2>
+            <p className="text-gray-500 text-base max-w-lg mx-auto">
+              Start with a {trialDays}-day free trial. No credit card required.
+              Annual billing saves you {freeMonths} months free.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {PLANS.map((plan) => (
+              <div
+                key={plan.name}
+                className={`rounded-2xl border p-6 flex flex-col ${
+                  plan.highlight
+                    ? "border-blue-500 bg-blue-600 text-white shadow-xl ring-2 ring-blue-500"
+                    : "border-gray-200 bg-white text-gray-900"
+                }`}
+              >
+                {plan.highlight && (
+                  <div className="text-xs font-bold text-blue-100 bg-blue-500/40 rounded-full px-3 py-1 w-fit mb-3">
+                    Most Popular
+                  </div>
+                )}
+                <h3 className={`font-bold text-lg mb-1 ${plan.highlight ? "text-white" : "text-gray-900"}`}>
+                  {plan.name}
+                </h3>
+                <div className="mb-4">
+                  {plan.price !== null ? (
+                    <>
+                      <span className={`text-3xl font-extrabold ${plan.highlight ? "text-white" : "text-gray-900"}`}>
+                        {fmt(plan.price)}
+                      </span>
+                      <span className={`text-sm ml-1 ${plan.highlight ? "text-blue-200" : "text-gray-500"}`}>/month</span>
+                    </>
+                  ) : (
+                    <span className="text-2xl font-extrabold text-gray-900">Custom</span>
+                  )}
+                </div>
+                <p className={`text-sm mb-1 ${plan.highlight ? "text-blue-200" : "text-gray-500"}`}>{plan.users}</p>
+                <p className={`text-sm mb-5 ${plan.highlight ? "text-blue-200" : "text-gray-500"}`}>{plan.storage}</p>
+                <ul className="space-y-2 mb-6 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-sm">
+                      <span className={plan.highlight ? "text-blue-200" : "text-green-500"}>✓</span>
+                      <span className={plan.highlight ? "text-blue-100" : "text-gray-600"}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href={plan.href}
+                  className={`block w-full py-3 rounded-xl font-bold text-sm text-center transition ${
+                    plan.highlight
+                      ? "bg-white text-blue-700 hover:bg-blue-50"
+                      : plan.name === "Enterprise"
+                      ? "bg-gray-900 text-white hover:bg-gray-800"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {plan.cta}
+                </a>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-sm text-gray-400 mt-6">
+            Annual billing: pay for {12 - freeMonths} months, get 12. Contact us for volume pricing.
+          </p>
+        </div>
+      </section>
+
+      {/* ── Testimonials ── */}
+      {testimonials.length > 0 && (
+        <section className="py-20 px-4 bg-gray-50">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4">
+                What engineers say
+              </h2>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {testimonials.map((t) => (
+                <div key={t.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                  <div className="text-amber-400 text-sm mb-3">{"★".repeat(t.rating)}</div>
+                  <p className="text-gray-700 text-sm leading-relaxed mb-4">&ldquo;{t.content}&rdquo;</p>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">{t.authorName}</p>
+                    {(t.authorRole || t.company) && (
+                      <p className="text-xs text-gray-500">
+                        {[t.authorRole, t.company].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── CTA ── */}
       <section className="py-20 px-4 bg-white">
         <div className="max-w-3xl mx-auto">
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl p-10 text-center text-white shadow-xl">
             <div className="text-4xl mb-4">🚀</div>
             <h2 className="text-3xl font-extrabold mb-3">Start your free trial today</h2>
             <p className="text-blue-200 text-base mb-8 max-w-md mx-auto">
-              3 days of full access — no credit card, no commitment. See how much
+              {trialDays} days of full access — no credit card, no commitment. See how much
               faster your team can estimate.
             </p>
-            <Link
-              href="/register"
-              className="inline-block px-10 py-4 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-xl font-bold text-lg shadow-lg transition"
-            >
-              Create Your Free Account →
-            </Link>
-            <p className="text-blue-300 text-sm mt-6">
-              After your trial, contact us at{" "}
-              <a
-                href="mailto:hello@estimatenepal.com"
-                className="underline text-blue-100 hover:text-white"
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/register"
+                className="inline-block px-10 py-4 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-xl font-bold text-lg shadow-lg transition"
               >
-                hello@estimatenepal.com
-              </a>{" "}
-              to continue.
+                Create Your Free Account →
+              </Link>
+              <a
+                href={`https://wa.me/${contactWa.replace(/\D/g, "")}?text=${waMsg}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-8 py-4 bg-green-500 hover:bg-green-400 text-white rounded-xl font-bold text-lg shadow transition"
+              >
+                WhatsApp Us
+              </a>
+            </div>
+            <p className="text-blue-300 text-sm mt-6">
+              Questions?{" "}
+              <a href={`mailto:${contactEmail}`} className="underline text-blue-100 hover:text-white">
+                {contactEmail}
+              </a>
             </p>
           </div>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-gray-100 py-10 px-4 bg-gray-50">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="border-t border-gray-100 py-6 px-4 bg-gray-50">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-600 rounded-md flex items-center justify-center">
               <span className="text-white font-bold text-xs">NE</span>
@@ -311,15 +460,11 @@ export default async function LandingPage() {
             <span className="font-semibold text-gray-700 text-sm">NepaliEstimate</span>
           </div>
           <div className="flex gap-6 text-sm text-gray-500">
-            <a href="mailto:hello@estimatenepal.com" className="hover:text-gray-900 transition">
-              hello@estimatenepal.com
+            <a href={`mailto:${contactEmail}`} className="hover:text-gray-900 transition">
+              {contactEmail}
             </a>
-            <Link href="/login" className="hover:text-gray-900 transition">
-              Sign In
-            </Link>
-            <Link href="/register" className="hover:text-gray-900 transition">
-              Register
-            </Link>
+            <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
+            <Link href="/register" className="hover:text-gray-900 transition">Register</Link>
           </div>
           <p className="text-xs text-gray-400">
             © {new Date().getFullYear()} NepaliEstimate. All rights reserved.

@@ -15,6 +15,7 @@ const registerSchema = z.object({
   fileName: z.string().min(1).max(255),
   fileKey: z.string().min(1),
   pageCount: z.number().int().min(1).max(MAX_PAGES, { message: "PDF must have ≤ 100 pages" }),
+  fileSizeBytes: z.number().int().min(0).max(50 * 1024 * 1024).default(0),
   revisionNumber: z.string().max(20).optional(),
   parentDrawingId: z.string().optional(),
   folderId: z.string().nullable().optional(),
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
     }
 
-    const { fileName, fileKey, pageCount, revisionNumber, parentDrawingId, folderId } = parsed.data;
+    const { fileName, fileKey, pageCount, fileSizeBytes, revisionNumber, parentDrawingId, folderId } = parsed.data;
 
     // Ensure fileKey belongs to this org/project to prevent cross-tenant file linking
     const expectedPrefix = `drawings/${project.orgId}/${params.id}/`;
@@ -109,6 +110,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         fileName,
         fileUrl: fileKey,
         pageCount,
+        fileSizeBytes,
         revisionNumber,
         parentDrawingId,
         folderId: folderId ?? null,
@@ -124,6 +126,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         pages: { orderBy: { pageNumber: "asc" } },
       },
     });
+
+    // Increment org storage counter
+    if (fileSizeBytes > 0) {
+      await prisma.org.update({
+        where: { id: project.orgId },
+        data: { storageUsedBytes: { increment: BigInt(fileSizeBytes) } },
+      });
+    }
 
     await appendAuditLog({
       orgId: project.orgId,

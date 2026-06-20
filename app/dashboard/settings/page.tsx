@@ -4,14 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Profile = { id: string; name: string; email: string; role: string };
-type Org = { id: string; name: string; panNumber: string | null; logoUrl: string | null; address: string | null; phone: string | null; plan: string };
+type Org = { id: string; name: string; panNumber: string | null; logoUrl: string | null; address: string | null; phone: string | null; plan: string; storageUsedBytes: number | string };
 
 const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Org | null>(null);
-  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password" | "review">("profile");
+
+  // Review form state
+  const [review, setReview] = useState({ content: "", authorRole: "", company: "", rating: 5 });
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewMsg, setReviewMsg] = useState("");
+  const [reviewError, setReviewError] = useState("");
 
   // Profile form
   const [name, setName] = useState("");
@@ -80,10 +86,25 @@ export default function SettingsPage() {
     else setOrgError(d?.error?.message ?? "Failed.");
   }
 
+  async function submitReview(e: React.FormEvent) {
+    e.preventDefault();
+    if (review.content.trim().length < 20) { setReviewError("Please write at least 20 characters."); return; }
+    setReviewSaving(true); setReviewMsg(""); setReviewError("");
+    const res = await fetch("/api/testimonials", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...review, authorName: profile?.name ?? "Anonymous" }),
+    });
+    const d = await res.json();
+    setReviewSaving(false);
+    if (res.ok) { setReviewMsg(d.message); setReview({ content: "", authorRole: "", company: "", rating: 5 }); }
+    else setReviewError(d.error?.message ?? "Failed to submit.");
+  }
+
   const tabs = [
     { id: "profile", label: "My Profile" },
     { id: "password", label: "Change Password" },
     ...(org && profile?.role === "OWNER" ? [{ id: "org", label: "Organisation" }] : []),
+    { id: "review", label: "Leave a Review" },
   ] as { id: typeof activeTab; label: string }[];
 
   return (
@@ -207,6 +228,29 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 rounded px-3 py-2 mb-2">
                 Plan: <span className="font-bold">{org.plan}</span>
               </div>
+
+              {/* Storage usage bar */}
+              {(() => {
+                const LIMIT = 10 * 1024 * 1024 * 1024; // 10 GB in bytes
+                const used = Number(org.storageUsedBytes ?? 0);
+                const pct = Math.min(100, (used / LIMIT) * 100);
+                const usedGB = (used / (1024 ** 3)).toFixed(2);
+                const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-blue-500";
+                return (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                      <span className="font-medium">Storage</span>
+                      <span>{usedGB} GB of 10 GB used</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    {pct >= 90 && (
+                      <p className="text-xs text-red-600 mt-1.5">Storage almost full. Delete old drawings to free space.</p>
+                    )}
+                  </div>
+                );
+              })()}
               <div>
                 <label htmlFor="sp-org-name" className="block text-sm text-gray-700 mb-1">Organisation Name</label>
                 <input id="sp-org-name" required value={orgForm.name} onChange={e => setOrgForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
@@ -244,6 +288,72 @@ export default function SettingsPage() {
               </button>
             </form>
           )}
+          {/* Review tab */}
+          {activeTab === "review" && (
+            <form
+              id="tab-panel-review"
+              role="tabpanel"
+              aria-labelledby="tab-review"
+              onSubmit={submitReview}
+              className="space-y-4"
+            >
+              <h2 className="font-semibold text-gray-800 mb-1">Leave a Review</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Your review will appear on the NepaliEstimate website after our team approves it.
+              </p>
+
+              <div>
+                <label htmlFor="rev-rating" className="block text-sm text-gray-700 mb-1">Rating</label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setReview(r => ({ ...r, rating: n }))}
+                      className={`text-2xl transition ${n <= review.rating ? "text-amber-400" : "text-gray-300"}`}
+                      aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="rev-content" className="block text-sm text-gray-700 mb-1">Your Review</label>
+                <textarea
+                  id="rev-content"
+                  rows={4}
+                  required
+                  value={review.content}
+                  onChange={e => setReview(r => ({ ...r, content: e.target.value }))}
+                  placeholder="Tell us how NepaliEstimate has helped your work…"
+                  className={inputCls + " resize-none"}
+                />
+                <p className="text-xs text-gray-400 mt-0.5">{review.content.length}/1000 — minimum 20 characters</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="rev-role" className="block text-sm text-gray-700 mb-1">Your Role (optional)</label>
+                  <input id="rev-role" value={review.authorRole} onChange={e => setReview(r => ({ ...r, authorRole: e.target.value }))} placeholder="e.g. Senior Estimator" className={inputCls} />
+                </div>
+                <div>
+                  <label htmlFor="rev-company" className="block text-sm text-gray-700 mb-1">Company (optional)</label>
+                  <input id="rev-company" value={review.company} onChange={e => setReview(r => ({ ...r, company: e.target.value }))} placeholder="e.g. Sharma Construction" className={inputCls} />
+                </div>
+              </div>
+
+              {reviewError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{reviewError}</p>}
+              {reviewMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{reviewMsg}</p>}
+
+              <button type="submit" disabled={reviewSaving}
+                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                {reviewSaving ? "Submitting…" : "Submit Review"}
+              </button>
+            </form>
+          )}
+
         </div>
       </div>
     </div>

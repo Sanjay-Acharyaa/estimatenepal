@@ -73,7 +73,11 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md bg-white rounded-xl shadow p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Create account</h1>
-        <p className="text-gray-500 mb-6 text-sm">Set up your NepaliEstimate workspace</p>
+        <p className="text-gray-500 mb-1 text-sm">Set up your NepaliEstimate workspace</p>
+        <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-3 py-1.5 rounded-full mb-5">
+          <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+          14-day free trial — no credit card required
+        </div>
 
         {error && (
           <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">

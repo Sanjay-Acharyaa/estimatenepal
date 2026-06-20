@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "CONFLICT"
   | "RATE_LIMITED"
+  | "STORAGE_LIMIT_EXCEEDED"
   | "INTERNAL_ERROR";
 
 export function apiError(

@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { getConfig, getConfigBool } from "@/lib/config";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SignOutButton } from "@/components/ui/SignOutButton";
@@ -7,6 +8,25 @@ import { NotificationBell } from "@/components/ui/NotificationBell";
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
+
+  const siteAnnouncement = await getConfig("site_announcement");
+
+  // Trial banner: show when <= 5 days remain and trial hasn't yet expired
+  // (middleware redirects to /trial-expired when it's actually past)
+  let trialBanner: { daysLeft: number; contactEmail: string; contactWa: string; waMsg: string } | null = null;
+  if (!session.user.isSuperAdmin && session.user.trialEndsAt) {
+    const daysLeft = Math.ceil(
+      (new Date(session.user.trialEndsAt).getTime() - Date.now()) / 86400000
+    );
+    if (daysLeft >= 0 && daysLeft <= 5) {
+      const [contactEmail, contactWa, waMsg] = await Promise.all([
+        getConfig("contact_email"),
+        getConfig("contact_whatsapp"),
+        getConfig("whatsapp_message"),
+      ]);
+      trialBanner = { daysLeft, contactEmail, contactWa, waMsg: encodeURIComponent(waMsg) };
+    }
+  }
 
   return (
     <div className="min-h-screen flex bg-gray-100">
@@ -79,7 +99,36 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto flex flex-col">
+        {siteAnnouncement && (
+          <div className="flex-shrink-0 bg-blue-600 text-white text-center py-2 px-4 text-sm font-medium">
+            {siteAnnouncement}
+          </div>
+        )}
+        {trialBanner !== null && (
+          <div className={`flex-shrink-0 px-4 py-2.5 text-sm text-center flex flex-wrap items-center justify-center gap-x-3 gap-y-1 ${trialBanner.daysLeft === 0 ? "bg-red-600 text-white" : "bg-amber-500 text-white"}`}>
+            <span className="font-semibold">
+              {trialBanner.daysLeft === 0
+                ? "Your trial expires today!"
+                : `Trial ends in ${trialBanner.daysLeft} day${trialBanner.daysLeft === 1 ? "" : "s"}.`}
+            </span>
+            <span className="opacity-80">Upgrade to keep access to all your projects.</span>
+            <a
+              href={`https://wa.me/${trialBanner.contactWa.replace(/\D/g, "")}?text=${trialBanner.waMsg}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-bold hover:opacity-80"
+            >
+              WhatsApp us
+            </a>
+            <span className="opacity-60">or</span>
+            <a href={`mailto:${trialBanner.contactEmail}`} className="underline font-bold hover:opacity-80">
+              {trialBanner.contactEmail}
+            </a>
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

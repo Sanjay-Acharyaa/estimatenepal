@@ -132,6 +132,7 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
         fileName: file.name,
         fileKey: key,
         pageCount,
+        fileSizeBytes: file.size,
         revisionNumber: revisionNumber || undefined,
         parentDrawingId,
         folderId: folderId ?? undefined,

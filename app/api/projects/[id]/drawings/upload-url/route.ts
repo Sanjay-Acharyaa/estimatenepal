@@ -9,6 +9,7 @@ import { getUploadUrl } from "@/lib/upload";
 import { randomUUID } from "crypto";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+const STORAGE_LIMIT = BigInt(10 * 1024 * 1024 * 1024); // 10 GB
 
 const schema = z.object({
   fileName: z.string().min(1).max(255),
@@ -33,6 +34,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    }
+
+    // Enforce per-org 10 GB storage limit
+    const org = await prisma.org.findUnique({
+      where: { id: project.orgId },
+      select: { storageUsedBytes: true },
+    });
+    if (org && org.storageUsedBytes + BigInt(parsed.data.fileSize) > STORAGE_LIMIT) {
+      return apiError(
+        "STORAGE_LIMIT_EXCEEDED",
+        "Storage limit of 10 GB reached. Delete old drawings or upgrade your plan.",
+        400
+      );
     }
 
     const key = `drawings/${project.orgId}/${params.id}/${randomUUID()}.pdf`;

@@ -89,14 +89,29 @@ export const authOptions: NextAuthOptions = {
           token.orgName = org?.name ?? null;
           token.trialEndsAt = org?.trialEndsAt?.toISOString() ?? null;
         }
+        // Single active session: increment sequence counter on every new login.
+        // Old tokens with a lower seq number are invalidated by the check below.
+        const seq = await redis.incr(`session_seq:${user.id}`).catch(() => 0);
+        if (seq > 0) {
+          await redis.expire(`session_seq:${user.id}`, 7 * 24 * 60 * 60).catch(() => {});
+        }
+        token.sessionSeq = seq;
       } else if (token.id) {
         // Redis key written on every password change — avoids a DB query on every request.
         // TTL matches max JWT lifetime so the key auto-expires when no active tokens remain.
-        const changedAtStr = await redis.get(`pw_changed:${token.id}`);
+        const changedAtStr = await redis.get(`pw_changed:${token.id}`).catch(() => null);
         if (changedAtStr) {
           const changedAt = parseInt(changedAtStr, 10);
           const issuedAt = ((token.iat as number) ?? 0) * 1000;
           if (changedAt > issuedAt) {
+            return { ...token, invalidated: true };
+          }
+        }
+        // Single active session: verify this token's sequence matches the latest login.
+        // Only enforce for tokens that carry a seq (i.e. issued after this feature shipped).
+        if (token.sessionSeq !== undefined) {
+          const seqStr = await redis.get(`session_seq:${token.id}`).catch(() => null);
+          if (seqStr !== null && parseInt(seqStr, 10) !== token.sessionSeq) {
             return { ...token, invalidated: true };
           }
         }
@@ -105,7 +120,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token?.invalidated) {
-        // Token was invalidated due to password change — return empty session
+        // Token was invalidated due to password change or new login on another device
         return { ...session, user: undefined as any, expires: new Date(0).toISOString() };
       }
       if (token) {
@@ -113,6 +128,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string;
         session.user.isSuperAdmin = token.isSuperAdmin as boolean;
         session.user.orgId = token.orgId as string | null;
+        session.user.trialEndsAt = token.trialEndsAt as string | null;
       }
       return session;
     },
