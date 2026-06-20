@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const org = await prisma.org.findUnique({ where: { id: orgId } });
     if (!org) throw notFound("Organisation");
 
-    return NextResponse.json(org);
+    return NextResponse.json({ ...org, storageUsedBytes: Number(org.storageUsedBytes) });
   } catch (err) {
     return handleApiError(err);
   }
@@ -70,7 +70,7 @@ export async function PUT(req: NextRequest) {
       ipAddress: ip,
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ ...updated, storageUsedBytes: Number(updated.storageUsedBytes) });
   } catch (err) {
     return handleApiError(err);
   }
