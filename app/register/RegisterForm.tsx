@@ -48,7 +48,7 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
     orgName: form.orgName.trim().length >= 2,
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email),
     password: form.password.length >= 8 && /[A-Z]/.test(form.password) && /[0-9]/.test(form.password),
-    phone: /^(\+977[-\s]?)?[0-9]{9,10}$/.test(form.phone.replace(/\s/g, "")),
+    phone: /^\+?[0-9]{7,15}$/.test(form.phone.replace(/[\s\-]/g, "")),
   };
 
   const strength = passwordStrength(form.password);
@@ -199,21 +199,13 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
                 <label htmlFor="reg-phone" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Mobile Number <span className="text-red-500">*</span>
                 </label>
-                <div className="flex">
-                  <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm select-none">
-                    🇳🇵 +977
-                  </span>
-                  <input id="reg-phone" name="phone" type="tel" required autoComplete="tel"
-                    value={form.phone} onChange={handleChange} aria-label="Mobile number"
-                    aria-invalid={touched.phone && !validations.phone}
-                    className={`flex-1 border rounded-r-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent transition ${
-                      touched.phone === undefined || !touched.phone ? "border-gray-300 focus:ring-blue-500" :
-                      validations.phone ? "border-green-400 focus:ring-green-400" : "border-red-400 focus:ring-red-400"
-                    }`}
-                    placeholder="98XXXXXXXX" />
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Used for support and account recovery only.</p>
-                {touched.phone && !validations.phone && <p className="text-xs text-red-500 mt-1" role="alert">Enter a valid Nepal mobile number (e.g. 9812345678).</p>}
+                <input id="reg-phone" name="phone" type="tel" required autoComplete="tel"
+                  value={form.phone} onChange={handleChange} aria-label="Mobile number"
+                  aria-invalid={touched.phone && !validations.phone}
+                  className={fieldCls(touched.phone ? validations.phone : null)}
+                  placeholder="+977 98XXXXXXXX or +91 XXXXXXXXXX" />
+                <p className="text-xs text-gray-400 mt-1">Include country code (e.g. +977 for Nepal). Used for support only.</p>
+                {touched.phone && !validations.phone && <p className="text-xs text-red-500 mt-1" role="alert">Enter a valid phone number with country code (e.g. +977 9812345678).</p>}
               </div>
 
               <div>

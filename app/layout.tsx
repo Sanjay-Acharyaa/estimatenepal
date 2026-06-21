@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
+import { Suspense } from "react";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "sonner";
+import { Analytics } from "@/components/tracking/Analytics";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -90,6 +92,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </>
         )}
 
+        <Suspense fallback={null}>
+          <Analytics />
+        </Suspense>
         <Providers>{children}</Providers>
         <Toaster position="top-right" richColors closeButton duration={4000} />
       </body>

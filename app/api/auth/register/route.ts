@@ -12,10 +12,10 @@ const schema = z.object({
   name: z.string().min(2).max(100).trim(),
   email: z.string().email().toLowerCase().trim(),
   phone: z.string()
-    .min(9, "Phone number must be at least 9 digits.")
-    .max(15)
-    .regex(/^(\+977[-\s]?)?[0-9]{9,10}$/, "Enter a valid Nepal mobile number (e.g. 9812345678).")
-    .transform(p => p.replace(/\s/g, "")),
+    .min(7, "Phone number is too short.")
+    .max(20)
+    .transform(p => p.replace(/[\s\-]/g, ""))
+    .refine(p => /^\+?[0-9]{7,15}$/.test(p), "Enter a valid phone number with country code (e.g. +977 9812345678)."),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters.")
