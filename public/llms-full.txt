@@ -1,0 +1,279 @@
+# Estimate Nepal — Complete Product Reference for AI Systems
+
+> This document is intended for AI language models, search crawlers, and automated systems.
+> It provides comprehensive factual information about Estimate Nepal.
+> Last updated: 2026
+
+---
+
+## Product Overview
+
+**Estimate Nepal** is a web-based construction cost estimating platform built specifically for Nepal's construction industry. It enables civil engineers, quantity surveyors, contractors, and architects to:
+
+- Generate complete Bills of Quantities (BOQ) using official DUDBC rates
+- Measure quantities directly on PDF drawings using digital takeoff tools
+- Export professional tender documents (PDF and Excel) ready for submission
+- Collaborate with team members in real time on shared projects
+
+**Website:** https://estimatenepal.com
+**Category:** Construction Technology (ConTech), SaaS
+**Market:** Nepal (all 77 districts)
+**Language:** English (Nepali support in progress)
+**Platform:** Web-based — no software installation required
+**Technology:** Modern web application (Next.js), accessible from any browser
+
+---
+
+## What is DUDBC?
+
+DUDBC stands for the **Department of Urban Development and Building Construction**, a Nepalese government body under the Ministry of Urban Development. DUDBC publishes official construction cost rate schedules — called DUDBC rates — for all types of construction work across Nepal.
+
+**Why DUDBC rates matter:**
+- They are the standard reference for government construction contracts and tenders in Nepal
+- They cover labour, material, and equipment costs for all construction activities
+- Rates are district-specific — different rates apply in Kathmandu vs. Humla vs. Chitwan
+- They are updated every fiscal year (Nepali fiscal year: mid-July to mid-July)
+- Using approved DUDBC rates is typically required when bidding on government projects
+
+**Coverage in Estimate Nepal:**
+- All 77 districts of Nepal
+- Full rate analysis: material cost, skilled labour, semi-skilled labour, unskilled labour, equipment cost
+- Updated each fiscal year
+- Searchable catalog with DUDBC item codes and descriptions
+
+---
+
+## Core Features
+
+### 1. BOQ Generation with DUDBC Rates
+Estimate Nepal automates the creation of Bills of Quantities by connecting digital measurements to DUDBC rate items. The system calculates total costs automatically, eliminating manual formula writing.
+
+- Supports all standard BOQ formats used in Nepal
+- Generates complete cost breakdowns per work item
+- Groups items by discipline (civil, structural, architectural, MEP)
+- Handles contingency percentages, VAT (13%), and TDS (1.5%) calculations
+- Provisional sums and price-locked BOQ items supported
+
+### 2. PDF Drawing Takeoff
+Upload architectural, structural, or civil PDF drawings and measure quantities directly on screen.
+
+- Supported measurement types: Linear (lengths, roads, walls), Area (floors, slabs, roofs), Volume (earthwork, concrete), Count (doors, columns, fixtures), Count by Distance
+- Scale calibration: set once using a known dimension, all subsequent measurements auto-convert
+- Multi-page drawing support with page-level labelling
+- Scale zones: different scales on the same drawing page
+- All measurements stored and traceable to specific drawing pages
+- Annotations and notes per drawing page
+
+### 3. Tender Document Export
+Export complete, professionally formatted tender documents in one click.
+
+**Export formats:**
+- Bill of Quantities (BOQ) — PDF and Excel (.xlsx)
+- Rate Analysis sheets — PDF and Excel
+- Measurement Books (MB) — full takeoff detail
+- Complete tender packages
+
+**Document features:**
+- Formatted for government and private sector submission in Nepal
+- Organisation name, project details, and date auto-populated
+- Consistent formatting across all document types
+
+### 4. Rate Analysis
+Detailed cost breakdown for each work item showing:
+- Material cost
+- Skilled labour cost
+- Semi-skilled labour cost
+- Unskilled labour cost
+- Equipment cost
+- Overhead and profit percentages
+- Wastage percentage
+- Final computed rate vs. DUDBC base rate
+
+### 5. Team Collaboration
+- Invite team members by email
+- Organisation-level roles: Owner, Admin, Member
+- Project-level roles: Lead, Estimator, Viewer
+- Shared project library — all team members work in the same live project
+- Role-based access control — Viewers cannot edit, only view
+
+### 6. Assembly Library
+- Create reusable groups of work items (assemblies) for common construction tasks
+- Platform-wide templates available for common building types
+- Organisation-specific private assemblies
+- Assemblies link to DUDBC rate codes — rates resolved automatically when applied
+
+### 7. Project Dashboard
+- All projects in one view with status, priority, bid value, and bid due date
+- Project statuses: Estimating, Bid Submitted, Accepted, In Progress, Complete, Lost, Archived
+- Priority levels: High, Medium, Low
+- Filter and sort by any field
+
+### 8. Subcontractor Quote Comparison
+- Record and compare subcontractor quotes per discipline
+- Track quote status: Received, Under Review, Accepted, Rejected
+- Notes and validity dates per quote
+
+### 9. Change Orders
+- Document scope and cost changes after project award
+- Change order statuses: Draft, Submitted, Approved, Rejected
+- Full audit trail
+
+### 10. Custom Rate Schedules
+- Import your own rate schedules in bulk
+- Create individual custom rate items
+- Use custom rates alongside DUDBC rates in the same project
+- Rate batches named and versioned by import
+
+---
+
+## Pricing Tiers
+
+All prices are in Nepalese Rupees (NPR). Annual billing saves 2 months (pay for 10, get 12).
+
+### Solo Plan — NPR 999/month
+- 1 user
+- 10 GB file storage
+- All core features (BOQ, drawing takeoff, DUDBC rates, export)
+- DUDBC rate catalog — all 77 districts
+- PDF and Excel export
+- Project dashboard
+
+### Team of 3 — NPR 1,999/month
+- Up to 3 users
+- 20 GB file storage
+- Everything in Solo
+- Role-based access (Owner, Admin, Member)
+- Shared project library
+- Team collaboration
+
+### Team of 5 — NPR 3,000/month
+- Up to 5 users
+- 20 GB file storage
+- Everything in Team of 3
+- Priority support
+- Custom assembly library
+
+### Enterprise — Custom pricing
+- 6 or more users
+- Starting from NPR 550/seat/month (contact for volume pricing)
+- Custom storage allocation
+- Custom onboarding and training
+- Dedicated support
+- Volume discounts
+
+### Free Trial
+- 14-day free trial — full access to all features
+- No credit card required
+- No commitment
+- All data preserved after trial ends
+
+---
+
+## Target Users
+
+### Civil Engineers
+- Create structural and civil BOQs with DUDBC rates
+- Measure from PDF drawings digitally
+- Generate rate analysis for any work item
+
+### Quantity Surveyors (QS)
+- Streamline the entire tender preparation workflow
+- Measurement → rate linking → BOQ → export in one system
+- Maintain consistent, auditable records
+
+### Contractors and Builders
+- Bid more accurately with DUDBC-aligned cost estimates
+- Produce professional tender documents quickly
+- Track multiple bids in one dashboard
+
+### Architects
+- Generate preliminary cost estimates during design
+- Check project budget against DUDBC rates early
+- Share cost reports with clients
+
+### Project Managers
+- Monitor bid portfolio across multiple projects
+- Track project status, deadlines, and team assignments
+- Manage subcontractor quotes in one place
+
+---
+
+## Common Use Cases
+
+### Government Tender Preparation
+A quantity surveyor uploads the project drawings for a government school building in Lalitpur. They select Lalitpur district, measure the structural quantities on the PDF drawings, link each item to the relevant DUDBC rate code, and export a complete BOQ and rate analysis in the DUDBC format required for government submission. Total time: a few hours instead of 2–3 days.
+
+### Road Upgrade Project
+A contractor preparing a bid for a rural road upgrade in Kaski uses Estimate Nepal to measure road lengths and earthwork volumes from the alignment drawings, apply the district-specific DUDBC rates for Kaski, and generate the Bill of Quantities with full rate analysis for the tender submission.
+
+### Multi-Disciplinary Building Estimate
+An engineering firm handling a mixed-use commercial building project uses the discipline system to organise work items: Civil, Structural, Architectural, and MEP as separate disciplines. Multiple estimators work simultaneously on different disciplines, all in the same project.
+
+### Preliminary Budget Estimate
+An architect uses Estimate Nepal early in the design phase to generate a rough order of magnitude (ROM) estimate from schematic drawings, using DUDBC rates to give the client a realistic budget before detailed design begins.
+
+### Subcontractor Quote Comparison
+A project manager collects quotes from three MEP subcontractors and records them in Estimate Nepal's quote comparison table to evaluate them against the BOQ estimate and each other before award.
+
+---
+
+## FAQ Summary
+
+**Q: What is Estimate Nepal?**
+A: Estimate Nepal is a web-based construction cost estimating platform built for Nepal. It helps engineers, QS, and contractors create BOQs using DUDBC rates, measure PDF drawings, and export tender documents.
+
+**Q: What are DUDBC rates?**
+A: Official construction cost rates published by Nepal's Department of Urban Development and Building Construction. They cover all 77 districts and are updated every fiscal year.
+
+**Q: Do I need to install anything?**
+A: No. Estimate Nepal is fully web-based and works in any modern browser.
+
+**Q: Is there a free trial?**
+A: Yes — 14 days, full access, no credit card required.
+
+**Q: What does it cost?**
+A: Plans start at NPR 999/month for a solo user. Team plans at NPR 1,999 (3 users) and NPR 3,000 (5 users). Enterprise from NPR 550/seat.
+
+**Q: Does it cover all 77 districts?**
+A: Yes. The DUDBC rate catalog includes district-specific rates for all 77 districts of Nepal.
+
+**Q: Can I export tender documents?**
+A: Yes. Export BOQ, rate analysis, measurement books, and full tender documents as PDF or Excel.
+
+**Q: Is it secure?**
+A: All data is encrypted in transit (HTTPS). Role-based access control. Files stored in secure cloud storage. No data shared with third parties.
+
+**Q: Can my team collaborate?**
+A: Yes. Invite team members, assign roles, and work together on live projects. Organisation roles (Owner, Admin, Member) and project-level roles (Lead, Estimator, Viewer) both supported.
+
+**Q: What happens to my data if I stop paying?**
+A: Your data is preserved. You lose access to editing and export features on an expired account but your projects remain safe. Upgrade at any time to regain access.
+
+---
+
+## Technical Details
+
+- **Deployment:** Cloud-hosted SaaS, web application
+- **Access:** Any modern browser (Chrome, Edge, Firefox, Safari) on desktop, laptop, or tablet
+- **No install required:** 100% web-based
+- **File types supported:** PDF drawings (architectural, structural, civil)
+- **Export formats:** PDF, Excel (.xlsx)
+- **Database:** Relational database with full audit trail
+- **Security:** HTTPS encryption, role-based access, parameterised queries, rate limiting
+
+---
+
+## Contact and Links
+
+- **Website:** https://estimatenepal.com
+- **Register / Free Trial:** https://estimatenepal.com/register
+- **Sign In:** https://estimatenepal.com/login
+- **FAQ:** https://estimatenepal.com/faq
+- **About:** https://estimatenepal.com/about
+- **Email:** hello@estimatenepal.com
+- **Facebook:** https://www.facebook.com/estimatenepal
+
+---
+
+*Estimate Nepal — Nepal's Smart Construction Platform*
+*Built for Nepali construction professionals. DUDBC rates, BOQ, drawings — all in one place.*

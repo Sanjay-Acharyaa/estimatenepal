@@ -176,3 +176,67 @@ export function passwordResetEmailHtml(url: string) {
     </div>
   `);
 }
+
+export function trialReminderEmailHtml(
+  name: string,
+  trialEndsAt: Date,
+  upgradeUrl: string
+): string {
+  const safeName = escapeHtml(name);
+  // Format date as "15 July 2026" — readable, unambiguous for a Nepali audience
+  const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial ends in 3 days</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      Your Estimate Nepal free trial expires on <strong>${expiryDateStr}</strong>. After that, you&apos;ll lose access to creating new exports, uploading drawings, and editing projects.
+    </p>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#1e40af;font-size:14px;font-weight:600;margin:0 0 8px">What you&apos;ll lose without a plan:</p>
+      <ul style="color:#1d4ed8;font-size:14px;margin:0;padding-left:20px;line-height:1.8">
+        <li>BOQ generation and rate analysis</li>
+        <li>PDF drawing takeoff and measurements</li>
+        <li>PDF &amp; Excel tender document export</li>
+        <li>Team collaboration features</li>
+      </ul>
+    </div>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      Your projects, drawings, and data will <strong>remain safe</strong> — you just need to upgrade to keep working.
+    </p>
+    ${ctaButton(upgradeUrl, "View Plans →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Plans start from NPR 999/month for a single user. Annual billing saves you 2 months free.
+      If you have any questions, reply to this email and we&apos;ll help you find the right plan.
+    </p>
+  `);
+}
+
+export function trialExpiredEmailHtml(name: string, upgradeUrl: string): string {
+  const safeName = escapeHtml(name);
+
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial has ended</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      Your Estimate Nepal free trial has ended. Your account is currently on a limited plan and you&apos;re unable to create new exports, upload drawings, or edit projects.
+    </p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#15803d;font-size:14px;font-weight:600;margin:0 0 4px">Your data is safe</p>
+      <p style="color:#166534;font-size:14px;margin:0">
+        All your projects, drawings, measurements, and BOQs are preserved and waiting for you. Upgrade now to pick up exactly where you left off.
+      </p>
+    </div>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      Plans start from <strong>NPR 999/month</strong> — no long-term commitment required.
+    </p>
+    ${ctaButton(upgradeUrl, "Upgrade Now →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Need help choosing a plan or have questions about pricing? Reply to this email or WhatsApp us — we&apos;re happy to help.
+    </p>
+  `);
+}

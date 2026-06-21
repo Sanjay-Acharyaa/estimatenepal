@@ -86,6 +86,13 @@ export default async function LandingPage() {
     }),
   ]);
 
+  // Compute aggregate rating — only include if we have at least 3 reviews
+  const ratingCount = testimonials.length;
+  const ratingValue =
+    ratingCount >= 3
+      ? Math.round((testimonials.reduce((sum, t) => sum + t.rating, 0) / ratingCount) * 10) / 10
+      : null;
+
   const trialDays = parseInt(cfg.trial_days, 10) || 14;
   const priceSolo = parseInt(cfg.price_solo_monthly, 10) || 999;
   const priceTeam3 = parseInt(cfg.price_team3_monthly, 10) || 1999;
@@ -224,6 +231,16 @@ export default async function LandingPage() {
           "Team collaboration and role management",
           "All 77 districts DUDBC rate catalog",
         ],
+        // Only emit aggregateRating when we have ≥3 approved testimonials with ratings
+        ...(ratingValue !== null && {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: ratingValue.toFixed(1),
+            ratingCount,
+            bestRating: "5",
+            worstRating: "1",
+          },
+        }),
       },
       {
         "@type": "WebSite",
@@ -263,6 +280,12 @@ export default async function LandingPage() {
             <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
               Pricing
             </a>
+            <Link href="/faq" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
+              FAQ
+            </Link>
+            <Link href="/about" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
+              About
+            </Link>
             <Link
               href="/login"
               className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium"
@@ -559,6 +582,8 @@ export default async function LandingPage() {
           <div className="flex items-center gap-4 text-xs text-gray-500">
             <Logo size={22} name={cfg.site_name || "Estimate Nepal"} src={cfg.site_logo_url || null} />
             <a href={`mailto:${contactEmail}`} className="hover:text-gray-900 transition">{contactEmail}</a>
+            <Link href="/faq" className="hover:text-gray-900 transition">FAQ</Link>
+            <Link href="/about" className="hover:text-gray-900 transition">About</Link>
             <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
             <Link href="/register" className="hover:text-gray-900 transition">Register</Link>
           </div>
