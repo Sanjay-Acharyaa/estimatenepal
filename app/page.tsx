@@ -139,7 +139,59 @@ export default async function LandingPage() {
     },
   ];
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://estimatenepal.com/#org",
+        name: "Estimate Nepal",
+        url: "https://estimatenepal.com",
+        logo: "https://estimatenepal.com/icon.svg",
+        contactPoint: { "@type": "ContactPoint", contactType: "customer support", email: contactEmail },
+        sameAs: ["https://www.facebook.com/estimatenepal"],
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://estimatenepal.com/#app",
+        name: "Estimate Nepal",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        url: "https://estimatenepal.com",
+        description: "Nepal's construction estimating platform. Generate BOQ with DUDBC rates, measure PDF drawings, manage tenders, and collaborate with your team.",
+        publisher: { "@id": "https://estimatenepal.com/#org" },
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "NPR",
+          description: `${trialDays}-day free trial, then from NPR ${priceSolo}/month`,
+        },
+        featureList: [
+          "Automated BOQ generation with DUDBC rates",
+          "PDF drawing takeoff and measurement",
+          "Tender document export (PDF & Excel)",
+          "Team collaboration and role management",
+          "All 77 districts DUDBC rate catalog",
+        ],
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://estimatenepal.com/#website",
+        url: "https://estimatenepal.com",
+        name: "Estimate Nepal",
+        publisher: { "@id": "https://estimatenepal.com/#org" },
+        potentialAction: {
+          "@type": "SearchAction",
+          target: "https://estimatenepal.com/dashboard/rates?q={search_term_string}",
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
+
   return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
     <div className="min-h-screen bg-white font-sans">
       {/* ── Site announcement banner (empty = hidden) ── */}
       {cfg.site_announcement && (
@@ -461,5 +513,6 @@ export default async function LandingPage() {
         </div>
       </footer>
     </div>
+    </>
   );
 }

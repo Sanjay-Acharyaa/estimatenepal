@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getConfig } from "@/lib/config";
 import { LoginForm } from "./LoginForm";
+
+export const metadata: Metadata = {
+  title: "Sign In — Estimate Nepal",
+  description: "Sign in to your Estimate Nepal account to manage construction projects, BOQs, and tenders.",
+  alternates: { canonical: "https://estimatenepal.com/login" },
+  robots: { index: false },
+};
 
 // Server component — fetches branding from config (Redis-cached, ~1ms) so the
 // correct logo/headline loads on first render with no client-side flash.
