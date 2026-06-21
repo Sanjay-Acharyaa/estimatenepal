@@ -139,6 +139,57 @@ export default async function LandingPage() {
     },
   ];
 
+  const faqLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "What is Estimate Nepal?",
+        acceptedAnswer: { "@type": "Answer", text: "Estimate Nepal is a web-based construction cost estimating software built for Nepal. It helps engineers, quantity surveyors, and contractors generate BOQ using official DUDBC rates, measure PDF drawings, and export professional tender documents." },
+      },
+      {
+        "@type": "Question",
+        name: "What are DUDBC rates?",
+        acceptedAnswer: { "@type": "Answer", text: "DUDBC rates are official construction cost rates published by Nepal's Department of Urban Development and Building Construction (DUDBC). They cover labour, material, and equipment costs for all construction activities across all 77 districts of Nepal and are updated each fiscal year." },
+      },
+      {
+        "@type": "Question",
+        name: "How do I create a BOQ in Nepal?",
+        acceptedAnswer: { "@type": "Answer", text: "With Estimate Nepal, you can create a BOQ by uploading your PDF drawings, measuring quantities directly on the drawings, and connecting those measurements to DUDBC rate items. The software automatically calculates costs and generates a professional BOQ ready for tender submission." },
+      },
+      {
+        "@type": "Question",
+        name: "Is Estimate Nepal free to use?",
+        acceptedAnswer: { "@type": "Answer", text: `Estimate Nepal offers a ${trialDays}-day free trial with no credit card required. After the trial, plans start from NPR ${priceSolo} per month for a single user.` },
+      },
+      {
+        "@type": "Question",
+        name: "Can I export tender documents from Estimate Nepal?",
+        acceptedAnswer: { "@type": "Answer", text: "Yes. Estimate Nepal lets you export professional tender documents, Bill of Quantities, rate analysis sheets, and measurement books (MB) as PDF or Excel files, ready for client or government submission." },
+      },
+      {
+        "@type": "Question",
+        name: "Does Estimate Nepal support all 77 districts of Nepal?",
+        acceptedAnswer: { "@type": "Answer", text: "Yes. The DUDBC rate catalog in Estimate Nepal covers all 77 districts of Nepal with district-specific rates for labour, materials, and equipment as per the latest DUDBC fiscal year schedule." },
+      },
+    ],
+  };
+
+  const howToLd = {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    name: "How to create a construction BOQ using DUDBC rates in Nepal",
+    description: "Step-by-step guide to generating a Bill of Quantities for Nepal construction projects using official DUDBC rates.",
+    step: [
+      { "@type": "HowToStep", name: "Create a project", text: "Sign up on Estimate Nepal and create a new construction project with project name, location, and district." },
+      { "@type": "HowToStep", name: "Upload PDF drawings", text: "Upload your architectural or structural PDF drawings. Set the scale by measuring a known dimension on the drawing." },
+      { "@type": "HowToStep", name: "Take off quantities", text: "Use the drawing tools to measure lengths, areas, volumes, and counts directly on the PDF drawings." },
+      { "@type": "HowToStep", name: "Link DUDBC rates", text: "Connect each measurement to the relevant DUDBC rate item from the catalog. The software automatically calculates the cost breakdown." },
+      { "@type": "HowToStep", name: "Export tender documents", text: "Export the completed BOQ, rate analysis, and tender documents as PDF or Excel files ready for submission." },
+    ],
+  };
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -192,6 +243,8 @@ export default async function LandingPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(howToLd) }} />
     <div className="min-h-screen bg-white font-sans">
       {/* ── Site announcement banner (empty = hidden) ── */}
       {cfg.site_announcement && (
