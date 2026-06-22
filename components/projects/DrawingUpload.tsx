@@ -70,8 +70,10 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
     setError("");
 
     // 1. Validate page count using PDF.js in the browser
+    // Some PDFs (e.g. AutoCAD exports) use non-standard encoding PDF.js can't parse —
+    // in that case we skip client-side validation and let the server handle it.
     setStatus("validating");
-    let pageCount: number;
+    let pageCount: number = 1;
     let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
     try {
       const buffer = await file.arrayBuffer();
@@ -83,9 +85,8 @@ export function DrawingUpload({ projectId, parentDrawingId, folderId: initialFol
         return;
       }
     } catch {
-      setError("Could not read PDF. Make sure the file is a valid PDF.");
-      setStatus("idle");
-      return;
+      // PDF.js couldn't parse it (common with AutoCAD/CAD exports) — allow upload anyway
+      pdfDoc = null;
     }
 
     // 2. Get pre-signed upload URL
