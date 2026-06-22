@@ -28,6 +28,9 @@ model User {
   assignedTasks  ProjectTask[]  @relation("AssignedTasks")
   createdTasks   ProjectTask[]  @relation("CreatedTasks")
   lastLoginAt    DateTime?
+  lastSeenPath   String?
+  npsSentAt      DateTime?
+  npsScore       Int?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -46,6 +49,8 @@ model Org {
   address          String?
   phone            String?
   storageUsedBytes BigInt      @default(0)
+  adminNotes       String?     @db.Text
+  churnReason      String?
   users            User[]
   projects         Project[]
   invites          OrgInvite[]

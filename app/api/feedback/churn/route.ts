@@ -1,0 +1,40 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+const VALID_REASONS = ["too_expensive", "missing_features", "just_exploring", "competitor"];
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const reason = searchParams.get("reason");
+  const orgId = searchParams.get("org");
+
+  if (!reason || !VALID_REASONS.includes(reason) || !orgId) {
+    return new NextResponse("Invalid feedback link.", { status: 400 });
+  }
+
+  await prisma.org.update({
+    where: { id: orgId },
+    data: { churnReason: reason },
+  }).catch(() => {});
+
+  const labels: Record<string, string> = {
+    too_expensive: "Too expensive",
+    missing_features: "Missing features",
+    just_exploring: "Just exploring",
+    competitor: "Went with a competitor",
+  };
+
+  return new NextResponse(
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Thank you</title>
+    <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f1f5f9}
+    .card{background:#fff;border-radius:12px;padding:40px;text-align:center;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+    h2{color:#0f172a;margin:0 0 8px}p{color:#64748b;font-size:15px}</style></head>
+    <body><div class="card">
+      <div style="font-size:40px;margin-bottom:16px">🙏</div>
+      <h2>Thank you for your feedback!</h2>
+      <p>You selected: <strong>${labels[reason] ?? reason}</strong></p>
+      <p>Your response helps us improve Estimate Nepal. We appreciate you taking the time.</p>
+    </div></body></html>`,
+    { headers: { "Content-Type": "text/html" } }
+  );
+}

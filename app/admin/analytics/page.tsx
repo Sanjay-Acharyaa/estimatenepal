@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { AnalyticsDashboardClient } from "./AnalyticsClient";
 
 export const revalidate = 0;
 
@@ -51,7 +52,7 @@ async function loadData() {
       include: {
         _count: { select: { users: true, projects: true } },
         users: {
-          select: { id: true, name: true, email: true, lastLoginAt: true, emailVerified: true, createdAt: true, role: true },
+          select: { id: true, name: true, email: true, phone: true, lastLoginAt: true, emailVerified: true, createdAt: true, role: true },
           where: { isSuperAdmin: false },
         },
       },
@@ -143,15 +144,19 @@ export default async function AnalyticsDashboard() {
       return !latest || u.lastLoginAt > latest ? u.lastLoginAt : latest;
     }, null as Date | null);
     const daysSinceLogin = daysAgo(lastLogin);
-    const projectScore = Math.min(org._count.projects * 10, 40);
+
+    // Engagement score: projects(30) + login recency(40) + members>1(15) + has drawings(15)
+    const projectScore = Math.min(org._count.projects * 15, 30);
     const loginScore =
       daysSinceLogin === null ? 0
       : daysSinceLogin === 0 ? 40
       : daysSinceLogin <= 2 ? 35
-      : daysSinceLogin <= 5 ? 25
-      : daysSinceLogin <= 10 ? 15
-      : 5;
-    const activityScore = Math.min(projectScore + loginScore + 20, 100);
+      : daysSinceLogin <= 5 ? 20
+      : daysSinceLogin <= 10 ? 10
+      : 3;
+    const teamScore = org._count.users > 1 ? 15 : 0;
+    const drawingScore = drawingCount > 0 && org._count.projects > 0 ? 15 : 0;
+    const activityScore = Math.min(projectScore + loginScore + teamScore + drawingScore, 100);
 
     let status: "active" | "at_risk" | "expired" | "new";
     if (daysLeft !== null && daysLeft < 0) status = "expired";
@@ -164,6 +169,34 @@ export default async function AnalyticsDashboard() {
 
   const atRisk = orgAnalytics.filter(o => o.status === "at_risk");
   const orgsWithProjectsCount = orgs.filter(o => o._count.projects > 0).length;
+
+  // Serialize for client component (Dates → strings)
+  const serializedOrgAnalytics = orgAnalytics.map(item => ({
+    ...item,
+    org: {
+      ...item.org,
+      trialEndsAt: item.org.trialEndsAt?.toISOString() ?? null,
+      adminNotes: (item.org as any).adminNotes ?? null,
+      churnReason: (item.org as any).churnReason ?? null,
+      users: item.org.users.map(u => ({
+        ...u,
+        lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+        createdAt: u.createdAt.toISOString(),
+      })),
+    },
+    lastLogin: item.lastLogin?.toISOString() ?? null,
+  }));
+
+  const overviewCards = [
+    { label: "Total Orgs", value: totalOrgs, color: "bg-blue-50 border-blue-200 text-blue-700", filterKey: "all" as const },
+    { label: "Active Trials", value: activeTrials, color: "bg-green-50 border-green-200 text-green-700", filterKey: "active" as const },
+    { label: "Expiring in 7d", value: expiringSoon, color: expiringSoon > 0 ? "bg-amber-50 border-amber-300 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-500", filterKey: "expiring7d" as const },
+    { label: "Expired", value: expiredOrgs, color: expiredOrgs > 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-gray-50 border-gray-200 text-gray-500", filterKey: "expired" as const },
+    { label: "Total Users", value: totalUsers, color: "bg-purple-50 border-purple-200 text-purple-700", filterKey: "all" as const },
+    { label: "New This Week", value: newUsersThisWeek, color: "bg-teal-50 border-teal-200 text-teal-700", filterKey: "new" as const },
+    { label: "Total Projects", value: totalProjects, color: "bg-orange-50 border-orange-200 text-orange-700", filterKey: "all" as const },
+    { label: "New Projects 7d", value: newProjectsThisWeek, color: "bg-pink-50 border-pink-200 text-pink-700", filterKey: "all" as const },
+  ];
 
   // ── Activation funnel ─────────────────────────────────────────────────────
   const pdfExportOrgs = eventCount("pdf_export") > 0
@@ -183,69 +216,12 @@ export default async function AnalyticsDashboard() {
 
       <div className="p-6 space-y-8 max-w-screen-xl mx-auto">
 
-        {/* ── TIER 1: Overview Cards ─────────────────────────────────────── */}
-        <section>
-          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">Overview</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-            {[
-              { label: "Total Orgs", value: totalOrgs, color: "bg-blue-50 border-blue-200 text-blue-700" },
-              { label: "Active Trials", value: activeTrials, color: "bg-green-50 border-green-200 text-green-700" },
-              { label: "Expiring in 7d", value: expiringSoon, color: expiringSoon > 0 ? "bg-amber-50 border-amber-300 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-500" },
-              { label: "Expired", value: expiredOrgs, color: expiredOrgs > 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-gray-50 border-gray-200 text-gray-500" },
-              { label: "Total Users", value: totalUsers, color: "bg-purple-50 border-purple-200 text-purple-700" },
-              { label: "New This Week", value: newUsersThisWeek, color: "bg-teal-50 border-teal-200 text-teal-700" },
-              { label: "Total Projects", value: totalProjects, color: "bg-orange-50 border-orange-200 text-orange-700" },
-              { label: "New Projects 7d", value: newProjectsThisWeek, color: "bg-pink-50 border-pink-200 text-pink-700" },
-            ].map(card => (
-              <div key={card.label} className={`rounded-xl border p-4 text-center ${card.color}`}>
-                <div className="text-3xl font-extrabold">{card.value}</div>
-                <div className="text-xs font-medium mt-1 opacity-80">{card.label}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── TIER 1: Action Required ────────────────────────────────────── */}
-        {atRisk.length > 0 && (
-          <section>
-            <h2 className="text-sm font-bold text-red-600 uppercase tracking-widest mb-3">
-              🚨 Action Required — Contact These Users Today
-            </h2>
-            <div className="bg-white rounded-xl border border-red-200 overflow-x-auto shadow-sm">
-              <table className="w-full text-sm">
-                <thead className="bg-red-50 border-b border-red-100">
-                  <tr>
-                    {["Org", "Trial Ends", "Days Left", "Last Login", "Projects", "Contact"].map(h => (
-                      <th key={h} className="text-left px-4 py-2 text-red-700 font-semibold text-xs">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-red-50">
-                  {atRisk.map(item => (
-                    <tr key={item.org.id} className="hover:bg-red-50">
-                      <td className="px-4 py-2.5 font-semibold text-gray-900">{item.org.name}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{fmtDate(item.org.trialEndsAt)}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                          (item.daysLeft ?? 99) <= 3 ? "bg-red-600 text-white" : "bg-amber-500 text-white"
-                        }`}>
-                          {item.daysLeft} days
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-gray-500">
-                        {item.daysSinceLogin !== null ? `${item.daysSinceLogin}d ago` : "Never"}
-                      </td>
-                      <td className="px-4 py-2.5 text-gray-600">{item.org._count.projects}</td>
-                      <td className="px-4 py-2.5 text-xs text-gray-500">
-                        {item.org.users[0]?.email ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
+        {/* ── TIER 1: Overview Cards + Action Required + Trial Health (client) ── */}
+        <AnalyticsDashboardClient
+          overviewCards={overviewCards}
+          orgAnalytics={serializedOrgAnalytics}
+          atRisk={serializedOrgAnalytics.filter(o => o.status === "at_risk")}
+        />
 
         {/* ── TIER 1: Activation Funnel ─────────────────────────────────── */}
         <section>
@@ -298,80 +274,6 @@ export default async function AnalyticsDashboard() {
           </div>
         </section>
 
-        {/* ── TIER 1+2: Trial Health + Engagement Table ─────────────────── */}
-        <section>
-          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">
-            Trial Health &amp; Engagement (All Orgs)
-          </h2>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {["Organisation", "Trial Ends", "Days Left", "Status", "Users", "Projects", "Last Login", "Activity", "Owner Email"].map(h => (
-                    <th key={h} className="text-left px-3 py-2.5 text-gray-600 font-semibold text-xs whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {orgAnalytics.map(item => {
-                  const owner = item.org.users.find((u: { role: string }) => u.role === "OWNER") ?? item.org.users[0];
-                  const statusColors = {
-                    active: "bg-green-100 text-green-700",
-                    at_risk: "bg-red-100 text-red-700",
-                    expired: "bg-gray-200 text-gray-600",
-                    new: "bg-blue-100 text-blue-700",
-                  };
-                  const daysLeftColors =
-                    item.daysLeft === null ? "text-gray-400"
-                    : item.daysLeft < 0 ? "text-gray-400 line-through"
-                    : item.daysLeft <= 3 ? "text-red-600 font-bold"
-                    : item.daysLeft <= 7 ? "text-amber-600 font-semibold"
-                    : "text-green-700";
-                  return (
-                    <tr key={item.org.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2.5 font-semibold text-gray-900 whitespace-nowrap">{item.org.name}</td>
-                      <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{fmtDate(item.org.trialEndsAt)}</td>
-                      <td className={`px-3 py-2.5 whitespace-nowrap ${daysLeftColors}`}>
-                        {item.daysLeft === null ? "—" : item.daysLeft < 0 ? "Expired" : `${item.daysLeft}d`}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[item.status]}`}>
-                          {item.status === "at_risk" ? "At Risk" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-gray-600 text-center">{item.org._count.users}</td>
-                      <td className="px-3 py-2.5 text-gray-600 text-center">{item.org._count.projects}</td>
-                      <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">
-                        {item.lastLogin ? `${item.daysSinceLogin}d ago` : "Never"}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${
-                                item.activityScore >= 70 ? "bg-green-500"
-                                : item.activityScore >= 40 ? "bg-amber-400"
-                                : "bg-red-400"
-                              }`}
-                              style={{ width: `${item.activityScore}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-500">{item.activityScore}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-gray-500 text-xs">{(owner as any)?.email ?? "—"}</td>
-                    </tr>
-                  );
-                })}
-                {orgAnalytics.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-sm">No organisations yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
 
         {/* ── TIER 3: Weekly Signups + Coupon Analytics ─────────────────── */}
         <div className="grid lg:grid-cols-2 gap-6">
