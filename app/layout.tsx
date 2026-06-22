@@ -37,6 +37,9 @@ export const metadata: Metadata = {
   icons: {
     icon: "/icon.svg",
   },
+  other: {
+    "facebook-domain-verification": "ucsek73h6xbpfz4pdf2kwz04lx1lnm",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
