@@ -33,8 +33,9 @@ export const authOptions: NextAuthOptions = {
           (req?.headers?.["x-forwarded-for"] as string | undefined)
             ?.split(",")[0].trim() ?? "unknown";
 
-        // Enforce per-IP login rate limit before touching the DB
-        const { isLoginRateLimited } = await import("./security");
+        const { isLoginRateLimited, consumeLoginFailure } = await import("./security");
+
+        // Block if this ip:email has too many recent failures
         const rateLimited = await isLoginRateLimited(ip, parsed.data.email);
         if (rateLimited) return null;
 
@@ -43,7 +44,8 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user || !user.emailVerified) {
-          // Record failed attempt if user exists
+          // Consume a token only on a real credential failure, not server errors
+          await consumeLoginFailure(ip, parsed.data.email);
           if (user) {
             await prisma.failedLogin.create({
               data: { userId: user.id, email: parsed.data.email, ipAddress: ip },
@@ -54,6 +56,7 @@ export const authOptions: NextAuthOptions = {
 
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!valid) {
+          await consumeLoginFailure(ip, parsed.data.email);
           await prisma.failedLogin.create({
             data: { userId: user.id, email: parsed.data.email, ipAddress: ip },
           });

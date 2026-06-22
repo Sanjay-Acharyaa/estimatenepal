@@ -16,16 +16,15 @@ export { getSecurityHeaders } from "./headers";
 // Prevents Redis downtime from cascading into a full API outage.
 // Conservative limits — slightly more permissive than Redis limits to avoid false positives.
 
-// Login: 5 attempts per 15 minutes
+// Login: 10 failed attempts per 15 minutes per ip:email
+// Only failed/invalid attempts count — server errors and timeouts do not consume tokens.
 const loginLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: "rl_login",
-  points: 5,
+  points: 10,
   duration: 900,
   blockDuration: 900,
-  // Conservative insurance: 1 attempt/15min per replica avoids bypassing the global limit
-  // even when Redis is down and multiple replicas each apply their own in-memory counter.
-  insuranceLimiter: new RateLimiterMemory({ points: 1, duration: 900 }),
+  insuranceLimiter: new RateLimiterMemory({ points: 2, duration: 900 }),
 });
 
 // API: 120 requests per minute
@@ -49,18 +48,30 @@ const uploadLimiter = new RateLimiterRedis({
   insuranceLimiter: new RateLimiterMemory({ points: 5, duration: 3600 }),
 });
 
-// Returns true when rate-limited (caller should reject the request), false otherwise.
-// Keyed by ip:email so users behind the same NAT (office, classroom) don't block each other.
+// Check only — does NOT consume a token. Returns true if already rate-limited.
 export async function isLoginRateLimited(ip: string, email?: string): Promise<boolean> {
   const key = email ? `${ip}:${email.toLowerCase()}` : ip;
   try {
-    await loginLimiter.consume(key);
+    await loginLimiter.get(key).then(res => {
+      if (res && res.remainingPoints <= 0) throw new RateLimiterRes(res.msBeforeNext, res.consumedPoints);
+    });
     return false;
   } catch (e) {
     if (e instanceof RateLimiterRes) return true;
-    // Redis error — fail open so an outage doesn't lock everyone out
     console.error("[rate-limit] isLoginRateLimited error:", (e as Error).message);
     return false;
+  }
+}
+
+// Consume a token — called only on actual credential failures, not server errors.
+export async function consumeLoginFailure(ip: string, email?: string): Promise<void> {
+  const key = email ? `${ip}:${email.toLowerCase()}` : ip;
+  try {
+    await loginLimiter.consume(key);
+  } catch (e) {
+    if (!(e instanceof RateLimiterRes)) {
+      console.error("[rate-limit] consumeLoginFailure error:", (e as Error).message);
+    }
   }
 }
 
