@@ -50,6 +50,10 @@ export default async function SuperAdminPage() {
             className="inline-flex items-center gap-2 bg-indigo-600 border border-indigo-700 rounded-lg px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 shadow-sm">
             📊 Analytics Dashboard
           </Link>
+          <Link href="/admin/activity"
+            className="inline-flex items-center gap-2 bg-green-600 border border-green-700 rounded-lg px-4 py-2 text-sm font-medium text-white hover:bg-green-700 shadow-sm">
+            🟢 Live Activity
+          </Link>
         </div>
 
         {/* Orgs */}
