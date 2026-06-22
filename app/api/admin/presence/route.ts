@@ -33,7 +33,7 @@ export async function GET() {
         select: { id: true, name: true, email: true, orgId: true },
       })
     : [];
-  const orgIds = [...new Set(users.map(u => u.orgId).filter(Boolean) as string[])];
+  const orgIds = Array.from(new Set(users.map(u => u.orgId).filter(Boolean) as string[]));
   const orgs = orgIds.length > 0
     ? await prisma.org.findMany({ where: { id: { in: orgIds } }, select: { id: true, name: true } })
     : [];
