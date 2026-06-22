@@ -46,14 +46,19 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const res = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
-    if (res?.error) {
-      setError("Invalid credentials or unverified account.");
-      setShowResend(true);
-      setResendEmail(email);
-    } else {
-      router.push(callbackUrl);
+    try {
+      const res = await signIn("credentials", { email, password, redirect: false });
+      if (res?.error) {
+        setError("Invalid credentials or unverified email. Check your inbox for the verification link.");
+        setShowResend(true);
+        setResendEmail(email);
+      } else {
+        router.push(callbackUrl);
+      }
+    } catch {
+      setError("Connection error — please check your internet and try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
