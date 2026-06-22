@@ -8,9 +8,14 @@ const PUBLIC_PATHS = [
   "/verify-email",
   "/forgot-password",
   "/reset-password",
+  "/about",
+  "/faq",
+  "/sitemap.xml",
+  "/robots.txt",
   "/api/auth",
   "/api/config/public", // Public pricing + contact config for client components
   "/api/testimonials",  // Public GET for approved testimonials
+  "/api/branding",      // Public branding endpoint
   "/share",          // Public read-only share link viewer
   "/api/invite",     // Public invite accept
   "/trial-expired",  // Must be accessible without auth
