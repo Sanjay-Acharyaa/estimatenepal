@@ -7,7 +7,7 @@ import { handleApiError, apiError, unauthorized } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { invalidateUserCache } from "@/lib/auth";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 
 const schema = z.object({
   currentPassword: z.string().min(1),
