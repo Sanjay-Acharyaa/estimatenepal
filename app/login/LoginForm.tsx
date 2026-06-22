@@ -49,7 +49,7 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
     try {
       const res = await signIn("credentials", { email, password, redirect: false });
       if (res?.error) {
-        setError("Invalid credentials or unverified email. Check your inbox for the verification link.");
+        setError("Incorrect email or password. If you forgot your password, use the 'Forgot password?' link above.");
         setShowResend(true);
         setResendEmail(email);
       } else {
@@ -256,7 +256,8 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
           )}
           {showResend && !resendMsg && (
             <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-              <p className="text-amber-800 mb-2 font-medium">Account not verified?</p>
+              <p className="text-amber-800 mb-1 font-medium">Just registered and never received a verification email?</p>
+              <p className="text-amber-700 mb-2 text-xs">If your email is already verified, use &ldquo;Forgot password?&rdquo; instead.</p>
               <form onSubmit={handleResend} className="flex gap-2">
                 <input type="email" required value={resendEmail} onChange={e => setResendEmail(e.target.value)}
                   placeholder="your@email.com"
