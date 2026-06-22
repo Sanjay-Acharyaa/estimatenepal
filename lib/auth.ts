@@ -35,7 +35,7 @@ export const authOptions: NextAuthOptions = {
 
         // Enforce per-IP login rate limit before touching the DB
         const { isLoginRateLimited } = await import("./security");
-        const rateLimited = await isLoginRateLimited(ip);
+        const rateLimited = await isLoginRateLimited(ip, parsed.data.email);
         if (rateLimited) return null;
 
         const user = await prisma.user.findUnique({

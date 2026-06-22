@@ -50,10 +50,11 @@ const uploadLimiter = new RateLimiterRedis({
 });
 
 // Returns true when rate-limited (caller should reject the request), false otherwise.
-// Use this inside non-HTTP contexts (e.g. NextAuth authorize) where a NextResponse cannot be returned.
-export async function isLoginRateLimited(ip: string): Promise<boolean> {
+// Keyed by ip:email so users behind the same NAT (office, classroom) don't block each other.
+export async function isLoginRateLimited(ip: string, email?: string): Promise<boolean> {
+  const key = email ? `${ip}:${email.toLowerCase()}` : ip;
   try {
-    await loginLimiter.consume(ip);
+    await loginLimiter.consume(key);
     return false;
   } catch (e) {
     if (e instanceof RateLimiterRes) return true;
@@ -63,9 +64,10 @@ export async function isLoginRateLimited(ip: string): Promise<boolean> {
   }
 }
 
-export async function checkLoginRateLimit(ip: string) {
+export async function checkLoginRateLimit(ip: string, email?: string) {
+  const key = email ? `${ip}:${email.toLowerCase()}` : ip;
   try {
-    await loginLimiter.consume(ip);
+    await loginLimiter.consume(key);
     return null;
   } catch (e) {
     if (e instanceof RateLimiterRes) {
