@@ -29,6 +29,7 @@ model User {
   createdTasks   ProjectTask[]  @relation("CreatedTasks")
   lastLoginAt    DateTime?
   lastSeenPath   String?
+  sessions       UserSession[]
   npsSentAt      DateTime?
   npsScore       Int?
   createdAt      DateTime       @default(now())
@@ -734,6 +735,22 @@ model Coupon {
 
   @@index([code])
   @@index([redeemedByOrg])
+}
+
+// User session tracking — written when a session ends (presence beacon detects new session after gap)
+model UserSession {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  startedAt       DateTime
+  endedAt         DateTime
+  durationSeconds Int
+  pageCount       Int      @default(0)
+  date            DateTime @db.Date
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([date(sort: Desc)])
+  @@index([userId, date])
 }
 
 // Analytics event log — fire-and-forget, never blocks requests, powers admin analytics dashboard

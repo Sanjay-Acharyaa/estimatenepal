@@ -17,6 +17,7 @@ const PUBLIC_PATHS = [
   "/api/testimonials",  // Public GET for approved testimonials
   "/api/branding",      // Public branding endpoint
   "/api/feedback",      // Public churn reason + NPS feedback (links from emails)
+  "/api/user/presence", // Presence beacon — auth handled inside the route
   "/share",          // Public read-only share link viewer
   "/api/invite",     // Public invite accept
   "/trial-expired",  // Must be accessible without auth

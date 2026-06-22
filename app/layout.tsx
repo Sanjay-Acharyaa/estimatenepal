@@ -6,6 +6,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import { Analytics } from "@/components/tracking/Analytics";
+import { PresenceBeacon } from "@/components/tracking/PresenceBeacon";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -98,6 +99,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <Analytics />
         </Suspense>
+        <PresenceBeacon />
         <Providers>{children}</Providers>
         <Toaster position="top-right" richColors closeButton duration={4000} />
       </body>
