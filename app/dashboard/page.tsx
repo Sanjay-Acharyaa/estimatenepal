@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 
@@ -17,7 +18,8 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const orgId = session!.user.orgId;
+  if (!session?.user) redirect("/");
+  const orgId = session.user.orgId;
 
   if (!orgId) {
     return (

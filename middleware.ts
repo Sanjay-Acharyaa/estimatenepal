@@ -36,20 +36,30 @@ export async function middleware(req: NextRequest) {
   const isPublic = pathname === "/" || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   if (isPublic) return res;
 
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET,
-    cookieName:
-      process.env.NODE_ENV === "production"
-        ? "__Secure-next-auth.session-token"
-        : "next-auth.session-token",
-  });
+  let token;
+  try {
+    token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+      cookieName:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+    });
+  } catch {
+    // JWT parsing failure (e.g. Redis down, malformed cookie) — send to home page
+    return NextResponse.redirect(new URL("/", req.url));
+  }
 
   if (!token || (token as any).invalidated) {
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-    if ((token as any)?.invalidated) loginUrl.searchParams.set("reason", "session_expired");
-    return NextResponse.redirect(loginUrl);
+    if ((token as any)?.invalidated) {
+      // Existing session was revoked (password change / new login) — go to login with reason
+      const loginUrl = new URL("/login", req.url);
+      loginUrl.searchParams.set("reason", "session_expired");
+      return NextResponse.redirect(loginUrl);
+    }
+    // No session at all — show landing page
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   // Super-admin-only routes

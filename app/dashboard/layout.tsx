@@ -9,7 +9,7 @@ import { Logo } from "@/components/ui/Logo";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session?.user) redirect("/");
 
   const [siteAnnouncement, siteName, logoUrl] = await Promise.all([
     getConfig("site_announcement"),

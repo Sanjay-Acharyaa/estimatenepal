@@ -4,7 +4,7 @@ import { RateCatalog } from "@/components/rates/RateCatalog";
 
 export default async function RatesPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session?.user) redirect("/");
 
   const isAdmin = ["OWNER", "ADMIN"].includes(session.user.role ?? "");
 

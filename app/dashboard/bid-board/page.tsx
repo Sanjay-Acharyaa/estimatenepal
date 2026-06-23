@@ -22,7 +22,7 @@ function formatNRS(value: number) {
 
 export default async function BidBoardPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session?.user) redirect("/");
 
   const orgId = session.user.orgId;
 

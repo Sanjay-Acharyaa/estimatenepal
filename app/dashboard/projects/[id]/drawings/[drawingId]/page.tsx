@@ -17,7 +17,7 @@ export default async function DrawingViewerPage({
   params: { id: string; drawingId: string };
 }) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session?.user) redirect("/");
 
   const project = await prisma.project.findUnique({
     where: { id: params.id },

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
-  if (!session?.user.isSuperAdmin) redirect("/dashboard");
+  if (!session?.user) redirect("/");
+  if (!session.user.isSuperAdmin) redirect("/dashboard");
   return <>{children}</>;
 }
