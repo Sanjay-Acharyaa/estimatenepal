@@ -455,7 +455,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                   </p>
                 ) : group.type === "COUNT_BY_DISTANCE" && currentSpacing > 0 ? (
                   <p className="text-xs text-gray-600 mt-0.5">
-                    {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.ceil(totalRaw / currentSpacing)} items${currentMult !== 1 ? ` × ${currentMult} = ${displayTotal}` : ""}`}
+                    {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.floor(totalRaw / currentSpacing) + 1} items${currentMult !== 1 ? ` × ${currentMult} = ${displayTotal}` : ""}`}
                   </p>
                 ) : currentMult !== 1 ? (
                   <p className="text-xs text-gray-600 mt-0.5">
@@ -495,6 +495,23 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       ? "Draw a rectangle → area × height = volume"
                       : "Draw a polyline (length) → length × breadth × height = volume"}
                   </p>
+                  {/* BUG 28: warn about mismatched shapes */}
+                  {(() => {
+                    const items = detail?.items ?? [];
+                    const mismatchedCount = items.filter(i => {
+                      const isLengthShape = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || i.shapeType === null;
+                      const isAreaShape = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
+                      if (volumeMethod === "lbh") return !isLengthShape && isAreaShape;
+                      return !isAreaShape && isLengthShape;
+                    }).length;
+                    if (mismatchedCount === 0) return null;
+                    const correctShape = volumeMethod === "lbh" ? "polylines" : "rectangles or polygons";
+                    return (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mt-1">
+                        ⚠ {mismatchedCount} existing shape{mismatchedCount !== 1 ? "s" : ""} {mismatchedCount !== 1 ? "are" : "is"} excluded because {mismatchedCount !== 1 ? "they don't" : "it doesn't"} match the selected method. Delete and redraw {mismatchedCount !== 1 ? "them" : "it"} as {correctShape} to include {mismatchedCount !== 1 ? "them" : "it"}.
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 {/* Height */}
@@ -622,19 +639,19 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                     <p className="text-xs text-gray-500 mb-0.5">Live preview ({itemCount} shape{itemCount !== 1 ? "s" : ""})</p>
                     <p className="text-base font-bold text-gray-800">
                       {currentSpacing > 0
-                        ? <>{Math.ceil(totalRaw / currentSpacing) * currentMult} <span className="text-sm font-normal text-gray-500">each</span></>
+                        ? <>{(Math.floor(totalRaw / currentSpacing) + 1) * currentMult} <span className="text-sm font-normal text-gray-500">each</span></>
                         : <>{totalRaw.toFixed(2)} <span className="text-sm font-normal text-gray-500">ft (set spacing)</span></>
                       }
                     </p>
                     {currentSpacing > 0 && (
                       <p className="text-xs text-gray-600 mt-0.5">
-                        {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.ceil(totalRaw / currentSpacing)} items${currentMult !== 1 ? ` × ${currentMult} = ${Math.ceil(totalRaw / currentSpacing) * currentMult}` : ""}`}
+                        {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.floor(totalRaw / currentSpacing) + 1} items${currentMult !== 1 ? ` × ${currentMult} = ${(Math.floor(totalRaw / currentSpacing) + 1) * currentMult}` : ""}`}
                       </p>
                     )}
                   </div>
                 )}
                 <p className="text-xs text-gray-600">
-                  Count = ⌈ total length ÷ spacing ⌉. Set spacing first, then draw shapes.
+                  Count = ⌊ total length ÷ spacing ⌋ + 1. Set spacing first, then draw shapes.
                 </p>
               </div>
             )}

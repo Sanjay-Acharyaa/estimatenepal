@@ -60,7 +60,7 @@ export async function GET(
         multiplier: true,
         additionalParams: true,
         rateItem: { select: { baseRate: true } },
-        items: { select: { rawQuantity: true, shapeType: true } },
+        items: { select: { rawQuantity: true, shapeType: true, isNegative: true } },
       },
     });
 
@@ -71,17 +71,18 @@ export async function GET(
       const ap = g.additionalParams as Record<string, unknown> | null;
       const method = (ap?.volumeMethod as string) ?? "area_x_h";
 
-      // Sum rawQuantity, filtering by shapeType for VOLUME
+      // Sum rawQuantity, filtering by shapeType for VOLUME, subtracting isNegative items (BUG 9, BUG 24)
       let rawSum = 0;
       for (const item of g.items) {
+        const signed = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         if (g.type === "VOLUME") {
           const isLength = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
-          const isArea = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE";
+          const isArea = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
           if ((method === "lbh" && isLength) || (method !== "lbh" && isArea)) {
-            rawSum += item.rawQuantity;
+            rawSum += signed;
           }
         } else {
-          rawSum += item.rawQuantity;
+          rawSum += signed;
         }
       }
 

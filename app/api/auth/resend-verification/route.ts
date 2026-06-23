@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { redis } from "@/lib/redis";
 import { sendEmail, verificationEmailHtml } from "@/lib/email";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { apiError, handleApiError } from "@/lib/errors";
@@ -18,14 +19,20 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid email.", 400);
 
+    // Per-email rate limit: max 3 verification resend requests per hour
+    const emailKey = `rl:resendverify:${parsed.data.email.toLowerCase()}`;
+    const emailCount = await redis.incr(emailKey);
+    if (emailCount === 1) await redis.expire(emailKey, 3600);
+    if (emailCount > 3) {
+      return NextResponse.json({ message: "If this email exists and is unverified, a new link has been sent." });
+    }
+
     const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
 
     // Always return success to avoid email enumeration
     if (!user || user.emailVerified) {
       return NextResponse.json({ message: "If this email exists and is unverified, a new link has been sent." });
     }
-
-    const { redis } = await import("@/lib/redis");
     const verifyToken = crypto.randomBytes(32).toString("hex");
     await redis.set(`verify:${verifyToken}`, user.id, "EX", 86400);
 

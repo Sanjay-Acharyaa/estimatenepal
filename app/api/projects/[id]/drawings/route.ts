@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return apiError("VALIDATION_ERROR", "Invalid file key.", 400);
     }
 
-    // If this is a revision, validate the parent and mark it as superseded
+    // If this is a revision, validate the parent exists and is current
     if (parentDrawingId) {
       const parent = await prisma.drawing.findUnique({ where: { id: parentDrawingId } });
       if (!parent || parent.projectId !== params.id) {
@@ -101,11 +101,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (!parent.isLatest) {
         return apiError("CONFLICT", "Cannot revision an already-superseded drawing. Use the latest version instead.", 409);
       }
-      await prisma.drawing.update({ where: { id: parentDrawingId }, data: { isLatest: false } });
     }
 
-    const drawing = await prisma.drawing.create({
-      data: {
+    // Wrap the parent supersede + new drawing creation in a transaction so two concurrent
+    // revision uploads cannot both end up with isLatest:true on the same parent.
+    // Using updateMany with the isLatest condition means a second concurrent request that
+    // already set isLatest:false on the parent will match 0 rows, keeping the invariant safe.
+    let drawing: Awaited<ReturnType<typeof prisma.drawing.create>>;
+    if (parentDrawingId) {
+      const newDrawingData = {
         projectId: params.id,
         fileName,
         fileUrl: fileKey,
@@ -114,18 +118,49 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         revisionNumber,
         parentDrawingId,
         folderId: folderId ?? null,
-        isLatest: true,
+        isLatest: true as const,
         pages: {
           create: Array.from({ length: pageCount }, (_, i) => ({
             pageNumber: i + 1,
             label: `Page ${i + 1}`,
           })),
         },
-      },
-      include: {
-        pages: { orderBy: { pageNumber: "asc" } },
-      },
-    });
+      };
+      const [, created] = await prisma.$transaction([
+        prisma.drawing.updateMany({
+          where: { id: parentDrawingId, projectId: params.id, isLatest: true },
+          data: { isLatest: false },
+        }),
+        prisma.drawing.create({
+          data: newDrawingData,
+          include: { pages: { orderBy: { pageNumber: "asc" } } },
+        }),
+      ]);
+      drawing = created as typeof drawing;
+    } else {
+      drawing = await prisma.drawing.create({
+        data: {
+          projectId: params.id,
+          fileName,
+          fileUrl: fileKey,
+          pageCount,
+          fileSizeBytes,
+          revisionNumber,
+          parentDrawingId,
+          folderId: folderId ?? null,
+          isLatest: true,
+          pages: {
+            create: Array.from({ length: pageCount }, (_, i) => ({
+              pageNumber: i + 1,
+              label: `Page ${i + 1}`,
+            })),
+          },
+        },
+        include: {
+          pages: { orderBy: { pageNumber: "asc" } },
+        },
+      });
+    }
 
     // Increment org storage counter
     if (fileSizeBytes > 0) {

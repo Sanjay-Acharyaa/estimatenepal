@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
 
-    // Verify assignee belongs to same org
+    // Verify assignee belongs to same org AND is a member of this specific project
     if (parsed.data.assignedToId) {
       const assignee = await prisma.user.findUnique({
         where: { id: parsed.data.assignedToId },
@@ -79,6 +79,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
       if (!assignee || assignee.orgId !== project.orgId) {
         return apiError("VALIDATION_ERROR", "Assignee not found in this organisation.", 400);
+      }
+      const isMember = await prisma.projectMember.findFirst({
+        where: { projectId: params.id, userId: parsed.data.assignedToId },
+      });
+      if (!isMember) {
+        return apiError("VALIDATION_ERROR", "Assignee is not a member of this project.", 400);
       }
     }
 

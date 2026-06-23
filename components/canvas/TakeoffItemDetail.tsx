@@ -49,6 +49,7 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
             siteLocation: siteLocation.trim() || null,
             measuredDate: measuredDate ? new Date(measuredDate).toISOString() : null,
             notes: notes.trim() || null,
+            version: item.version,
           }),
         }
       );

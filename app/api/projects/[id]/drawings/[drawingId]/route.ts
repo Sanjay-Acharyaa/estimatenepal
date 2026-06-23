@@ -135,8 +135,11 @@ export async function DELETE(
 
     const pageIds = drawing.pages.map((p) => p.id);
 
-    // Cascade delete: scale zones → pages → drawing in one transaction
+    // Cascade delete: takeoff items → scale zones → pages → drawing in one transaction.
+    // TakeoffItem has no ON DELETE CASCADE on the DrawingPage FK so it must be removed
+    // explicitly before deleting pages, otherwise the delete fails with a FK constraint error.
     await prisma.$transaction([
+      prisma.takeoffItem.deleteMany({ where: { pageId: { in: pageIds } } }),
       prisma.scaleZone.deleteMany({ where: { pageId: { in: pageIds } } }),
       prisma.drawingPage.deleteMany({ where: { drawingId: params.drawingId } }),
       prisma.drawing.delete({ where: { id: params.drawingId } }),

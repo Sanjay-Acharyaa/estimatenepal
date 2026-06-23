@@ -16,6 +16,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!token) throw unauthorized();
     if (!token.isSuperAdmin) throw forbidden();
 
+    // Re-verify in DB — guards against stale JWT after isSuperAdmin was revoked
+    const dbUser = await prisma.user.findUnique({
+      where: { id: token.id as string },
+      select: { isSuperAdmin: true },
+    });
+    if (!dbUser?.isSuperAdmin) throw forbidden();
+
     const body = await req.json();
     const parsed = schema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid plan.", 400);

@@ -21,6 +21,14 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid email.", 400);
 
+    // Per-email rate limit: max 3 password reset requests per hour
+    const emailKey = `rl:pwreset:${parsed.data.email.toLowerCase()}`;
+    const emailCount = await redis.incr(emailKey);
+    if (emailCount === 1) await redis.expire(emailKey, 3600);
+    if (emailCount > 3) {
+      return NextResponse.json({ message: SUCCESS_MSG });
+    }
+
     const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
     // Always return success to prevent email enumeration
     if (!user) return NextResponse.json({ message: SUCCESS_MSG });

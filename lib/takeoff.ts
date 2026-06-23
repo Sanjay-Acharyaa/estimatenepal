@@ -81,7 +81,7 @@ function arcLengthPx(pts: Point[]): number {
   return r * sweep;
 }
 
-function areaUnit(scaleUnit: string): string {
+export function areaUnit(scaleUnit: string): string {
   if (scaleUnit === "ft") return "sq ft";
   if (scaleUnit === "m") return "sq m";
   return `${scaleUnit}²`;
@@ -167,7 +167,7 @@ export function computeQuantity(
       }
       const perimeterReal = perimPx * scale;
       const wall = additionalParams?.wall;
-      const wallH = wall?.enabled ? (wall.heightFt ?? 0) + (wall.heightIn ?? 0) / 12 : 0;
+      const wallH = wall ? (wall.heightFt ?? 0) + (wall.heightIn ?? 0) / 12 : 0;
       if (!wallH) {
         return { rawQuantity: perimeterReal, quantity: perimeterReal * multiplier, unit: `${scaleUnit} (set wall height)` };
       }

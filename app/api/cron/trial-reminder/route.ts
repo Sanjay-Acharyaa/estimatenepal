@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import {
@@ -10,6 +11,10 @@ import {
   churnReasonEmailHtml,
   npsEmailHtml,
 } from "@/lib/email";
+
+function feedbackKey(id: string): string {
+  return createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "fallback").update(id).digest("hex").slice(0, 20);
+}
 
 // GET /api/cron/trial-reminder
 // Handles all lifecycle emails for trial users.
@@ -147,11 +152,12 @@ export async function GET(req: NextRequest) {
       const owner = org.users[0];
       if (!owner) continue;
       counts.churn++;
+      const churnKey = feedbackKey(org.id);
       const reasons = [
-        { label: "Too expensive", url: `${BASE_URL}/api/feedback/churn?reason=too_expensive&org=${org.id}` },
-        { label: "Missing features I need", url: `${BASE_URL}/api/feedback/churn?reason=missing_features&org=${org.id}` },
-        { label: "Just exploring / not ready yet", url: `${BASE_URL}/api/feedback/churn?reason=just_exploring&org=${org.id}` },
-        { label: "Went with a competitor", url: `${BASE_URL}/api/feedback/churn?reason=competitor&org=${org.id}` },
+        { label: "Too expensive", url: `${BASE_URL}/api/feedback/churn?reason=too_expensive&org=${org.id}&key=${churnKey}` },
+        { label: "Missing features I need", url: `${BASE_URL}/api/feedback/churn?reason=missing_features&org=${org.id}&key=${churnKey}` },
+        { label: "Just exploring / not ready yet", url: `${BASE_URL}/api/feedback/churn?reason=just_exploring&org=${org.id}&key=${churnKey}` },
+        { label: "Went with a competitor", url: `${BASE_URL}/api/feedback/churn?reason=competitor&org=${org.id}&key=${churnKey}` },
       ];
       sendEmail({
         to: owner.email,
@@ -175,9 +181,10 @@ export async function GET(req: NextRequest) {
     });
     for (const user of npsUsers) {
       counts.nps++;
+      const npsKey = feedbackKey(user.id);
       const scores = Array.from({ length: 11 }, (_, i) => ({
         score: i,
-        url: `${BASE_URL}/api/feedback/nps?score=${i}&user=${user.id}`,
+        url: `${BASE_URL}/api/feedback/nps?score=${i}&user=${user.id}&key=${npsKey}`,
       }));
       sendEmail({
         to: user.email,

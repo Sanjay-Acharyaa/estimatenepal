@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
-import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
+import { handleApiError, apiError, unauthorized, notFound, forbidden } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
@@ -28,7 +28,7 @@ export async function PUT(
 
     const project = await prisma.project.findUnique({ where: { id: params.id } });
     if (!project) throw notFound("Project");
-    await withTenantGuard(token.id as string, project.orgId);
+    const caller = await withTenantGuard(token.id as string, project.orgId);
 
     const discipline = await prisma.discipline.findUnique({ where: { id: params.dId } });
     if (!discipline || discipline.projectId !== params.id) throw notFound("Discipline");
@@ -39,20 +39,25 @@ export async function PUT(
 
     // Copy: duplicate discipline + all groups (category→layer hierarchy) + all items
     if (parsed.data.copy) {
+      // Only OWNER or ADMIN may copy a discipline
+      if (!["OWNER", "ADMIN"].includes(caller.role)) throw forbidden();
+
       const groups = await prisma.takeoffGroup.findMany({
         where: { disciplineId: params.dId },
         include: { items: true },
         orderBy: { sortOrder: "asc" },
       });
 
-      const last = await prisma.discipline.findFirst({
-        where: { projectId: params.id },
-        orderBy: { sortOrder: "desc" },
-        select: { sortOrder: true },
-      });
-
       // Wrap the entire copy in a transaction so a mid-copy failure leaves no orphaned discipline.
+      // The sortOrder lookup is inside the transaction to prevent a race condition where two
+      // concurrent copy requests could derive the same sortOrder from the same findFirst result.
       const copy = await prisma.$transaction(async (tx) => {
+        const last = await tx.discipline.findFirst({
+          where: { projectId: params.id },
+          orderBy: { sortOrder: "desc" },
+          select: { sortOrder: true },
+        });
+
         const copyDisc = await tx.discipline.create({
           data: {
             projectId: params.id,
@@ -210,7 +215,8 @@ export async function DELETE(
 
     const project = await prisma.project.findUnique({ where: { id: params.id } });
     if (!project) throw notFound("Project");
-    await withTenantGuard(token.id as string, project.orgId);
+    const delCaller = await withTenantGuard(token.id as string, project.orgId);
+    if (!["OWNER", "ADMIN"].includes(delCaller.role)) throw forbidden();
 
     const discipline = await prisma.discipline.findUnique({
       where: { id: params.dId },

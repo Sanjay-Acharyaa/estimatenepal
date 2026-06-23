@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 const VALID_REASONS = ["too_expensive", "missing_features", "just_exploring", "competitor"];
@@ -7,9 +8,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const reason = searchParams.get("reason");
   const orgId = searchParams.get("org");
+  const key = searchParams.get("key");
 
   if (!reason || !VALID_REASONS.includes(reason) || !orgId) {
     return new NextResponse("Invalid feedback link.", { status: 400 });
+  }
+
+  const expected = createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "fallback").update(orgId).digest("hex").slice(0, 20);
+  if (!key || key !== expected) {
+    return new Response("<h2>Invalid or expired link.</h2>", { status: 400, headers: { "Content-Type": "text/html" } });
   }
 
   await prisma.org.update({

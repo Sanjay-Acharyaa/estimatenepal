@@ -1,11 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getOnlineUsers, getHeatmap } from "@/lib/presence";
 import { prisma } from "@/lib/prisma";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const ip = getClientIp(req);
+  const limited = await checkApiRateLimit(ip);
+  if (limited) return limited;
+
   const session = await getSession();
   if (!session?.user?.isSuperAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -82,11 +82,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!token) throw unauthorized();
 
     const project = await getProject(params.id);
-    await withTenantGuard(token.id as string, project.orgId);
+    const caller = await withTenantGuard(token.id as string, project.orgId);
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+
+    // Restricted fields — only OWNER or ADMIN may change them
+    const RESTRICTED_FIELDS = ["status", "isPricingLocked", "estimatedValue", "vatRate", "tdsRate"] as const;
+    const isPrivileged = ["OWNER", "ADMIN"].includes(caller.role);
+    if (!isPrivileged && RESTRICTED_FIELDS.some((f) => (parsed.data as Record<string, unknown>)[f] !== undefined)) {
+      throw forbidden();
+    }
 
     const updated = await prisma.project.update({ where: { id: params.id }, data: parsed.data });
 

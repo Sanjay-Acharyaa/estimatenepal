@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const scoreStr = searchParams.get("score");
   const userId = searchParams.get("user");
+  const key = searchParams.get("key");
   const score = parseInt(scoreStr ?? "", 10);
 
   if (!userId || isNaN(score) || score < 0 || score > 10) {
     return new NextResponse("Invalid NPS link.", { status: 400 });
+  }
+
+  const expected = createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "fallback").update(userId).digest("hex").slice(0, 20);
+  if (!key || key !== expected) {
+    return new Response("<h2>Invalid or expired link.</h2>", { status: 400, headers: { "Content-Type": "text/html" } });
   }
 
   await prisma.user.update({

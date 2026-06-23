@@ -6,7 +6,7 @@ import { Stage, Layer, Image as KonvaImage, Rect, Line, Text, Group, Circle, Pat
 import Konva from "konva";
 import * as pdfjsLib from "pdfjs-dist";
 import { computeScale, scaleLabel } from "@/lib/scale";
-import { effectiveScale } from "@/lib/takeoff";
+import { effectiveScale, areaUnit } from "@/lib/takeoff";
 import { DrawingScalePanel } from "./DrawingScalePanel";
 import { ScaleZonePanel } from "./ScaleZonePanel";
 import { TakeoffPanel, type TakeoffGroup } from "./TakeoffPanel";
@@ -1003,7 +1003,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             toolType,
             shapeType,
             toolData: { points },
-            multiplier: 1,
+            multiplier: group.multiplier ?? 1,
           }),
         }
       );
@@ -1743,7 +1743,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
       case "VERTICAL_WALL_AREA": {
         const wObj = ap?.wall as Record<string, unknown> | undefined;
-        const wallH = wObj?.enabled ? (Number(wObj.heightFt ?? 0) + Number(wObj.heightIn ?? 0) / 12) : 0;
+        const wallH = wObj ? (Number(wObj.heightFt ?? 0) + Number(wObj.heightIn ?? 0) / 12) : 0;
         if (!wallH) return { qty: raw * mult, unit: `${su} (set wall height)` };
         return { qty: raw * wallH * mult, unit: su === "ft" ? "sq ft" : "sq m" };
       }
@@ -1773,7 +1773,12 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       }
 
       default:
-        return { qty: raw * mult, unit: item.unit };
+        // Use current page's scaleUnit so unit reflects live scale, not the stored unit.
+        // AREA groups report sq ft / sq m; LINEAR groups report the linear unit.
+        return {
+          qty: raw * mult,
+          unit: group.type === "AREA" ? areaUnit(su) : (currentPage.scaleUnit ?? item.unit),
+        };
     }
   }
 

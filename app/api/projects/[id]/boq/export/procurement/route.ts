@@ -32,10 +32,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const boq = await generateBOQ(params.id);
 
     // Pull wastagePct from TakeoffItems grouped by their group
+    // Also fetch isNegative, rawQuantity, multiplier, additionalParams for correct BOQ qty (BUG 10 & 11)
     const groups = await prisma.takeoffGroup.findMany({
       where: { projectId: params.id, parentId: { not: null } },
       include: {
-        items: { select: { wastagePct: true, quantity: true } },
+        items: { select: { wastagePct: true, quantity: true, isNegative: true, rawQuantity: true, shapeType: true } },
         rateItem: { select: { description: true, unit: true, baseRate: true } },
         discipline: { select: { name: true } },
       },
@@ -78,7 +79,28 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       const avgWastage = grp.items.length > 0
         ? grp.items.reduce((s, i) => s + i.wastagePct, 0) / grp.items.length
         : 0;
-      const boqQty = grp.items.reduce((s, i) => s + i.quantity, 0);
+
+      // Compute BOQ quantity the same way lib/boq.ts does:
+      // sum signed rawQuantity (respecting isNegative), then apply group multiplier (BUG 10 & 11)
+      const ap = grp.additionalParams as Record<string, unknown> | null;
+      const type = grp.type as string;
+      let rawSum = 0;
+      if (type === "VOLUME") {
+        const method = (ap?.volumeMethod as string) ?? "area_x_h";
+        for (const i of grp.items) {
+          const isLength = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || !i.shapeType;
+          const isArea = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
+          if ((method === "lbh" && isLength) || (method !== "lbh" && isArea)) {
+            rawSum += i.isNegative ? -i.rawQuantity : i.rawQuantity;
+          }
+        }
+      } else {
+        for (const i of grp.items) {
+          rawSum += i.isNegative ? -i.rawQuantity : i.rawQuantity;
+        }
+      }
+      // Apply group-level multiplier
+      const boqQty = rawSum * grp.multiplier;
       const orderQty = boqQty * (1 + avgWastage / 100);
       const rate = grp.rateItem?.baseRate ?? 0;
       const orderAmount = orderQty * rate;

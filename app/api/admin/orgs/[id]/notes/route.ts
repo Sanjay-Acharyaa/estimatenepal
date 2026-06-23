@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const ip = getClientIp(req);
+  const limited = await checkApiRateLimit(ip);
+  if (limited) return limited;
+
   const session = await getSession();
   if (!session?.user?.isSuperAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

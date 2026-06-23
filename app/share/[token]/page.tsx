@@ -9,8 +9,7 @@ export default async function SharePage({ params }: { params: { token: string } 
     include: {
       project: {
         include: {
-          members: { include: { user: { select: { name: true } } } },
-          _count: { select: { drawings: true, disciplines: true } },
+          _count: { select: { drawings: true, disciplines: true, members: true } },
           disciplines: {
             include: {
               _count: { select: { groups: true } },
@@ -100,7 +99,7 @@ export default async function SharePage({ params }: { params: { token: string } 
             <div className="text-xs text-gray-500 mt-1">Drawings</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">{p.members.length}</div>
+            <div className="text-2xl font-bold text-green-600">{p._count.members}</div>
             <div className="text-xs text-gray-500 mt-1">Team Members</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">

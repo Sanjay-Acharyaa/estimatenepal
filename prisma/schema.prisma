@@ -176,7 +176,7 @@ model ProjectMember {
 model ShareLink {
   id             String    @id @default(cuid())
   projectId      String
-  project        Project   @relation(fields: [projectId], references: [id])
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   token          String    @unique
   expiresAt      DateTime?
   isActive       Boolean   @default(true)
@@ -339,6 +339,7 @@ model TakeoffItem {
   @@index([groupId])
   @@index([rateItemId])
   @@index([pageId, sortOrder])
+  @@index([groupId, sortOrder])            // BOQ roll-up queries ordered by group + sortOrder
 }
 
 // Drawing Folders (Documents tab)
@@ -424,6 +425,7 @@ model RateItem {
   @@index([source, fiscalYear])
   @@index([source, isPublished])
   @@index([source, fiscalYear, isPublished])
+  @@index([orgId, source])                 // org-scoped rate list filtered by source
 }
 
 model DistrictRate {
@@ -464,7 +466,7 @@ model RateAnalysis {
 model BOQOverride {
   id            String         @id @default(cuid())
   projectId     String
-  project       Project        @relation(fields: [projectId], references: [id])
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   rateItemId    String
   rateItem      RateItem       @relation(fields: [rateItemId], references: [id])
   field         String
@@ -590,7 +592,7 @@ enum ChangeOrderStatus {
 model ChangeOrder {
   id          String            @id @default(cuid())
   projectId   String
-  project     Project           @relation(fields: [projectId], references: [id])
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   number      Int
   title       String
   description String?           @db.Text

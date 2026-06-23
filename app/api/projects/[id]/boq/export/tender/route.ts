@@ -150,9 +150,26 @@ ${project.scopeOfWork ? `
             <td>${String.fromCharCode(65 + di)}.${gi + 1}</td>
             <td>${escHtml(grp.name)}${grp.preamble ? `<br/><span style="font-weight:normal;font-size:9px;color:#6b7280">${escHtml(grp.preamble)}</span>` : ""}</td>
             <td>${escHtml(grp.unit)}</td>
-            <td class="text-right">${grp.totalQuantity.toFixed(3)}</td>
+            <td class="text-right"></td>
             <td class="text-right">${NRS(grp.rate)}</td>
             <td class="text-right">${NRS(grp.amount)}</td>
+          </tr>
+          ${grp.items.map(item => `
+          <tr style="font-size:9px;">
+            <td></td>
+            <td style="padding-left:20px;">${escHtml(item.label)}</td>
+            <td>${escHtml(item.unit)}</td>
+            <td class="text-right">${item.quantity.toFixed(3)}</td>
+            <td></td>
+            <td></td>
+          </tr>`).join("")}
+          <tr style="font-size:9px;font-weight:600;">
+            <td></td>
+            <td style="text-align:right;padding-right:8px;">Total</td>
+            <td>${escHtml(grp.unit)}</td>
+            <td class="text-right">${grp.totalQuantity.toFixed(3)}</td>
+            <td></td>
+            <td></td>
           </tr>
         `).join("")}
         <tr class="total-row">
@@ -206,8 +223,14 @@ ${project.rateAnalyses.length > 0 ? `
         <div class="ra-row"><span>Semi-skilled Labour</span><span>NRS ${NRS(ra.semiSkilledLabour)}</span></div>
         <div class="ra-row"><span>Unskilled Labour</span><span>NRS ${NRS(ra.unskilledLabour)}</span></div>
         <div class="ra-row"><span>Equipment Cost</span><span>NRS ${NRS(ra.equipmentCost)}</span></div>
-        <div class="ra-row"><span>Overhead (${ra.overheadPct}%)</span><span>NRS ${NRS((ra.materialCost + ra.skilledLabour + ra.semiSkilledLabour + ra.unskilledLabour + ra.equipmentCost) * ra.overheadPct / 100)}</span></div>
-        <div class="ra-row"><span>Profit (${ra.profitPct}%)</span><span>NRS ${NRS((ra.materialCost + ra.skilledLabour + ra.semiSkilledLabour + ra.unskilledLabour + ra.equipmentCost) * ra.profitPct / 100)}</span></div>
+        ${(() => {
+          const baseTotal = ra.materialCost + ra.skilledLabour + ra.semiSkilledLabour + ra.unskilledLabour + ra.equipmentCost;
+          const overheadAmount = baseTotal * ra.overheadPct / 100;
+          const afterOverhead = baseTotal + overheadAmount;
+          const profitAmount = afterOverhead * ra.profitPct / 100;
+          return `<div class="ra-row"><span>Overhead (${ra.overheadPct}%)</span><span>NRS ${NRS(overheadAmount)}</span></div>
+        <div class="ra-row"><span>Profit (${ra.profitPct}%)</span><span>NRS ${NRS(profitAmount)}</span></div>`;
+        })()}
         <div class="computed-rate">Composite Rate: NRS ${NRS(ra.computedRate)} / ${escHtml(ra.rateItem.unit)} ${ra.useComputedRate ? "(ACTIVE)" : "(not applied)"}</div>
       </div>
     `).join("")}

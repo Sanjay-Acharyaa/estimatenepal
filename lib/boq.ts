@@ -152,6 +152,15 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
     : [];
   const analysisMap = new Map(rateAnalyses.map((a) => [a.rateItemId, a]));
 
+  // Fetch district-specific rates for the project's district (BUG 8)
+  const districtRates = project.district
+    ? await prisma.districtRate.findMany({
+        where: { district: project.district },
+        select: { rateItemId: true, rate: true },
+      })
+    : [];
+  const districtRateMap = new Map(districtRates.map((r) => [r.rateItemId, r.rate]));
+
   const allOverrides = await prisma.bOQOverride.findMany({
     where: { projectId },
     orderBy: { createdAt: "desc" },
@@ -239,18 +248,34 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         unit = (layer.items[0]?.unit ?? "").replace(/ \(set [^)]+\)/g, "").trim();
       }
 
-      // Start with base rate; upgrade to computed rate if analysis says so
+      // Start with base rate; prefer district rate over base rate (BUG 8); upgrade to computed rate if analysis says so
       const analysis = rateItemId ? analysisMap.get(rateItemId) : undefined;
-      let rate = (analysis?.useComputedRate ? analysis.computedRate : rateItem?.baseRate) ?? 0;
+      const baseOrDistrictRate = rateItemId
+        ? (districtRateMap.get(rateItemId) ?? rateItem?.baseRate ?? 0)
+        : 0;
+      let rate = (analysis?.useComputedRate ? analysis.computedRate : baseOrDistrictRate) ?? 0;
       let isOverridden = false;
       let originalRate: number | null = null;
+
+      // Track the description in case there's an approved description override (BUG 23)
+      let overriddenDescription: string | null = null;
 
       if (rateItemId) {
         const ov = approvedMap.get(rateItemId);
         if (ov && ov.field === "rate") {
           originalRate = rate;
-          rate = parseFloat(ov.approvedValue ?? ov.proposedValue);
+          const parsedRate = parseFloat(ov.approvedValue ?? ov.proposedValue);
+          // BUG 12: guard against NaN or negative values from non-numeric override
+          if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+            rate = districtRateMap.get(rateItemId) ?? rateItem?.baseRate ?? 0;
+          } else {
+            rate = parsedRate;
+          }
           isOverridden = true;
+        } else if (ov && ov.field === "description" && ov.status === "APPROVED") {
+          // BUG 23: apply approved description override
+          const desc = ov.approvedValue ?? ov.proposedValue;
+          if (desc) overriddenDescription = desc;
         }
       }
 
@@ -282,7 +307,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         amount: totalQuantity * rate,
         rateItemId,
         rateCode: rateItem?.code ?? null,
-        rateDescription: rateItem?.description ?? null,
+        rateDescription: overriddenDescription ?? rateItem?.description ?? null,
         isOverridden,
         originalRate,
         pendingOverride: pendingOv
