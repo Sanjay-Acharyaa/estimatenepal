@@ -1343,7 +1343,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       if (isDouble) {
         const pts = [...linearPointsRef.current];
         if (pts.length >= 2) {
-          const isClosed = group?.type === "AREA" || group?.type === "VOLUME";
+          const volumeMethod = (group?.additionalParams as any)?.volumeMethod ?? "area_x_h";
+          const isClosed = group?.type === "AREA" || (group?.type === "VOLUME" && volumeMethod !== "lbh");
           saveItem(group?.type ?? "LINEAR", isClosed ? "POLYGON" : "POLYLINE", pts).then(ok => {
             if (ok) { linearPointsRef.current = []; setLinearPoints([]); setMousePos(null); }
           });
@@ -1380,7 +1381,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
     const pts = linearPointsRef.current;
     const group = takeoffGroups.find(g => g.id === selectedGroupId);
     if (selectedGroupId && pts.length >= 2) {
-      const isClosed = group?.type === "AREA" || group?.type === "VOLUME";
+      const volumeMethod = (group?.additionalParams as any)?.volumeMethod ?? "area_x_h";
+      const isClosed = group?.type === "AREA" || (group?.type === "VOLUME" && volumeMethod !== "lbh");
       const ok = await saveItem(group?.type ?? "LINEAR", isClosed ? "POLYGON" : "POLYLINE", [...pts]);
       if (ok) {
         linearPointsRef.current = [];
