@@ -225,13 +225,19 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
           null,
           null,
         ]);
-        iRow.eachCell((c) => { c.alignment = { horizontal: "right", vertical: "middle" }; borderAll(c); });
+        // Use explicit range so empty (null) cells also get borders
+        for (let col = 1; col <= 10; col++) {
+          const c = iRow.getCell(col);
+          c.alignment = { horizontal: "right", vertical: "middle" };
+          borderAll(c);
+        }
         iRow.getCell(2).alignment = { horizontal: "left" };
         iRow.getCell(7).numFmt = '#,##0.000';
       }
 
       // Group total row
-      const totalQty = +qty(grp.totalQuantity);
+      const safeTotal = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
+      const totalQty = +qty(safeTotal);
       const tRow = ws.addRow([
         "", `Total — ${sanitizeCell(grp.name)}`, "", "", "", "",
         totalQty, grp.unit, grp.rate, grp.amount,
@@ -317,18 +323,21 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
           item.measuredDate ? new Date(item.measuredDate).toLocaleDateString("en-NP") : "",
           item.notes ?? "",
         ]);
-        iRow.eachCell((c) => {
+        // Use explicit range so empty (null) cells also get borders
+        for (let col = 1; col <= 11; col++) {
+          const c = iRow.getCell(col);
           c.alignment = { horizontal: "right", vertical: "middle", wrapText: true };
           borderAll(c);
-        });
+        }
         iRow.getCell(2).alignment = { horizontal: "left", wrapText: true };
         iRow.getCell(9).alignment = { horizontal: "left" };
         iRow.getCell(11).alignment = { horizontal: "left", wrapText: true };
         iRow.getCell(7).numFmt = '#,##0.000';
       }
 
+      const safeTotalMB = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
       const tRow = ws.addRow([
-        "", `Total — ${grp.name}`, "", "", "", "", +qty(grp.totalQuantity), grp.unit,
+        "", `Total — ${grp.name}`, "", "", "", "", +qty(safeTotalMB), grp.unit,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
       tRow.getCell(7).numFmt = '#,##0.000';
