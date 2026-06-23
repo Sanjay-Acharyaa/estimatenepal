@@ -220,7 +220,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           unit = h > 0 ? "cu ft" : "sq ft";
         }
       } else if (layer.type === "VERTICAL_WALL_AREA") {
-        const wallH = ap?.wall?.enabled ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12 : 0;
+        const wallH = ap?.wall ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12 : 0;
         const rawTotal = layer.items.reduce((s, i) => s + (i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
         totalQuantity = wallH > 0 ? rawTotal * wallH * layer.multiplier : 0;
         unit = wallH > 0 ? "sq ft" : "ft";
@@ -288,19 +288,51 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         type: layer.type,
         categoryName: layer.parent?.name ?? null,
         groupMultiplier: layer.multiplier,
-        items: layer.items.map((item) => ({
-          id: item.id,
-          label: item.label,
-          multiplier: item.multiplier,
-          length: item.length,
-          breadth: item.breadth,
-          height: item.height,
-          quantity: item.isNegative ? -item.quantity : item.quantity,
-          unit: item.unit,
-          siteLocation: item.siteLocation,
-          measuredDate: item.measuredDate,
-          notes: item.notes,
-        })),
+        items: layer.items.map((item) => {
+          // Compute per-item L/B/H for measurement book format and recompute quantity
+          // from rawQuantity + current group params to avoid stale stored values.
+          let mbLength: number | null = null;
+          let mbBreadth: number | null = null;
+          let mbHeight: number | null = null;
+          let effectiveQty: number;
+          const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+
+          if (layer.type === "VERTICAL_WALL_AREA") {
+            const wH = ap?.wall ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12 : 0;
+            mbLength = item.rawQuantity;
+            if (wH > 0) mbHeight = wH;
+            effectiveQty = wH > 0 ? signedRaw * wH * item.multiplier : signedRaw * item.multiplier;
+          } else if (layer.type === "VOLUME") {
+            const method = ap?.volumeMethod ?? "area_x_h";
+            const h = ap?.height ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12 : 0;
+            mbLength = item.rawQuantity;
+            if (h > 0) mbHeight = h;
+            if (method === "lbh") {
+              const b = ap?.breadth ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12 : 0;
+              if (b > 0) mbBreadth = b;
+              effectiveQty = signedRaw * (b > 0 ? b : 1) * (h > 0 ? h : 1) * item.multiplier;
+            } else {
+              effectiveQty = signedRaw * (h > 0 ? h : 1) * item.multiplier;
+            }
+          } else {
+            // COUNT, LINEAR, AREA, COUNT_BY_DISTANCE — stored quantity is correct
+            effectiveQty = item.isNegative ? -item.quantity : item.quantity;
+          }
+
+          return {
+            id: item.id,
+            label: item.label,
+            multiplier: item.multiplier,
+            length: mbLength,
+            breadth: mbBreadth,
+            height: mbHeight,
+            quantity: effectiveQty,
+            unit: item.unit,
+            siteLocation: item.siteLocation,
+            measuredDate: item.measuredDate,
+            notes: item.notes,
+          };
+        }),
         totalQuantity,
         unit,
         rate,
