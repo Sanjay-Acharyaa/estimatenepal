@@ -152,7 +152,7 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
 
         {/* Logo */}
         <div className="relative z-10">
-          <Logo white size={36} src={logoUrl || null} name={siteName} />
+          <Link href="/"><Logo white size={36} src={logoUrl || null} name={siteName} /></Link>
         </div>
 
         {/* Main content */}
@@ -231,7 +231,7 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
       <div className="w-full lg:w-1/2 xl:w-2/5 flex items-center justify-center bg-white px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
-            <Logo size={32} src={logoUrl || null} name={siteName} />
+            <Link href="/"><Logo size={32} src={logoUrl || null} name={siteName} /></Link>
           </div>
 
           <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h2>
