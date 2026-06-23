@@ -78,6 +78,8 @@ export async function POST(
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
+    if (project.isPricingLocked) return apiError("FORBIDDEN", "Estimate pricing is locked. Unlock it in project settings before making takeoff changes.", 403);
+
     // Load page with scale + zones for quantity computation
     const page = await prisma.drawingPage.findUnique({
       where: { id: params.pageId },

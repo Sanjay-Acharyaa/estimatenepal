@@ -44,6 +44,7 @@ type Props = {
   initialDisciplines: Discipline[];
   allDrawings: { id: string; fileName: string; folderId?: string | null; folderName?: string }[];
   currentUser: { id: string; name: string };
+  isPricingLocked?: boolean;
 };
 
 type ActiveUser = { socketId: string; userId: string; name: string; initials: string };
@@ -80,7 +81,7 @@ const MAX_HISTORY = 30;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, initialDisciplines, allDrawings, currentUser }: Props) {
+export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, initialDisciplines, allDrawings, currentUser, isPricingLocked = false }: Props) {
   // PDF state
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [pdfImage, setPdfImage] = useState<HTMLImageElement | null>(null);
@@ -2075,23 +2076,23 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             ] as { m: Mode; label: string; icon: string; title: string }[]).map(({ m, label, icon, title }) => {
               const activeGrp = selectedGroupId ? takeoffGroups.find(g => g.id === selectedGroupId) : null;
               const locked = activeGrp?.isLocked ?? false;
-              const disabled = !selectedGroupId || locked;
+              const disabled = !selectedGroupId || locked || isPricingLocked;
               return (
                 <button key={m}
                   onClick={() => {
-                    if (!selectedGroupId) { return; }
-                    if (locked) return;
+                    if (!selectedGroupId || locked || isPricingLocked) return;
                     setMode(m);
                     setCalibLine(null);
                     resetDrawingState();
                     setMeasureAnchor(null);
                   }}
                   title={
+                    isPricingLocked ? "Estimate pricing is locked — unlock in project settings" :
                     locked ? "Layer is locked — unlock to draw" :
                     !selectedGroupId ? "Select a takeoff layer first" : title
                   }
                   className={`text-xs px-2 py-1 rounded transition flex items-center gap-1 ${
-                    mode === m && !locked ? "bg-blue-600 text-white" :
+                    mode === m && !disabled ? "bg-blue-600 text-white" :
                     disabled ? "text-gray-600 cursor-not-allowed opacity-50" :
                     "text-gray-600 hover:text-white hover:bg-gray-700"
                   }`}
@@ -2220,6 +2221,17 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
             )}
           </div>
         </div>
+
+        {/* Pricing lock banner */}
+        {isPricingLocked && (
+          <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-900/40 border-b border-amber-600/50 text-amber-300 text-xs font-medium flex-shrink-0">
+            🔒 Estimate pricing is locked — takeoff is read-only. Go to{" "}
+            <a href={`/dashboard/projects/${projectId}`} className="underline hover:text-amber-100 transition">
+              project settings
+            </a>{" "}
+            to unlock.
+          </div>
+        )}
 
         {/* Canvas */}
         <div ref={containerRef} className="flex-1 relative overflow-hidden bg-gray-900" style={{ cursor }}>

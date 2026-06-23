@@ -81,6 +81,8 @@ export async function PUT(
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
+    if (project.isPricingLocked) return apiError("FORBIDDEN", "Estimate pricing is locked. Unlock it in project settings before making takeoff changes.", 403);
+
     const resolved = await resolveItem(params.pageId, params.drawingId, params.itemId);
     if (!resolved) throw notFound("Takeoff item");
     const { page, item } = resolved;
@@ -158,6 +160,8 @@ export async function DELETE(
     const project = await prisma.project.findUnique({ where: { id: params.id } });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
+
+    if (project.isPricingLocked) return apiError("FORBIDDEN", "Estimate pricing is locked. Unlock it in project settings before making takeoff changes.", 403);
 
     const resolved = await resolveItem(params.pageId, params.drawingId, params.itemId);
     if (!resolved) throw notFound("Takeoff item");

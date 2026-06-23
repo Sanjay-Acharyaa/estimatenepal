@@ -75,6 +75,8 @@ export async function PUT(
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
+    if (project.isPricingLocked) return apiError("FORBIDDEN", "Estimate pricing is locked. Unlock it in project settings before making takeoff changes.", 403);
+
     const group = await prisma.takeoffGroup.findUnique({ where: { id: params.gId } });
     if (!group || group.projectId !== params.id) throw notFound("Takeoff group");
 
@@ -124,6 +126,8 @@ export async function DELETE(
     const project = await prisma.project.findUnique({ where: { id: params.id } });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
+
+    if (project.isPricingLocked) return apiError("FORBIDDEN", "Estimate pricing is locked. Unlock it in project settings before making takeoff changes.", 403);
 
     if (!["OWNER", "ADMIN"].includes(token.role as string)) throw forbidden();
 

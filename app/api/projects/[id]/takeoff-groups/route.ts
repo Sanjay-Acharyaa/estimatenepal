@@ -72,6 +72,8 @@ export async function POST(
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
+    if (project.isPricingLocked) return apiError("FORBIDDEN", "Estimate pricing is locked. Unlock it in project settings before making takeoff changes.", 403);
+
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
