@@ -20,7 +20,7 @@ export function PublicFooter({ cfg }: Props) {
 
   return (
     <footer className="border-t border-gray-100 bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[45px] flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[30px] flex items-center justify-between gap-4">
         <p className="text-[11px] text-gray-400 shrink-0">© {year} Estimate Nepal</p>
 
         <nav className="flex items-center gap-4 flex-wrap justify-center">

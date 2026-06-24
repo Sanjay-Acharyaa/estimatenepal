@@ -181,12 +181,7 @@ export default async function SecurityPage() {
           </section>
 
           {/* Last updated */}
-          <p className="text-xs text-gray-400 mt-10 text-center">
-            Security page last reviewed: June 2026.{" "}
-            <Link href="/privacy" className="text-gray-400 hover:text-gray-600 underline">Privacy Policy</Link>
-            {" · "}
-            <Link href="/contact" className="text-gray-400 hover:text-gray-600 underline">Contact Us</Link>
-          </p>
+          <p className="text-xs text-gray-400 mt-10 text-center">Security page last reviewed: June 2026.</p>
         </article>
 
         <PublicFooter cfg={cfg} />

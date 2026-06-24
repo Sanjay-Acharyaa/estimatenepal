@@ -181,11 +181,6 @@ export default async function RefundPage() {
             </div>
           </section>
 
-          <div className="mt-10 pt-6 border-t border-gray-100 flex flex-wrap gap-4 text-sm text-gray-400">
-            <Link href="/privacy" className="hover:text-gray-600 transition">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-gray-600 transition">Terms of Service</Link>
-            <Link href="/contact" className="hover:text-gray-600 transition">Contact Us</Link>
-          </div>
         </article>
 
         <PublicFooter cfg={cfg} />

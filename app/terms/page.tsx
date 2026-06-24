@@ -252,12 +252,6 @@ export default async function TermsPage() {
             </div>
           </section>
 
-          <div className="mt-10 pt-6 border-t border-gray-100 flex flex-wrap gap-4 text-sm text-gray-400">
-            <Link href="/privacy" className="hover:text-gray-600 transition">Privacy Policy</Link>
-            <Link href="/refund" className="hover:text-gray-600 transition">Refund Policy</Link>
-            <Link href="/security" className="hover:text-gray-600 transition">Security</Link>
-            <Link href="/contact" className="hover:text-gray-600 transition">Contact Us</Link>
-          </div>
         </article>
 
         <PublicFooter cfg={cfg} />
