@@ -74,7 +74,7 @@ function fmt(n: number) {
 
 export default async function LandingPage() {
   const session = await getSession();
-  if (session) redirect("/dashboard");
+  if (session?.user) redirect("/dashboard");
 
   const [cfg, testimonials] = await Promise.all([
     getAllConfigs(),
