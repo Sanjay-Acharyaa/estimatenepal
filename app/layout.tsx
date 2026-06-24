@@ -7,6 +7,7 @@ import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import { Analytics } from "@/components/tracking/Analytics";
 import { PresenceBeacon } from "@/components/tracking/PresenceBeacon";
+import { CookieBanner } from "@/components/public/CookieBanner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -102,6 +103,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <PresenceBeacon />
         <Providers>{children}</Providers>
         <Toaster position="top-right" richColors closeButton duration={4000} />
+        <CookieBanner />
       </body>
     </html>
   );

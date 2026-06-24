@@ -1,52 +1,68 @@
 # Estimate Nepal
-
-> Nepal's construction estimating platform. Generate BOQ with DUDBC rates, measure PDF drawings, manage tenders, and collaborate with your team.
+> Nepal's construction estimating platform — BOQ generation, DUDBC rates, PDF drawing takeoff, and tender document export.
 
 ## What is Estimate Nepal?
-
-Estimate Nepal (estimatenepal.com) is a web-based construction cost estimating software built specifically for Nepal's construction industry. It helps civil engineers, quantity surveyors, architects, and contractors create accurate Bills of Quantities (BOQ) using official DUDBC (Department of Urban Development and Building Construction) rates.
+Estimate Nepal (estimatenepal.com) is a web-based SaaS platform built specifically for Nepal's construction industry. It helps civil engineers, quantity surveyors, architects, and contractors create accurate Bills of Quantities (BOQ) using official DUDBC (Department of Urban Development and Building Construction) rates, measure directly on PDF drawings, and export professional tender documents.
 
 ## Core Features
+- **BOQ Generation**: Automatically generate Bill of Quantities by connecting takeoff measurements to DUDBC rate items. Supports all 77 districts of Nepal with district-specific rates.
+- **PDF Drawing Takeoff**: Measure lengths, areas, volumes, and counts directly on uploaded PDF drawings. Set scale once; all measurements auto-convert.
+- **DUDBC Rate Catalog**: Full database of DUDBC rates updated each fiscal year, with complete cost breakdown (labour, material, equipment) for all 77 districts.
+- **Tender Document Export**: Export professional BOQ, measurement books (MB), rate analysis sheets, and tender documents as PDF or Excel in one click.
+- **Team Collaboration**: Invite team members with role-based access (Owner, Admin, Member). Live collaboration on shared projects.
+- **Project Dashboard**: Track bids, pipeline value, win rate, and upcoming deadlines across all projects.
+- **Volume & Area Takeoff**: Supports LINEAR, AREA, VOLUME (L×B×H and Area×H), COUNT, VERTICAL WALL AREA, and COUNT BY DISTANCE measurement types.
 
-- **BOQ Generation**: Automatically generate Bill of Quantities by connecting measurements to DUDBC rate items
-- **PDF Drawing Takeoff**: Measure lengths, areas, volumes, and counts directly on uploaded PDF drawings with scale calibration
-- **DUDBC Rate Catalog**: Full database of DUDBC rates covering all 77 districts of Nepal, updated each fiscal year, with complete cost breakdown (labour, material, equipment)
-- **Tender Document Export**: Export professional tender documents, measurement books (MB), and rate analysis sheets as PDF or Excel
-- **Team Collaboration**: Invite team members, assign roles (Owner, Admin, Member), manage permissions across projects
-- **Project Dashboard**: Track multiple construction projects, monitor progress, manage change orders
+## Who Uses Estimate Nepal?
+- Civil and structural engineers preparing BOQs for government and private projects
+- Quantity surveyors (QS) streamlining tender preparation
+- Contractors and builders bidding on government tenders
+- Architects generating early-stage cost estimates from drawings
+- Project managers tracking multiple bids and project values
+- Government departments requiring DUDBC-compliant estimates
 
-## Who uses Estimate Nepal?
+## Pricing (NPR/month, as of 2026)
+- **Solo**: NPR 999/month — 1 user, 10 GB storage, all core features
+- **Team of 3**: NPR 1,999/month — up to 3 users, 20 GB storage
+- **Team of 5**: NPR 3,000/month — up to 5 users, 20 GB storage
+- **Enterprise**: NPR 550/seat/month — 6+ users, custom onboarding, dedicated support
+- All plans include a **14-day free trial** with no credit card required.
+- Annual billing saves 2 months (pay for 10, get 12).
 
-- Civil engineers and structural engineers in Nepal
-- Quantity surveyors (QS) preparing BOQs for government and private projects
-- Architects needing cost estimates for building designs
-- Contractors preparing bids and tender submissions
-- Construction companies managing multiple projects
-- Government departments using DUDBC-compliant estimates
+## Key Terms
+- **DUDBC**: Department of Urban Development and Building Construction — Nepal government body that publishes official construction rates by district and fiscal year.
+- **BOQ**: Bill of Quantities — document listing all materials, labour, and costs for a construction project.
+- **Takeoff**: The process of measuring quantities from construction drawings.
+- **MB Book**: Measurement Book — official document recording field measurements in Nepal government projects.
+- **Rate Analysis**: Breakdown of a rate item into labour, material, and equipment components with district-specific costs.
 
-## Pricing
-
-- **Solo**: NPR 999/month — 1 user, all core features
-- **Team of 3**: NPR 1,999/month — up to 3 users
-- **Team of 5**: NPR 3,000/month — up to 5 users
-- **Enterprise**: NPR 550/seat/month — unlimited projects
-- All plans include a 14-day free trial, no credit card required
-
-## Technical Details
-
-- Web application, works on all browsers and devices
-- Built on Next.js, hosted at estimatenepal.com
-- Data stored securely, Nepal-based operations
-
-## Contact
-
+## Company
+- Name: Estimate Nepal
+- Location: Kathmandu, Nepal
+- Founded: serving Nepal's construction industry
 - Website: https://estimatenepal.com
 - Email: hello@estimatenepal.com
 - Facebook: https://www.facebook.com/estimatenepal
 
-## Key Terms
+## Key Pages
+- Home: https://estimatenepal.com
+- About: https://estimatenepal.com/about
+- FAQ: https://estimatenepal.com/faq
+- Contact: https://estimatenepal.com/contact
+- Security: https://estimatenepal.com/security
+- Pricing: https://estimatenepal.com/#pricing
+- Sign In: https://estimatenepal.com/login
+- Register (Free Trial): https://estimatenepal.com/register
 
-- **DUDBC**: Department of Urban Development and Building Construction — the Nepal government body that publishes official construction rates
-- **BOQ**: Bill of Quantities — a document listing all materials, labour, and costs for a construction project
-- **Takeoff**: The process of measuring quantities from construction drawings
-- **MB Book**: Measurement Book — official document used to record field measurements in Nepal government projects
+## Legal
+- Privacy Policy: https://estimatenepal.com/privacy
+- Terms of Service: https://estimatenepal.com/terms
+- Refund Policy: https://estimatenepal.com/refund
+
+## Security Summary
+- All data encrypted in transit (TLS/HTTPS)
+- Passwords hashed using bcrypt
+- Role-based access control — users only access their own organisation's data
+- Sessions invalidated server-side on password change
+- Regular database backups
+- Rate limiting on authentication endpoints
