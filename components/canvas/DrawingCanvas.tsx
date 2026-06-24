@@ -2361,6 +2361,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
                   const groupType = item.group?.type ?? item.toolType;
                   const shape = item.shapeType;
+                  const groupAp = groupDef?.additionalParams as Record<string, unknown> | null;
+                  const isLbhVolume = groupType === "VOLUME" && (groupAp?.volumeMethod as string) === "lbh";
 
                   // Lock overlay — shown when another user has this shape locked
                   const lockOverlay = remoteLock && remoteLock.userId !== currentUser.id ? (() => {
@@ -2419,7 +2421,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
                   if (shape === "CIRCLE" && pts.length >= 2) {
                     const dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y;
                     const r = Math.sqrt(dx * dx + dy * dy);
-                    const isFilled = groupType === "AREA" || groupType === "VOLUME";
+                    const isFilled = (groupType === "AREA" || groupType === "VOLUME") && !isLbhVolume;
                     return (
                       <Group key={item.id} onClick={handleItemClick} opacity={remoteLock && remoteLock.userId !== currentUser.id ? 0.4 : 1}>
                         {isSelected && (
@@ -2471,8 +2473,8 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
                   // POLYLINE / POLYGON / RECTANGLE shapes
                   {
-                    const isFilled = groupType === "AREA" || groupType === "VOLUME";
-                    const isClosed = isFilled || shape === "RECTANGLE" || shape === "POLYGON";
+                    const isFilled = (groupType === "AREA" || groupType === "VOLUME") && !isLbhVolume;
+                    const isClosed = isFilled || (!isLbhVolume && (shape === "RECTANGLE" || shape === "POLYGON"));
                     const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
                     const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
                     const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
