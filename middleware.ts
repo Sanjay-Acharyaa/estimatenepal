@@ -10,8 +10,14 @@ const PUBLIC_PATHS = [
   "/reset-password",
   "/about",
   "/faq",
+  "/contact",
+  "/security",
+  "/privacy",
+  "/terms",
+  "/refund",
   "/sitemap.xml",
   "/robots.txt",
+  "/llms.txt",
   "/api/auth",
   "/api/config/public", // Public pricing + contact config for client components
   "/api/testimonials",  // Public GET for approved testimonials
