@@ -112,21 +112,18 @@ export default async function SecurityPage() {
       <div className="min-h-screen bg-white font-sans">
         <PublicNav cfg={cfg} />
 
-        {/* Hero */}
-        <section className="bg-gradient-to-b from-blue-950 to-blue-900 text-white py-14 sm:py-20 px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <nav className="text-sm text-blue-300 mb-4" aria-label="Breadcrumb">
-              <Link href="/" className="hover:text-white transition">Home</Link>
-              <span className="mx-2 text-blue-500">/</span>
-              <span className="text-blue-100">Security</span>
+        {/* Page title */}
+        <div className="border-b border-gray-200 px-4 py-8">
+          <div className="max-w-3xl mx-auto">
+            <nav className="text-xs text-gray-400 mb-2" aria-label="Breadcrumb">
+              <Link href="/" className="hover:text-gray-600 transition">Home</Link>
+              <span className="mx-1.5">/</span>
+              <span>Security</span>
             </nav>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold mb-4">Security at Estimate Nepal</h1>
-            <p className="text-blue-200 text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
-              Your project data, drawings, and BOQs represent years of professional work. We take their security
-              seriously at every layer — from your password to our servers.
-            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Security at Estimate Nepal</h1>
+            <p className="text-xs text-gray-500">Your project data is protected at every layer — from your password to our servers.</p>
           </div>
-        </section>
+        </div>
 
         {/* Summary badges */}
         <section className="bg-gray-50 border-b border-gray-100 py-6 px-4">

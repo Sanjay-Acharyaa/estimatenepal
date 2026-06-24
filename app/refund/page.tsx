@@ -50,18 +50,18 @@ export default async function RefundPage() {
       <div className="min-h-screen bg-white font-sans">
         <PublicNav cfg={cfg} />
 
-        {/* Hero */}
-        <section className="bg-gradient-to-b from-blue-950 to-blue-900 text-white py-12 px-4">
+        {/* Page title */}
+        <div className="border-b border-gray-200 px-4 py-8">
           <div className="max-w-3xl mx-auto">
-            <nav className="text-sm text-blue-300 mb-4" aria-label="Breadcrumb">
-              <Link href="/" className="hover:text-white transition">Home</Link>
-              <span className="mx-2 text-blue-500">/</span>
-              <span className="text-blue-100">Refund Policy</span>
+            <nav className="text-xs text-gray-400 mb-2" aria-label="Breadcrumb">
+              <Link href="/" className="hover:text-gray-600 transition">Home</Link>
+              <span className="mx-1.5">/</span>
+              <span>Refund Policy</span>
             </nav>
-            <h1 className="text-3xl sm:text-4xl font-extrabold mb-3">Refund &amp; Cancellation Policy</h1>
-            <p className="text-blue-200 text-sm">Last Updated: {LAST_UPDATED}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Refund &amp; Cancellation Policy</h1>
+            <p className="text-xs text-gray-400">Last Updated: {LAST_UPDATED}</p>
           </div>
-        </section>
+        </div>
 
         {/* Quick summary cards */}
         <section className="bg-gray-50 border-b border-gray-100 py-8 px-4">
