@@ -8,6 +8,7 @@ interface Props {
 const TRUST_LINKS = [
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Contact Us" },
+  { href: "/about", label: "About" },
   { href: "/security", label: "Security" },
   { href: "/privacy", label: "Privacy Policy" },
   { href: "/terms", label: "Terms" },

@@ -13,7 +13,6 @@ export function PublicNav({ cfg }: Props) {
           <Logo size={32} name={cfg.site_name || "Estimate Nepal"} src={cfg.site_logo_url || null} />
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
-          <Link href="/about" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">About</Link>
           <Link href="/contact" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">Contact</Link>
           <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium">Sign In</Link>
           <Link href="/register" className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition">
