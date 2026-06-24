@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Logo } from "@/components/ui/Logo";
 import { getAllConfigs } from "@/lib/config";
+import { PublicNav } from "@/components/public/PublicNav";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { FaqAccordion } from "./FaqAccordion";
 import type { FaqCategory } from "./FaqAccordion";
@@ -176,45 +176,20 @@ export default async function FaqPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
 
       <div className="min-h-screen bg-white font-sans">
-        {/* ── Nav ── */}
-        <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-            <Link href="/">
-              <Logo size={32} name={cfg.site_name || "Estimate Nepal"} src={cfg.site_logo_url || null} />
-            </Link>
-            <nav className="flex items-center gap-3">
-              <Link href="/about" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
-                About
-              </Link>
-              <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium">
-                Sign In
-              </Link>
-              <Link
-                href="/register"
-                className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition"
-              >
-                Start Free Trial
-              </Link>
-            </nav>
-          </div>
-        </header>
+        <PublicNav cfg={cfg} />
 
-        {/* ── Hero ── */}
-        <section className="bg-gradient-to-b from-blue-950 via-blue-900 to-blue-800 text-white py-14 sm:py-20 px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <nav className="text-sm text-blue-300 mb-6" aria-label="Breadcrumb">
-              <Link href="/" className="hover:text-white transition">Home</Link>
-              <span className="mx-2 text-blue-500">/</span>
-              <span className="text-blue-100">FAQ</span>
+        {/* Page title */}
+        <div className="border-b border-gray-200 px-4 py-8">
+          <div className="max-w-3xl mx-auto">
+            <nav className="text-xs text-gray-400 mb-2" aria-label="Breadcrumb">
+              <Link href="/" className="hover:text-gray-600 transition">Home</Link>
+              <span className="mx-1.5">/</span>
+              <span>FAQ</span>
             </nav>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight mb-4 tracking-tight">
-              Frequently Asked Questions
-            </h1>
-            <p className="text-blue-200 text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
-              Everything you need to know about Estimate Nepal — DUDBC rates, BOQ, pricing, and getting started.
-            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Frequently Asked Questions</h1>
+            <p className="text-xs text-gray-500">DUDBC rates, BOQ, pricing, and getting started.</p>
           </div>
-        </section>
+        </div>
 
         {/* ── FAQ Content ── */}
         <section className="py-16 sm:py-20 px-4">
