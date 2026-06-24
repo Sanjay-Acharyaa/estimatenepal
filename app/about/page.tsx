@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 import { getAllConfigs } from "@/lib/config";
+import { PublicFooter } from "@/components/public/PublicFooter";
 
 export const metadata: Metadata = {
   title: "About Us | Estimate Nepal",
@@ -300,19 +301,7 @@ export default async function AboutPage() {
           </div>
         </section>
 
-        {/* ── Footer ── */}
-        <footer className="border-t border-gray-100 py-3 px-6 bg-white">
-          <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-x-6 gap-y-1">
-            <div className="flex items-center gap-4 text-xs text-gray-500">
-              <Logo size={22} name={cfg.site_name || "Estimate Nepal"} src={cfg.site_logo_url || null} />
-              <a href={`mailto:${contactEmail}`} className="hover:text-gray-900 transition">{contactEmail}</a>
-              <Link href="/" className="hover:text-gray-900 transition">Home</Link>
-              <Link href="/faq" className="hover:text-gray-900 transition">FAQ</Link>
-              <Link href="/register" className="hover:text-gray-900 transition">Register</Link>
-            </div>
-            <p className="text-xs text-gray-400">© {new Date().getFullYear()} Estimate Nepal</p>
-          </div>
-        </footer>
+        <PublicFooter cfg={cfg} />
       </div>
     </>
   );
