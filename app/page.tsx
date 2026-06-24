@@ -281,9 +281,6 @@ export default async function LandingPage() {
             <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
               Pricing
             </a>
-            <Link href="/faq" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
-              FAQ
-            </Link>
             <Link href="/about" className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 transition font-medium hidden sm:block">
               About
             </Link>
