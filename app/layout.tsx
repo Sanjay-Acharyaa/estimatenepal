@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     siteName: "Estimate Nepal",
     images: [
       {
-        url: "https://estimatenepal.com/opengraph-image",
+        url: "https://estimatenepal.com/og-image.png",
         width: 1200,
         height: 630,
         alt: "Estimate Nepal — Nepal's Smart Construction Platform",
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Estimate Nepal — Nepal's Smart Construction Platform",
     description: "Create accurate BOQs, manage tenders, and bid on projects. Nepal's leading construction platform.",
-    images: ["https://estimatenepal.com/opengraph-image"],
+    images: ["https://estimatenepal.com/og-image.png"],
   },
   icons: {
     icon: "/icon.svg",
