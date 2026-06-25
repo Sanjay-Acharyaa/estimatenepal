@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/opengraph-image",
+        url: "https://estimatenepal.com/opengraph-image",
         width: 1200,
         height: 630,
         alt: "Estimate Nepal — Construction Estimating Software",
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/opengraph-image"],
+    images: ["https://estimatenepal.com/opengraph-image"],
   },
   keywords: [
     "construction estimating Nepal",
