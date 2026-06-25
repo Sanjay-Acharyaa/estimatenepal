@@ -26,6 +26,7 @@ const PUBLIC_PATHS = [
   "/share",          // Public read-only share link viewer
   "/api/invite",     // Public invite accept
   "/trial-expired",  // Must be accessible without auth
+  "/opengraph-image", // OG image must be public for social media crawlers
 ];
 
 export async function middleware(req: NextRequest) {
