@@ -30,11 +30,20 @@ export const metadata: Metadata = {
     title: "Estimate Nepal — Nepal's Smart Construction Platform",
     description: "Create accurate BOQs, manage tenders, bid on projects, and collaborate with your team. Nepal's leading construction platform.",
     siteName: "Estimate Nepal",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Estimate Nepal — Nepal's Smart Construction Platform",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Estimate Nepal — Nepal's Smart Construction Platform",
     description: "Create accurate BOQs, manage tenders, and bid on projects. Nepal's leading construction platform.",
+    images: ["/opengraph-image"],
   },
   icons: {
     icon: "/icon.svg",
