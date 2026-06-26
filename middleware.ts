@@ -27,6 +27,7 @@ const PUBLIC_PATHS = [
   "/api/invite",     // Public invite accept
   "/trial-expired",  // Must be accessible without auth
   "/opengraph-image", // OG image must be public for social media crawlers
+  "/loaderio-",       // loader.io domain verification files
 ];
 
 export async function middleware(req: NextRequest) {
