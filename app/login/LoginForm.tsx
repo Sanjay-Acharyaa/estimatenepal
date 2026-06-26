@@ -48,7 +48,13 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
     setError("");
     setLoading(true);
     try {
-      const res = await signIn("credentials", { email, password, redirect: false });
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 15000)
+      );
+      const res = await Promise.race([
+        signIn("credentials", { email, password, redirect: false }),
+        timeout,
+      ]);
       if (res?.error) {
         setError("Incorrect email or password. If you forgot your password, use the 'Forgot password?' link above.");
         setShowResend(true);
@@ -56,8 +62,12 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
       } else {
         router.push(callbackUrl);
       }
-    } catch {
-      setError("Connection error — please check your internet and try again.");
+    } catch (err: any) {
+      if (err?.message === "timeout") {
+        setError("Login is taking longer than usual — the server may be busy. Please try again in a moment.");
+      } else {
+        setError("Connection error — please check your internet and try again.");
+      }
     } finally {
       setLoading(false);
     }
