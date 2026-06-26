@@ -28,24 +28,23 @@ Or: winget install k6
 
 ## Step 4: Run the tests
 
-### Test A — Mixed realistic load (10 logins + 20 working + 10 takeoff + 5 export + 10 landing)
+### Test A — Mixed realistic (Grafana Cloud, 100 VUs, recommended)
+Upload `load-tests/k6-mixed-cloud.js` to Grafana Cloud Script Editor.
+Simulates real traffic:
+- 40 VUs doing takeoff (main feature — BOQ, disciplines, takeoff groups)
+- 25 VUs exploring dashboard (rates, projects, assemblies)
+- 15 VUs logging in continuously
+- 10 VUs on the drawings/upload page
+- 10 VUs exporting PDF/Excel
+
+### Test B — Escalating load (local run, finds breaking point)
 ```bash
-k6 run load-tests/k6-mixed-realistic.js
+k6 run load-tests/k6-cloud.js
 ```
 
-### Test B — Escalating load (finds exact breaking point with real user behavior)
+### Test C — Escalating with file (requires load-test-users.json)
 ```bash
 k6 run load-tests/k6-escalating.js
-```
-
-### Test C — Custom VU counts
-```bash
-k6 run --env LOGINS=30 --env WORKERS=50 --env TAKEOFF=20 --env EXPORT=10 load-tests/k6-mixed-realistic.js
-```
-
-### Test D — Multi-IP from cloud (requires free k6 Cloud account)
-```bash
-k6 cloud load-tests/k6-escalating.js
 ```
 
 ## Step 5: Cleanup after testing

@@ -2,6 +2,8 @@ const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
 const { Server } = require("socket.io");
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { Redis } = require("ioredis");
 const { PrismaClient } = require("@prisma/client");
 
 const dev = process.env.NODE_ENV !== "production";
@@ -48,6 +50,16 @@ app.prepare().then(async () => {
   const io = new Server(httpServer, {
     cors: { origin: "*", methods: ["GET", "POST"] },
   });
+
+  // Redis pub/sub adapter — required for PM2 cluster mode.
+  // Without this, each worker process has its own in-memory socket registry, so
+  // cursor events, shape locks, and presence emitted on worker A never reach
+  // clients connected to worker B. The adapter forwards events across all workers.
+  if (process.env.REDIS_URL) {
+    const pubClient = new Redis(process.env.REDIS_URL);
+    const subClient = pubClient.duplicate();
+    io.adapter(createAdapter(pubClient, subClient));
+  }
 
   // ─── Auth middleware — extract session from cookie ───────────────────────────
   io.use(async (socket, next) => {
