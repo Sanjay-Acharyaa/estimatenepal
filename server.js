@@ -3,7 +3,7 @@ const { parse } = require("url");
 const next = require("next");
 const { Server } = require("socket.io");
 const { createAdapter } = require("@socket.io/redis-adapter");
-const { Redis } = require("ioredis");
+const Redis = require("ioredis");
 const { PrismaClient } = require("@prisma/client");
 
 const dev = process.env.NODE_ENV !== "production";
