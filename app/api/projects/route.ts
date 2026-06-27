@@ -118,6 +118,15 @@ export async function POST(req: NextRequest) {
     const caller = await withTenantGuard(token.id as string, token.orgId as string);
     if (!["OWNER", "ADMIN"].includes(caller.role)) throw forbidden();
 
+    // Free plan: 1 project limit
+    const org = await prisma.org.findUnique({ where: { id: token.orgId as string }, select: { plan: true } });
+    if (org?.plan === "FREE") {
+      const existing = await prisma.project.count({ where: { orgId: token.orgId as string } });
+      if (existing >= 1) {
+        return apiError("PLAN_LIMIT", "Free plan is limited to 1 project. Upgrade to create more.", 403);
+      }
+    }
+
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
