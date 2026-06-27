@@ -35,10 +35,10 @@ const loginLimiter = new RateLimiterRedis({
 const ipLoginFloodLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: "rl_login_ip",
-  points: 60,           // 60 total login POSTs per IP per hour
-  duration: 3600,
-  blockDuration: 1800,  // block for 30 min if exceeded
-  insuranceLimiter: new RateLimiterMemory({ points: 10, duration: 3600 }),
+  points: 500,          // 500 total login POSTs per IP per hour
+  duration: 3600,       // raised from 60: Grafana Cloud shares ~10 IPs across all VUs,
+  blockDuration: 1800,  // so 60/hr was exhausted in the first 30s of a 100-VU test.
+  insuranceLimiter: new RateLimiterMemory({ points: 50, duration: 3600 }),
 });
 
 // API: 300 requests per minute per IP.

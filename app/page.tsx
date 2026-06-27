@@ -107,10 +107,12 @@ export default async function LandingPage() {
       : null;
 
   const trialDays = parseInt(cfg.trial_days, 10) || 14;
-  const priceSolo = parseInt(cfg.price_solo_monthly, 10) || 999;
-  const priceTeam3 = parseInt(cfg.price_team3_monthly, 10) || 1999;
-  const priceTeam5 = parseInt(cfg.price_team5_monthly, 10) || 3000;
-  const pricePerSeat = parseInt(cfg.price_per_seat_enterprise, 10) || 550;
+  const priceSolo = parseInt(cfg.price_solo_monthly, 10) || 1499;
+  const priceTeam3 = parseInt(cfg.price_team3_monthly, 10) || 3499;
+  const priceTeam5 = parseInt(cfg.price_team5_monthly, 10) || 5499;
+  const anchorSolo = parseInt(cfg.price_solo_anchor, 10) || 2999;
+  const anchorTeam3 = parseInt(cfg.price_team3_anchor, 10) || 6999;
+  const anchorTeam5 = parseInt(cfg.price_team5_anchor, 10) || 10999;
   const freeMonths = parseInt(cfg.annual_free_months, 10) || 2;
   const contactEmail = cfg.contact_email || "hello@estimatenepal.com";
   const contactWa = cfg.contact_whatsapp || "+977XXXXXXXXX";
@@ -118,44 +120,69 @@ export default async function LandingPage() {
 
   const PLANS = [
     {
-      name: "Solo",
-      price: priceSolo,
+      name: "Free",
+      price: 0 as number | null,
+      anchor: null as number | null,
+      users: "1 user",
+      storage: "1 GB storage",
+      features: ["1 project forever", "Full takeoff & BOQ", "PDF & Excel export", "DUDBC rate catalog"],
+      cta: "Start Free",
+      href: "/register",
+      highlight: false,
+      isFree: true,
+      note: "No credit card required",
+    },
+    {
+      name: "Solo Pro",
+      price: priceSolo as number | null,
+      anchor: anchorSolo as number | null,
       users: "1 user",
       storage: `${cfg.storage_limit_solo_gb || "10"} GB storage`,
       features: ["All core features", "DUDBC rate catalog", "PDF & Excel export", "Drawing takeoff"],
-      cta: "Start Free Trial",
+      cta: "Pay Now",
       href: "/register",
-      highlight: false,
+      highlight: true,
+      isFree: false,
+      note: null as string | null,
     },
     {
       name: "Team of 3",
-      price: priceTeam3,
+      price: priceTeam3 as number | null,
+      anchor: anchorTeam3 as number | null,
       users: "Up to 3 users",
       storage: `${cfg.storage_limit_team_gb || "20"} GB storage`,
       features: ["Everything in Solo", "3 team members", "Role-based access", "Shared project library"],
-      cta: "Start Free Trial",
+      cta: "Pay Now",
       href: "/register",
-      highlight: true,
+      highlight: false,
+      isFree: false,
+      note: null as string | null,
     },
     {
       name: "Team of 5",
-      price: priceTeam5,
+      price: priceTeam5 as number | null,
+      anchor: anchorTeam5 as number | null,
       users: "Up to 5 users",
       storage: `${cfg.storage_limit_team_gb || "20"} GB storage`,
       features: ["Everything in Team 3", "5 team members", "Priority support", "Custom assembly library"],
-      cta: "Start Free Trial",
+      cta: "Pay Now",
       href: "/register",
       highlight: false,
+      isFree: false,
+      note: null as string | null,
     },
     {
       name: "Enterprise",
-      price: null,
+      price: null as number | null,
+      anchor: null as number | null,
       users: "6+ users",
       storage: "Custom storage",
-      features: [`From ${fmt(pricePerSeat)}/seat`, "Custom onboarding", "Dedicated support", "Volume discounts"],
+      features: ["Custom onboarding", "Dedicated support", "Volume discounts", "Future platform features"],
       cta: "Contact Us",
       href: `https://wa.me/${contactWa.replace(/\D/g, "")}?text=${waMsg}`,
       highlight: false,
+      isFree: false,
+      note: null as string | null,
     },
   ];
 
@@ -181,7 +208,7 @@ export default async function LandingPage() {
       {
         "@type": "Question",
         name: "Is Estimate Nepal free to use?",
-        acceptedAnswer: { "@type": "Answer", text: `Estimate Nepal offers a ${trialDays}-day free trial with no credit card required. After the trial, plans start from NPR ${priceSolo} per month for a single user.` },
+        acceptedAnswer: { "@type": "Answer", text: `Estimate Nepal has a free plan that lets you work on 1 project forever — no time limit, no credit card required. Paid plans start from NPR ${priceSolo} per month for unlimited projects.` },
       },
       {
         "@type": "Question",
@@ -445,38 +472,62 @@ export default async function LandingPage() {
 
       {/* ── Pricing ── */}
       <section id="pricing" className="py-20 px-4 bg-white">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4">
               Simple, transparent pricing
             </h2>
             <p className="text-gray-500 text-base max-w-lg mx-auto">
-              Start with a {trialDays}-day free trial. No credit card required.
-              Annual billing saves you {freeMonths} months free.
+              Start free — no credit card, no time limit. Upgrade when you are ready.
+              Founding member prices are locked forever.
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
-                className={`rounded-2xl border p-6 flex flex-col ${
+                className={`rounded-2xl border p-5 flex flex-col ${
                   plan.highlight
                     ? "border-blue-500 bg-blue-600 text-white shadow-xl ring-2 ring-blue-500"
                     : "border-gray-200 bg-white text-gray-900"
                 }`}
               >
-                {plan.highlight && (
-                  <div className="text-xs font-bold text-blue-100 bg-blue-500/40 rounded-full px-3 py-1 w-fit mb-3">
-                    Most Popular
+                {/* Badges */}
+                {plan.highlight ? (
+                  <div className="flex flex-col gap-2 mb-3">
+                    <div className="text-xs font-bold text-blue-100 bg-blue-500/40 rounded-full px-3 py-1 w-fit">
+                      Most Popular
+                    </div>
+                    <div className="text-xs font-semibold text-amber-300 bg-white/10 border border-amber-300/30 rounded-full px-3 py-1 w-fit">
+                      🔒 Founding Member Price
+                    </div>
                   </div>
+                ) : !plan.isFree && plan.price !== null ? (
+                  <div className="text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1 w-fit mb-3">
+                    🔒 Founding Member Price
+                  </div>
+                ) : (
+                  <div className="mb-3 h-6" />
                 )}
+
                 <h3 className={`font-bold text-lg mb-1 ${plan.highlight ? "text-white" : "text-gray-900"}`}>
                   {plan.name}
                 </h3>
+
                 <div className="mb-4">
-                  {plan.price !== null ? (
+                  {plan.price === 0 ? (
                     <>
+                      <span className="text-3xl font-extrabold text-gray-900">NPR 0</span>
+                      <span className="text-sm ml-1 text-gray-500">forever</span>
+                    </>
+                  ) : plan.price !== null ? (
+                    <>
+                      {plan.anchor && (
+                        <div className={`text-sm line-through mb-0.5 ${plan.highlight ? "text-blue-300" : "text-gray-400"}`}>
+                          {fmt(plan.anchor)}/month
+                        </div>
+                      )}
                       <span className={`text-3xl font-extrabold ${plan.highlight ? "text-white" : "text-gray-900"}`}>
                         {fmt(plan.price)}
                       </span>
@@ -486,8 +537,10 @@ export default async function LandingPage() {
                     <span className="text-2xl font-extrabold text-gray-900">Custom</span>
                   )}
                 </div>
+
                 <p className={`text-sm mb-1 ${plan.highlight ? "text-blue-200" : "text-gray-500"}`}>{plan.users}</p>
-                <p className={`text-sm mb-5 ${plan.highlight ? "text-blue-200" : "text-gray-500"}`}>{plan.storage}</p>
+                <p className={`text-sm mb-4 ${plan.highlight ? "text-blue-200" : "text-gray-500"}`}>{plan.storage}</p>
+
                 <ul className="space-y-2 mb-6 flex-1">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-center gap-2 text-sm">
@@ -496,6 +549,11 @@ export default async function LandingPage() {
                     </li>
                   ))}
                 </ul>
+
+                {plan.note && (
+                  <p className="text-xs text-center text-gray-400 mb-2">{plan.note}</p>
+                )}
+
                 <a
                   href={plan.href}
                   className={`block w-full py-3 rounded-xl font-bold text-sm text-center transition ${
@@ -503,6 +561,8 @@ export default async function LandingPage() {
                       ? "bg-white text-blue-700 hover:bg-blue-50"
                       : plan.name === "Enterprise"
                       ? "bg-gray-900 text-white hover:bg-gray-800"
+                      : plan.isFree
+                      ? "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200"
                       : "bg-blue-600 text-white hover:bg-blue-700"
                   }`}
                 >
@@ -513,7 +573,10 @@ export default async function LandingPage() {
           </div>
 
           <p className="text-center text-sm text-gray-400 mt-6">
-            Annual billing: pay for {12 - freeMonths} months, get 12. Contact us for volume pricing.
+            Annual billing: pay for {12 - freeMonths} months, get 12.{" "}
+            <a href="/founding-member-terms" className="underline hover:text-gray-600 transition">
+              Founding member terms →
+            </a>
           </p>
         </div>
       </section>

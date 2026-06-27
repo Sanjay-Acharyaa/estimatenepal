@@ -251,6 +251,18 @@ app.prepare().then(async () => {
     });
   });
 
+  // Log Socket.io stats every minute — visible in PM2 logs.
+  // Watch with: pm2 logs nepaliestimate --lines 50 | grep socket-stats
+  setInterval(() => {
+    const connections = io.sockets.sockets.size;
+    if (connections === 0) return; // silent when idle
+    const activeLocks = Array.from(roomLocks.values())
+      .reduce((sum, locks) => sum + locks.size, 0);
+    console.log(
+      `[socket-stats] connections=${connections} rooms=${roomPresence.size} locks=${activeLocks}`
+    );
+  }, 60_000);
+
   httpServer.listen(port, () => {
     console.log(
       `> Ready on http://localhost:${port} (${dev ? "dev" : "production"})`

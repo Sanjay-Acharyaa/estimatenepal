@@ -20,7 +20,25 @@ if (process.env.NODE_ENV === "production" && dbUrl && !dbUrl.includes("connectio
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["error", "warn"]
+        : [
+            { emit: "event", level: "query" },
+            { emit: "stdout", level: "error" },
+          ],
   });
+
+// Log any DB query that takes longer than 2 seconds in production.
+// These show up in PM2 logs: pm2 logs nepaliestimate --lines 100 | grep slow-query
+if (process.env.NODE_ENV === "production") {
+  (prisma as any).$on("query", (e: any) => {
+    if (e.duration > 2000) {
+      console.warn(
+        `[slow-query] ${e.duration}ms | ${e.query.slice(0, 120)}`
+      );
+    }
+  });
+}
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
