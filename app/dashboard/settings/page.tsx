@@ -11,7 +11,7 @@ const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm foc
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Org | null>(null);
-  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password" | "review">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password" | "review" | "billing">("profile");
 
   // Review form state
   const [review, setReview] = useState({ content: "", authorRole: "", company: "", rating: 5 });
