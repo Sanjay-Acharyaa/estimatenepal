@@ -267,5 +267,10 @@ app.prepare().then(async () => {
     console.log(
       `> Ready on http://localhost:${port} (${dev ? "dev" : "production"})`
     );
+    // Signal PM2 that the server is actually listening — required for wait_ready: true
+    if (process.send) process.send("ready");
   });
+}).catch((err) => {
+  console.error("[server] Failed to start:", err);
+  process.exit(1);
 });

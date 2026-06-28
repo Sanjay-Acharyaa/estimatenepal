@@ -10,6 +10,9 @@ module.exports = {
       },
       // Restart a worker if it exceeds 512 MB — prevents memory leaks from taking down all workers
       max_memory_restart: "512M",
+      // Wait for process.send('ready') before marking worker as online and killing the old one
+      wait_ready: true,
+      listen_timeout: 30000,
       // Wait 5s before restarting a crashed worker to avoid rapid restart loops
       restart_delay: 5000,
       // Log to files so all workers' output goes to one place
