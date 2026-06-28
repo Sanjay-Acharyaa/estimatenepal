@@ -9,7 +9,7 @@ const { PrismaClient } = require("@prisma/client");
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
 
-const app = next({ dev });
+const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
 const prisma = new PrismaClient();
 
