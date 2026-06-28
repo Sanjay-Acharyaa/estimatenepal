@@ -330,7 +330,7 @@ export default async function LandingPage() {
               href="/register"
               className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition"
             >
-              Start Free Trial
+              Start Free
             </Link>
           </nav>
         </div>
@@ -341,7 +341,7 @@ export default async function LandingPage() {
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-blue-700/50 border border-blue-600 rounded-full px-4 py-1.5 text-sm text-blue-200 mb-8">
             <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-            {trialDays}-Day Free Trial — No Credit Card Required
+            Free forever — no credit card required
           </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight mb-6 tracking-tight">
             Nepal&apos;s Fastest<br />
@@ -357,7 +357,7 @@ export default async function LandingPage() {
               href="/register"
               className="px-8 py-4 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-xl font-bold text-lg shadow-lg transition"
             >
-              Start {trialDays}-Day Free Trial →
+              Start Free →
             </Link>
             <Link
               href="/login"

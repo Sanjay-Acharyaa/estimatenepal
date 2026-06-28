@@ -26,6 +26,8 @@ const PUBLIC_PATHS = [
   "/share",          // Public read-only share link viewer
   "/api/invite",     // Public invite accept
   "/trial-expired",  // Must be accessible without auth
+  "/checkout",              // Public payment page
+  "/founding-member-terms", // Public T&C page
   "/opengraph-image", // OG image must be public for social media crawlers
   "/loaderio-",       // loader.io domain verification files
 ];
