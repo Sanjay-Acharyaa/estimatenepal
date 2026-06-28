@@ -730,6 +730,8 @@ model Coupon {
   id            String    @id @default(cuid())
   code          String    @unique
   durationDays  Int
+  planType      String?   // PRO | ENTERPRISE | null = trial extension only
+  planTier      String?   // SOLO | TEAM3 | TEAM5 | ENTERPRISE
   createdById   String
   createdAt     DateTime  @default(now())
   redeemedByOrg String?

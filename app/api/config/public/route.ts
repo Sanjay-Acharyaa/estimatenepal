@@ -16,6 +16,7 @@ export async function GET() {
       contactEmail: cfg.contact_email,
       contactWhatsapp: cfg.contact_whatsapp,
       whatsappMessage: cfg.whatsapp_message,
+      paymentQrUrl: cfg.payment_qr_url ?? "",
     });
   } catch {
     // Return safe defaults if config is unavailable
@@ -29,6 +30,7 @@ export async function GET() {
       contactEmail: "hello@estimatenepal.com",
       contactWhatsapp: "+977XXXXXXXXX",
       whatsappMessage: "Hi, I am interested in Estimate Nepal. Please share pricing details.",
+      paymentQrUrl: "",
     });
   }
 }

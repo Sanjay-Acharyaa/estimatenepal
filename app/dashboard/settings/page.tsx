@@ -39,6 +39,12 @@ export default function SettingsPage() {
   const [orgMsg, setOrgMsg] = useState("");
   const [orgError, setOrgError] = useState("");
 
+  // Coupon redemption
+  const [couponCode, setCouponCode] = useState("");
+  const [couponSaving, setCouponSaving] = useState(false);
+  const [couponMsg, setCouponMsg] = useState("");
+  const [couponError, setCouponError] = useState("");
+
   useEffect(() => {
     fetch("/api/auth/profile").then(r => r.json()).then(d => { setProfile(d); setName(d.name ?? ""); });
     fetch("/api/orgs/me").then(r => r.ok ? r.json() : null).then(d => {
@@ -100,10 +106,26 @@ export default function SettingsPage() {
     else setReviewError(d.error?.message ?? "Failed to submit.");
   }
 
+  async function redeemCoupon(e: React.FormEvent) {
+    e.preventDefault();
+    setCouponError(""); setCouponMsg("");
+    if (!couponCode.trim()) { setCouponError("Enter a coupon code."); return; }
+    setCouponSaving(true);
+    const res = await fetch("/api/coupons/redeem", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: couponCode.trim() }),
+    });
+    const d = await res.json();
+    setCouponSaving(false);
+    if (res.ok) { setCouponMsg(d.message); setCouponCode(""); }
+    else setCouponError(d?.error?.message ?? "Failed to redeem coupon.");
+  }
+
   const tabs = [
     { id: "profile", label: "My Profile" },
     { id: "password", label: "Change Password" },
     ...(org && profile?.role === "OWNER" ? [{ id: "org", label: "Organisation" }] : []),
+    { id: "billing", label: "Billing" },
     { id: "review", label: "Leave a Review" },
   ] as { id: typeof activeTab; label: string }[];
 
@@ -352,6 +374,55 @@ export default function SettingsPage() {
                 {reviewSaving ? "Submitting…" : "Submit Review"}
               </button>
             </form>
+          )}
+
+          {/* Billing tab */}
+          {activeTab === "billing" && (
+            <div id="tab-panel-billing" role="tabpanel" aria-labelledby="tab-billing" className="space-y-6">
+              <h2 className="font-semibold text-gray-800">Billing &amp; Plan</h2>
+
+              {/* Current plan */}
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Current Plan</p>
+                <p className="text-lg font-bold text-gray-900">{org?.plan ?? "FREE"}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  <a href="/#pricing" className="text-blue-600 hover:underline">View pricing →</a>
+                </p>
+              </div>
+
+              {/* Coupon redemption */}
+              <form onSubmit={redeemCoupon} className="space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800">Redeem Activation Code</h3>
+                <p className="text-xs text-gray-500">
+                  Received a code after payment? Enter it here to activate your plan.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
+                    placeholder="NE-XXXX-XXXX"
+                    className={`${inputCls} font-mono tracking-widest flex-1`}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="submit"
+                    disabled={couponSaving}
+                    className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {couponSaving ? "Activating…" : "Activate"}
+                  </button>
+                </div>
+                {couponError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{couponError}</p>}
+                {couponMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{couponMsg}</p>}
+              </form>
+
+              <div className="pt-4 border-t border-gray-100 text-xs text-gray-400">
+                Need to upgrade? <a href="/#pricing" className="text-blue-600 hover:underline">See plans</a> or{" "}
+                <a href="/checkout" className="text-blue-600 hover:underline">pay now</a>.
+              </div>
+            </div>
           )}
 
         </div>

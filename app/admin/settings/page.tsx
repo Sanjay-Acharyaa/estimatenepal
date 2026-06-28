@@ -35,7 +35,7 @@ const SECTIONS = [
   {
     title: "Contact",
     description: "Shown in trial banners and upgrade prompts.",
-    keys: ["contact_email", "contact_whatsapp", "whatsapp_message"],
+    keys: ["contact_email", "contact_whatsapp", "whatsapp_message", "payment_qr_url"],
   },
   {
     title: "Access Control",

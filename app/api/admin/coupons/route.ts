@@ -20,6 +20,8 @@ function generateCouponCode(): string {
 const createSchema = z.object({
   durationDays: z.number().int().min(1).max(365),
   count: z.number().int().min(1).max(50).default(1),
+  planType: z.enum(["PRO", "ENTERPRISE"]).optional(),
+  planTier: z.enum(["SOLO", "TEAM3", "TEAM5", "ENTERPRISE"]).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
     }
 
-    const { durationDays, count } = parsed.data;
+    const { durationDays, count, planType, planTier } = parsed.data;
 
     // Generate and insert coupons one at a time to handle the rare code collision gracefully
     const created = [];
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
       while (attempts < 5) {
         try {
           const coupon = await prisma.coupon.create({
-            data: { code, durationDays, createdById: token.id as string },
+            data: { code, durationDays, planType, planTier, createdById: token.id as string },
           });
           created.push(coupon);
           break;

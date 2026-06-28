@@ -67,7 +67,11 @@ export default function NewProjectPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.error?.message ?? "Failed to create project.");
+      if (data.error?.code === "PLAN_LIMIT") {
+        setError("__PLAN_LIMIT__");
+      } else {
+        setError(data.error?.message ?? "Failed to create project.");
+      }
     } else {
       // Apply project template if selected
       if (selectedTemplate) {
@@ -89,7 +93,21 @@ export default function NewProjectPage() {
         <h1 className="text-2xl font-bold text-gray-900 mt-2">New Project</h1>
       </div>
 
-      {error && (
+      {error === "__PLAN_LIMIT__" && (
+        <div role="alert" className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-amber-800 font-semibold text-sm mb-1">Free plan limit reached</p>
+          <p className="text-amber-700 text-sm mb-3">
+            The free plan includes 1 project. Upgrade to create unlimited projects.
+          </p>
+          <a
+            href="/#pricing"
+            className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+          >
+            View Plans →
+          </a>
+        </div>
+      )}
+      {error && error !== "__PLAN_LIMIT__" && (
         <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>
       )}
 

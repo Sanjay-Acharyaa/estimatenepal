@@ -7,10 +7,20 @@ type Coupon = {
   id: string;
   code: string;
   durationDays: number;
+  planType: string | null;
+  planTier: string | null;
   createdAt: string;
   redeemedByOrg: string | null;
   redeemedAt: string | null;
 };
+
+const PLAN_OPTIONS = [
+  { label: "Trial extension only (no plan change)", planType: null, planTier: null },
+  { label: "Solo Pro — 1 user", planType: "PRO", planTier: "SOLO" },
+  { label: "Team of 3 — up to 3 users", planType: "PRO", planTier: "TEAM3" },
+  { label: "Team of 5 — up to 5 users", planType: "PRO", planTier: "TEAM5" },
+  { label: "Enterprise", planType: "ENTERPRISE", planTier: "ENTERPRISE" },
+];
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -42,14 +52,15 @@ export default function AdminCouponsPage() {
   const [loadError, setLoadError] = useState("");
   const [listLoading, setListLoading] = useState(true);
 
-  const [duration, setDuration] = useState(7);
+  const [duration, setDuration] = useState(30);
   const [customDuration, setCustomDuration] = useState("");
   const [count, setCount] = useState(1);
+  const [planIdx, setPlanIdx] = useState(1); // default: Solo Pro
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState("");
   const [genSuccess, setGenSuccess] = useState<Coupon[]>([]);
 
-  const DURATIONS = [1, 7, 30];
+  const DURATIONS = [30, 365];
 
   const loadCoupons = useCallback(async () => {
     setListLoading(true);
@@ -80,12 +91,19 @@ export default function AdminCouponsPage() {
       return;
     }
 
+    const selectedPlan = PLAN_OPTIONS[planIdx];
+
     setGenLoading(true);
     try {
       const res = await fetch("/api/admin/coupons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ durationDays: effectiveDuration, count }),
+        body: JSON.stringify({
+          durationDays: effectiveDuration,
+          count,
+          planType: selectedPlan.planType,
+          planTier: selectedPlan.planTier,
+        }),
       });
 
       const data = await res.json();
@@ -171,6 +189,25 @@ export default function AdminCouponsPage() {
           )}
 
           <form onSubmit={handleGenerate} className="space-y-4" noValidate>
+            {/* Plan selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Plan</label>
+              <div className="flex flex-col gap-2">
+                {PLAN_OPTIONS.map((p, i) => (
+                  <label key={i} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="plan"
+                      checked={planIdx === i}
+                      onChange={() => setPlanIdx(i)}
+                      className="accent-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">{p.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             {/* Duration selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -275,6 +312,7 @@ export default function AdminCouponsPage() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Code</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Plan</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Duration</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Status</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Used By (Org)</th>
@@ -302,6 +340,9 @@ export default function AdminCouponsPage() {
                           <code className="font-mono font-bold text-gray-900 text-sm">{c.code}</code>
                           {!c.redeemedAt && <CopyButton text={c.code} />}
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-xs">
+                        {c.planTier ?? <span className="text-gray-400">Trial only</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {c.durationDays} day{c.durationDays !== 1 ? "s" : ""}

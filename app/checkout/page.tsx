@@ -1,27 +1,46 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
-const PLAN_DETAILS: Record<string, { name: string; price: string; tier: string }> = {
-  "solo-pro": { name: "Solo Pro", price: "NPR 1,499/month", tier: "Solo Pro" },
-  "team-3":   { name: "Team of 3", price: "NPR 3,499/month", tier: "Team of 3" },
-  "team-5":   { name: "Team of 5", price: "NPR 5,499/month", tier: "Team of 5" },
+const PLANS: Record<string, { name: string; monthly: number; annual: number }> = {
+  "solo-pro": { name: "Solo Pro",   monthly: 1499,  annual: 14990 },
+  "team-3":   { name: "Team of 3",  monthly: 3499,  annual: 34990 },
+  "team-5":   { name: "Team of 5",  monthly: 5499,  annual: 54990 },
 };
+
+function fmt(n: number) {
+  return "NPR " + n.toLocaleString("en-NP");
+}
 
 function CheckoutContent() {
   const params = useSearchParams();
   const planKey = params.get("plan") ?? "solo-pro";
-  const plan = PLAN_DETAILS[planKey] ?? PLAN_DETAILS["solo-pro"];
-  const [email, setEmail] = useState("");
+  const plan = PLANS[planKey] ?? PLANS["solo-pro"];
 
-  const waNumber = "9779800000000"; // TODO: replace with real WhatsApp number
-  const waMessage = encodeURIComponent(
-    `Hi, I have paid for the ${plan.name} plan (${plan.price}) on EstimateNepal.\nMy registered email: ${email || "[your email]"}\nAttaching payment screenshot.`
+  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
+  const [waNumber, setWaNumber] = useState("");
+  const [qrUrl, setQrUrl] = useState("");
+
+  const price = billing === "annual" ? plan.annual : plan.monthly;
+  const saving = billing === "annual" ? plan.monthly * 2 : 0;
+
+  useEffect(() => {
+    fetch("/api/config/public")
+      .then(r => r.json())
+      .then(cfg => {
+        setWaNumber((cfg.contactWhatsapp ?? "").replace(/\D/g, ""));
+        setQrUrl(cfg.paymentQrUrl ?? "");
+      })
+      .catch(() => {});
+  }, []);
+
+  const waMsg = encodeURIComponent(
+    `Hi, I have paid for ${plan.name} (${billing === "annual" ? "Annual" : "Monthly"} — ${fmt(price)}) on EstimateNepal. Please send my activation code.`
   );
-  const waLink = `https://wa.me/${waNumber}?text=${waMessage}`;
+  const waLink = waNumber ? `https://wa.me/${waNumber}?text=${waMsg}` : "#";
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-16">
@@ -33,54 +52,61 @@ function CheckoutContent() {
         </div>
 
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Complete your payment</h1>
-        <p className="text-gray-500 text-sm mb-6">
-          You are subscribing to{" "}
-          <span className="font-semibold text-gray-800">{plan.name}</span> —{" "}
-          <span className="text-blue-600 font-semibold">{plan.price}</span>
-        </p>
+
+        {/* Plan + billing toggle */}
+        <div className="mb-6">
+          <p className="text-gray-500 text-sm mb-3">
+            Plan: <span className="font-semibold text-gray-800">{plan.name}</span>
+          </p>
+
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
+            <button
+              onClick={() => setBilling("monthly")}
+              className={`flex-1 py-2 transition ${billing === "monthly" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBilling("annual")}
+              className={`flex-1 py-2 transition ${billing === "annual" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              Annual
+            </button>
+          </div>
+
+          <div className="mt-3 text-center">
+            <span className="text-3xl font-extrabold text-gray-900">{fmt(price)}</span>
+            <span className="text-gray-500 text-sm ml-1">/{billing === "annual" ? "year" : "month"}</span>
+            {billing === "annual" && (
+              <p className="text-green-600 text-xs mt-1 font-medium">
+                You save {fmt(saving)} — 2 months free
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* QR Code */}
         <div className="flex flex-col items-center mb-6">
-          <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 w-56 h-56 flex items-center justify-center bg-gray-50">
-            <Image
-              src="/payment-qr.png"
-              alt="Payment QR Code"
-              width={200}
-              height={200}
-              className="rounded-lg object-contain"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-                const parent = e.currentTarget.parentElement;
-                if (parent) parent.innerHTML = '<p class="text-gray-400 text-sm text-center">QR code coming soon</p>';
-              }}
-            />
+          <div className="border-2 border-dashed border-gray-200 rounded-xl p-3 w-52 h-52 flex items-center justify-center bg-gray-50">
+            {qrUrl ? (
+              <Image src={qrUrl} alt="Payment QR" width={200} height={200} className="rounded-lg object-contain" />
+            ) : (
+              <p className="text-gray-400 text-sm text-center">QR code loading…</p>
+            )}
           </div>
           <p className="text-xs text-gray-400 mt-2">Scan to pay via eSewa / Khalti / Bank</p>
         </div>
 
         {/* Instructions */}
         <div className="bg-blue-50 rounded-xl p-4 mb-6 text-sm text-blue-800 space-y-1">
-          <p className="font-semibold">How to activate your account:</p>
+          <p className="font-semibold mb-2">How it works:</p>
           <ol className="list-decimal list-inside space-y-1 text-blue-700">
-            <li>Scan the QR code and send payment</li>
-            <li>Enter your registered email below</li>
-            <li>Click "Notify on WhatsApp" and send us your payment screenshot</li>
-            <li>We will activate your account within a few hours</li>
+            <li>Scan QR and pay <strong>{fmt(price)}</strong></li>
+            <li>Note your transaction ID from eSewa / Khalti</li>
+            <li>Click "Notify on WhatsApp" and share your transaction ID</li>
+            <li>We'll send your activation code within a few hours</li>
+            <li>Enter the code in <strong>Dashboard → Settings → Billing</strong></li>
           </ol>
-        </div>
-
-        {/* Email input for WA pre-fill */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Your registered email
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
         </div>
 
         <a
@@ -94,13 +120,10 @@ function CheckoutContent() {
 
         <p className="text-center text-xs text-gray-400">
           Already have an account?{" "}
-          <Link href="/login" className="text-blue-600 hover:underline">
-            Log in
-          </Link>{" "}
-          · New user?{" "}
-          <Link href="/register" className="text-blue-600 hover:underline">
-            Register first
-          </Link>
+          <Link href="/login" className="text-blue-600 hover:underline">Log in</Link>
+          {" · "}
+          New user?{" "}
+          <Link href="/register" className="text-blue-600 hover:underline">Register first</Link>
         </p>
       </div>
     </main>

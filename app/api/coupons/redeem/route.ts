@@ -45,19 +45,17 @@ export async function POST(req: NextRequest) {
 
     const now = new Date();
 
-    // Load current org trialEndsAt to compute the extension base
+    // Load current org to compute extension base
     const org = await prisma.org.findUnique({
       where: { id: orgId },
       select: { trialEndsAt: true },
     });
 
-    // Extend from whichever is later: current trial end (if still future) or now
+    // Extend from whichever is later: current subscription end (if still future) or now
     const base = org?.trialEndsAt && org.trialEndsAt > now ? org.trialEndsAt : now;
     const newTrialEndsAt = new Date(base.getTime() + coupon.durationDays * 24 * 60 * 60 * 1000);
 
-    // Atomic redemption — updateMany accepts non-unique filters so the WHERE redeemedAt=NULL
-    // acts as an optimistic lock: if a concurrent request already redeemed the coupon the
-    // count will be 0 and we return 409 without touching the org row.
+    // Atomic redemption — updateMany WHERE redeemedAt=NULL acts as an optimistic lock
     const redeemed = await prisma.$transaction(async (tx) => {
       const updated = await tx.coupon.updateMany({
         where: { code, redeemedAt: null },
@@ -67,7 +65,12 @@ export async function POST(req: NextRequest) {
 
       await tx.org.update({
         where: { id: orgId },
-        data: { trialEndsAt: newTrialEndsAt },
+        data: {
+          trialEndsAt: newTrialEndsAt,
+          // Upgrade plan if coupon carries a plan — otherwise leave plan unchanged
+          ...(coupon.planType ? { plan: coupon.planType as any } : {}),
+          ...(coupon.planTier ? { planTier: coupon.planTier } : {}),
+        },
       });
       return true;
     });
