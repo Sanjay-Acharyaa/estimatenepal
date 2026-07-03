@@ -386,7 +386,7 @@ export default function SettingsPage() {
                 <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Current Plan</p>
                 <p className="text-lg font-bold text-gray-900">{org?.plan ?? "FREE"}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  <a href="/#pricing" className="text-blue-600 hover:underline">View pricing →</a>
+                  <a href="/pricing" className="text-blue-600 hover:underline">View pricing →</a>
                 </p>
               </div>
 
@@ -419,8 +419,9 @@ export default function SettingsPage() {
               </form>
 
               <div className="pt-4 border-t border-gray-100 text-xs text-gray-400">
-                Need to upgrade? <a href="/#pricing" className="text-blue-600 hover:underline">See plans</a> or{" "}
-                <a href="/checkout" className="text-blue-600 hover:underline">pay now</a>.
+                Need to upgrade?{" "}
+                <a href="/pricing" className="text-blue-600 hover:underline">See plans</a> or{" "}
+                <a href="/pricing" className="text-blue-600 hover:underline">pay now</a>.
               </div>
             </div>
           )}

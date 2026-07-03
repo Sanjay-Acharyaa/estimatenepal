@@ -11,7 +11,7 @@ export default function FoundingMemberTermsPage() {
     <main className="min-h-screen bg-white py-16 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <Link href="/#pricing" className="text-blue-600 hover:underline text-sm">
+          <Link href="/pricing" className="text-blue-600 hover:underline text-sm">
             ← Back to Pricing
           </Link>
         </div>

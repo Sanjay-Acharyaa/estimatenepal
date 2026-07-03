@@ -100,7 +100,7 @@ export default function NewProjectPage() {
             The free plan includes 1 project. Upgrade to create unlimited projects.
           </p>
           <a
-            href="/#pricing"
+            href="/pricing"
             className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
           >
             View Plans →

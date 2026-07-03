@@ -242,7 +242,7 @@ export default async function DashboardPage() {
             </div>
           </div>
           <Link
-            href="/#pricing"
+            href="/pricing"
             className={`flex-shrink-0 text-sm font-semibold px-5 py-2.5 rounded-xl transition text-white ${
               trialDaysLeft <= 3 ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
             }`}

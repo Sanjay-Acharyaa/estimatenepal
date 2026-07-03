@@ -26,6 +26,7 @@ const PUBLIC_PATHS = [
   "/share",          // Public read-only share link viewer
   "/api/invite",     // Public invite accept
   "/trial-expired",  // Must be accessible without auth
+  "/pricing",               // Public standalone pricing page
   "/checkout",              // Public payment page
   "/founding-member-terms", // Public T&C page
   "/help",                  // Public help & user guide
