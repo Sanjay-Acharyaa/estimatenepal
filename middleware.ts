@@ -28,6 +28,7 @@ const PUBLIC_PATHS = [
   "/trial-expired",  // Must be accessible without auth
   "/checkout",              // Public payment page
   "/founding-member-terms", // Public T&C page
+  "/help",                  // Public help & user guide
   "/opengraph-image", // OG image must be public for social media crawlers
   "/loaderio-",       // loader.io domain verification files
 ];
