@@ -56,10 +56,20 @@ export async function POST(req: NextRequest) {
     const trialDays = await getConfigNum("trial_days");
     const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
 
+    // Read UTM cookies set by middleware when the user first landed on the site
+    const utmSource   = req.cookies.get("utm_source")?.value   ?? null;
+    const utmMedium   = req.cookies.get("utm_medium")?.value   ?? null;
+    const utmCampaign = req.cookies.get("utm_campaign")?.value ?? null;
+
     const { org, user } = await prisma.$transaction(async (tx) => {
       const org = await tx.org.create({ data: { name: orgName, trialEndsAt } });
       const user = await tx.user.create({
-        data: { name, email, phone, passwordHash, role: "OWNER", orgId: org.id },
+        data: {
+          name, email, phone, passwordHash, role: "OWNER", orgId: org.id,
+          referralSource:   utmSource,
+          referralMedium:   utmMedium,
+          referralCampaign: utmCampaign,
+        },
       });
       return { org, user };
     });

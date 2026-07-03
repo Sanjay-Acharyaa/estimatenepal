@@ -5,13 +5,15 @@ import Link from "next/link";
 
 type Profile = { id: string; name: string; email: string; role: string };
 type Org = { id: string; name: string; panNumber: string | null; logoUrl: string | null; address: string | null; phone: string | null; plan: string; storageUsedBytes: number | string };
+type Member = { id: string; name: string; email: string; role: string; emailVerified: boolean; lastLoginAt: string | null };
+type Invite = { id: string; email: string; role: string; createdAt: string; expiresAt: string };
 
 const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Org | null>(null);
-  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password" | "review" | "billing">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password" | "review" | "billing" | "team">("profile");
 
   // Review form state
   const [review, setReview] = useState({ content: "", authorRole: "", company: "", rating: 5 });
@@ -38,6 +40,16 @@ export default function SettingsPage() {
   const [orgSaving, setOrgSaving] = useState(false);
   const [orgMsg, setOrgMsg] = useState("");
   const [orgError, setOrgError] = useState("");
+
+  // Team management
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
+  const [inviteError, setInviteError] = useState("");
 
   // Coupon redemption
   const [couponCode, setCouponCode] = useState("");
@@ -121,10 +133,48 @@ export default function SettingsPage() {
     else setCouponError(d?.error?.message ?? "Failed to redeem coupon.");
   }
 
+  function loadTeam() {
+    setTeamLoading(true);
+    fetch("/api/orgs/members")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) { setMembers(d.members); setInvites(d.invites); } })
+      .finally(() => setTeamLoading(false));
+  }
+
+  async function sendInvite(e: React.FormEvent) {
+    e.preventDefault();
+    setInviteSending(true); setInviteMsg(""); setInviteError("");
+    const res = await fetch("/api/orgs/invites", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+    });
+    const d = await res.json();
+    setInviteSending(false);
+    if (res.ok) { setInviteMsg(`Invite sent to ${inviteEmail}.`); setInviteEmail(""); loadTeam(); }
+    else setInviteError(d?.error?.message ?? "Failed to send invite.");
+  }
+
+  async function removeMember(userId: string, name: string) {
+    if (!confirm(`Remove ${name} from the organisation?`)) return;
+    const res = await fetch(`/api/orgs/members/${userId}`, { method: "DELETE" });
+    if (res.ok) loadTeam();
+    else { const d = await res.json(); alert(d?.error?.message ?? "Failed to remove member."); }
+  }
+
+  async function changeRole(userId: string, role: "ADMIN" | "MEMBER") {
+    const res = await fetch(`/api/orgs/members/${userId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    if (res.ok) loadTeam();
+    else { const d = await res.json(); alert(d?.error?.message ?? "Failed to change role."); }
+  }
+
   const tabs = [
     { id: "profile", label: "My Profile" },
     { id: "password", label: "Change Password" },
     ...(org && profile?.role === "OWNER" ? [{ id: "org", label: "Organisation" }] : []),
+    ...(["OWNER", "ADMIN"].includes(profile?.role ?? "") ? [{ id: "team", label: "Team" }] : []),
     { id: "billing", label: "Billing" },
     { id: "review", label: "Leave a Review" },
   ] as { id: typeof activeTab; label: string }[];
@@ -374,6 +424,111 @@ export default function SettingsPage() {
                 {reviewSaving ? "Submitting…" : "Submit Review"}
               </button>
             </form>
+          )}
+
+          {/* Team tab — OWNER and ADMIN */}
+          {activeTab === "team" && (
+            <div id="tab-panel-team" role="tabpanel" aria-labelledby="tab-team" className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-gray-800">Team Members</h2>
+                <button onClick={loadTeam} className="text-xs text-blue-600 hover:underline">Refresh</button>
+              </div>
+
+              {members.length === 0 && !teamLoading && (
+                <button onClick={loadTeam} className="text-sm text-blue-600 hover:underline">Load team</button>
+              )}
+
+              {teamLoading && (
+                <div className="flex items-center gap-2 text-gray-500 text-sm">
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  Loading…
+                </div>
+              )}
+
+              {members.length > 0 && (
+                <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+                  {members.map(m => (
+                    <div key={m.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{m.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{m.email}</p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        m.role === "OWNER" ? "bg-purple-100 text-purple-700"
+                        : m.role === "ADMIN" ? "bg-blue-100 text-blue-700"
+                        : "bg-gray-100 text-gray-600"
+                      }`}>{m.role}</span>
+                      {profile?.role === "OWNER" && m.role !== "OWNER" && (
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={m.role}
+                            onChange={e => changeRole(m.id, e.target.value as "ADMIN" | "MEMBER")}
+                            className="text-xs border border-gray-300 rounded px-1 py-0.5"
+                          >
+                            <option value="ADMIN">Admin</option>
+                            <option value="MEMBER">Member</option>
+                          </select>
+                          <button
+                            onClick={() => removeMember(m.id, m.name)}
+                            className="text-xs text-red-500 hover:text-red-700 px-2 py-0.5 rounded hover:bg-red-50"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {invites.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Pending Invites</h3>
+                  <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+                    {invites.map(inv => (
+                      <div key={inv.id} className="flex items-center gap-3 px-4 py-3 bg-amber-50">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 truncate">{inv.email}</p>
+                          <p className="text-xs text-gray-400">Expires {new Date(inv.expiresAt).toLocaleDateString()}</p>
+                        </div>
+                        <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{inv.role}</span>
+                        <span className="text-xs text-gray-400">Pending</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {["OWNER", "ADMIN"].includes(profile?.role ?? "") && (
+                <form onSubmit={sendInvite} className="pt-4 border-t border-gray-100 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-800">Invite a team member</h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={e => { setInviteEmail(e.target.value); setInviteError(""); }}
+                      placeholder="colleague@example.com"
+                      required
+                      className={`${inputCls} flex-1`}
+                    />
+                    <select
+                      value={inviteRole}
+                      onChange={e => setInviteRole(e.target.value as "ADMIN" | "MEMBER")}
+                      className="border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                    >
+                      <option value="MEMBER">Member</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                    <button type="submit" disabled={inviteSending}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
+                      {inviteSending ? "Sending…" : "Send Invite"}
+                    </button>
+                  </div>
+                  {inviteError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{inviteError}</p>}
+                  {inviteMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{inviteMsg}</p>}
+                </form>
+              )}
+            </div>
           )}
 
           {/* Billing tab */}

@@ -25,7 +25,7 @@ function feedbackKey(id: string): string {
 const RATE_LIMIT_KEY = "cron:trial-reminder:last_run";
 const RATE_LIMIT_TTL = 3600;
 const BASE_URL = "https://estimatenepal.com";
-const UPGRADE_URL = `${BASE_URL}/register`;
+const UPGRADE_URL = `${BASE_URL}/pricing`;
 const DASHBOARD_URL = `${BASE_URL}/dashboard`;
 
 export const maxDuration = 60;

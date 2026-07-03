@@ -28,9 +28,12 @@ model User {
   assignedTasks  ProjectTask[]  @relation("AssignedTasks")
   createdTasks   ProjectTask[]  @relation("CreatedTasks")
   lastLoginAt    DateTime?
-  lastSeenPath   String?
-  isTestAccount  Boolean        @default(false)
-  sessions       UserSession[]
+  lastSeenPath     String?
+  isTestAccount    Boolean        @default(false)
+  referralSource   String?
+  referralMedium   String?
+  referralCampaign String?
+  sessions         UserSession[]
   npsSentAt      DateTime?
   npsScore       Int?
   createdAt      DateTime       @default(now())
@@ -135,6 +138,7 @@ model Project {
   projectNumber   String?
   scopeOfWork     String?   @db.Text
   ocrRegions      Json?
+  exportConfig    Json?
   orgId           String
   org             Org             @relation(fields: [orgId], references: [id])
   members         ProjectMember[]
@@ -630,6 +634,7 @@ enum PlanType {
   FREE
   PRO
   ENTERPRISE
+  ACADEMIC
 }
 
 enum ProjectStatus {
@@ -699,6 +704,25 @@ model ProjectTemplate {
   createdAt   DateTime @default(now())
 
   @@index([orgId])
+}
+
+// Pending payment record created when a user clicks "Notify on WhatsApp" on checkout
+model PendingPayment {
+  id        String   @id @default(cuid())
+  email     String
+  planKey   String
+  billing   String
+  amount    Int
+  txnId     String
+  orgId     String?
+  status    String   @default("PENDING")
+  adminNote String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
 }
 
 // Dynamic site configuration — editable by superadmin without redeploy

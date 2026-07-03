@@ -15,6 +15,50 @@ function fmt(n: number) {
   return "NPR " + n.toLocaleString("en-NP");
 }
 
+function PendingScreen({ plan, billing, price, txnId }: { plan: string; billing: string; price: number; txnId: string }) {
+  return (
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-16">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment notification sent</h1>
+        <p className="text-gray-500 text-sm mb-6">
+          We received your payment notification for <strong>{plan}</strong> ({billing}) — {fmt(price)}.
+        </p>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left text-sm space-y-2">
+          <p className="font-semibold text-amber-800">What happens next:</p>
+          <ol className="list-decimal list-inside space-y-1 text-amber-700">
+            <li>We verify your transaction ID <span className="font-mono text-xs bg-amber-100 px-1 rounded">{txnId}</span></li>
+            <li>We WhatsApp you an activation code (usually within a few hours)</li>
+            <li>Enter the code in <strong>Dashboard → Settings → Billing</strong></li>
+          </ol>
+        </div>
+
+        <p className="text-xs text-gray-400 mb-6">
+          Activation typically happens within 2–4 hours on business days.<br />
+          If you haven&apos;t heard back in 24 hours, message us again on WhatsApp.
+        </p>
+
+        <div className="flex flex-col gap-3">
+          <Link
+            href="/dashboard"
+            className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition"
+          >
+            Go to Dashboard
+          </Link>
+          <Link href="/pricing" className="text-blue-600 hover:underline text-sm">
+            ← Back to Pricing
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 function CheckoutContent() {
   const params = useSearchParams();
   const planKey = params.get("plan") ?? "solo-pro";
@@ -25,6 +69,8 @@ function CheckoutContent() {
   const [qrUrl, setQrUrl] = useState("");
   const [email, setEmail] = useState("");
   const [txnId, setTxnId] = useState("");
+  const [notified, setNotified] = useState(false);
+  const [notifying, setNotifying] = useState(false);
 
   const price = billing === "annual" ? plan.annual : plan.monthly;
   const saving = billing === "annual" ? plan.monthly * 2 : 0;
@@ -47,6 +93,25 @@ function CheckoutContent() {
     `Hi, I have paid for ${plan.name} (${billing === "annual" ? "Annual" : "Monthly"} — ${fmt(price)}) on EstimateNepal.\nRegistered email: ${email || "[your email]"}\nTransaction ID: ${txnId || "[your txn ID]"}\nPlease send my activation code.`
   );
   const waLink = waNumber ? `https://wa.me/${waNumber}?text=${waMsg}` : "#";
+  const canNotify = !!(email && txnId);
+
+  async function handleNotify() {
+    if (!canNotify || notifying) return;
+    setNotifying(true);
+    try {
+      await fetch("/api/payments/pending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, planKey, billing, amount: price, txnId }),
+      });
+    } catch { /* non-blocking — WhatsApp still opens */ }
+    setNotifying(false);
+    setNotified(true);
+  }
+
+  if (notified) {
+    return <PendingScreen plan={plan.name} billing={billing === "annual" ? "Annual" : "Monthly"} price={price} txnId={txnId} />;
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-16">
@@ -138,26 +203,27 @@ function CheckoutContent() {
           <ol className="list-decimal list-inside space-y-1 text-blue-700">
             <li>Scan QR and pay <strong>{fmt(price)}</strong></li>
             <li>Enter your email and transaction ID above</li>
-            <li>Click "Notify on WhatsApp" — message is pre-filled</li>
+            <li>Click &quot;Notify on WhatsApp&quot; — message is pre-filled</li>
             <li>We verify and send your activation code within a few hours</li>
             <li>Enter the code in <strong>Dashboard → Settings → Billing</strong></li>
           </ol>
         </div>
 
         <a
-          href={waLink}
+          href={canNotify ? waLink : "#"}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={canNotify ? handleNotify : undefined}
           className={`block w-full text-center font-semibold py-3 rounded-xl transition mb-3 ${
-            email && txnId
+            canNotify
               ? "bg-green-500 hover:bg-green-600 text-white"
               : "bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none"
           }`}
-          aria-disabled={!email || !txnId}
+          aria-disabled={!canNotify}
         >
-          Notify on WhatsApp
+          {notifying ? "Saving…" : "Notify on WhatsApp"}
         </a>
-        {(!email || !txnId) && (
+        {!canNotify && (
           <p className="text-center text-xs text-amber-600 mb-3">
             Fill in your email and transaction ID above to enable this button.
           </p>

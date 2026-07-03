@@ -39,6 +39,18 @@ export async function middleware(req: NextRequest) {
 
   // Apply security headers to all responses
   const res = NextResponse.next();
+
+  // Capture UTM params on any public landing — store in 30-day cookie
+  // so the referral source is available at registration time
+  const utm_source   = req.nextUrl.searchParams.get("utm_source");
+  const utm_medium   = req.nextUrl.searchParams.get("utm_medium");
+  const utm_campaign = req.nextUrl.searchParams.get("utm_campaign");
+  if (utm_source) {
+    const maxAge = 30 * 24 * 60 * 60;
+    if (utm_source)   res.cookies.set("utm_source",   utm_source,   { maxAge, path: "/" });
+    if (utm_medium)   res.cookies.set("utm_medium",   utm_medium,   { maxAge, path: "/" });
+    if (utm_campaign) res.cookies.set("utm_campaign", utm_campaign, { maxAge, path: "/" });
+  }
   const headers = getSecurityHeaders();
   for (const [key, value] of Object.entries(headers)) {
     res.headers.set(key, value);
