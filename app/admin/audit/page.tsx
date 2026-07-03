@@ -47,7 +47,7 @@ export default function AuditLogPage() {
     debounceRef.current = setTimeout(() => load(search || undefined, val || undefined), 400);
   }
 
-  const uniqueOrgs = [...new Map(logs.map(l => [l.orgId, l.orgName])).entries()];
+  const uniqueOrgs = Array.from(new Map(logs.map(l => [l.orgId, l.orgName])).entries());
 
   return (
     <div className="min-h-screen bg-gray-100">
