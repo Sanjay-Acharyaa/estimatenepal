@@ -50,7 +50,7 @@ const SECTIONS = [
 ];
 
 // Image fields show a live preview below the input
-const IMAGE_URL_KEYS = new Set(["site_logo_url", "site_favicon_url"]);
+const IMAGE_URL_KEYS = new Set(["site_logo_url", "site_favicon_url", "payment_qr_url"]);
 
 // Fields that show a multiline textarea
 const MULTILINE_KEYS = new Set(["whatsapp_message", "site_announcement", "login_subtext", "register_subtext", "og_description", "login_headline", "register_headline"]);
@@ -59,6 +59,7 @@ const MULTILINE_KEYS = new Set(["whatsapp_message", "site_announcement", "login_
 const FIELD_HINTS: Record<string, { size: string; formats: string }> = {
   site_logo_url: { size: "200 × 50 px", formats: "PNG (transparent bg) or SVG · max 500 KB" },
   site_favicon_url: { size: "64 × 64 px", formats: "PNG or SVG · square · max 100 KB" },
+  payment_qr_url: { size: "400 × 400 px recommended", formats: "PNG or JPG · square · max 500 KB · must be a public URL" },
 };
 
 export default function AdminSettingsPage() {

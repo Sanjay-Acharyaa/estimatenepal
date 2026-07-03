@@ -31,6 +31,7 @@ export const CONFIG_DEFAULTS: Record<string, string> = {
   contact_email: "hello@estimatenepal.com",
   contact_whatsapp: "+977XXXXXXXXX",
   whatsapp_message: "Hi, I am interested in Estimate Nepal. Please share pricing details.",
+  payment_qr_url: "",
   // Access Control
   maintenance_mode: "false",
   registration_enabled: "true",
@@ -64,6 +65,7 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   contact_email: "Public support/sales email address",
   contact_whatsapp: "WhatsApp number with country code (e.g. +977XXXXXXXXX)",
   whatsapp_message: "Default pre-filled WhatsApp enquiry message",
+  payment_qr_url: "Image URL of your eSewa/Khalti/bank QR code shown on the checkout page. Host the image on any public URL (e.g. paste to Google Drive, set to public, copy image link — or upload to your /public folder and use https://estimatenepal.com/payment-qr.png)",
   // Access Control
   maintenance_mode: "Show maintenance page to all visitors (true/false)",
   registration_enabled: "Allow new user registrations (true/false)",
