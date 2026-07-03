@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Resolve org names in one extra query
-    const orgIds = [...new Set(logs.map(l => l.orgId))];
+    const orgIds = Array.from(new Set(logs.map(l => l.orgId)));
     const orgs = orgIds.length
       ? await prisma.org.findMany({ where: { id: { in: orgIds } }, select: { id: true, name: true } })
       : [];
