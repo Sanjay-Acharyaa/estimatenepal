@@ -32,7 +32,7 @@ const updateSchema = z.object({
   clientCompany: z.string().max(200).nullable().optional(),
   bidDueDate: z.string().datetime().nullable().optional(),
   scopeOfWork: z.string().max(10000).nullable().optional(),
-  exportConfig: z.record(z.boolean()).optional(),
+  exportConfig: z.record(z.string(), z.boolean()).optional(),
 });
 
 async function getProject(id: string) {
