@@ -41,7 +41,19 @@ export async function GET(req: NextRequest) {
       prisma.coupon.findMany({ orderBy: { createdAt: "desc" }, skip, take: limit }),
     ]);
 
-    return NextResponse.json(paginatedResponse(coupons, total, page, limit));
+    // Enrich redeemed coupons with org name
+    const redeemedOrgIds = coupons.map(c => c.redeemedByOrg).filter(Boolean) as string[];
+    const orgs = redeemedOrgIds.length
+      ? await prisma.org.findMany({ where: { id: { in: redeemedOrgIds } }, select: { id: true, name: true } })
+      : [];
+    const orgMap = new Map(orgs.map(o => [o.id, o.name]));
+
+    const enriched = coupons.map(c => ({
+      ...c,
+      redeemedByOrgName: c.redeemedByOrg ? (orgMap.get(c.redeemedByOrg) ?? c.redeemedByOrg) : null,
+    }));
+
+    return NextResponse.json(paginatedResponse(enriched, total, page, limit));
   } catch (err) {
     return handleApiError(err);
   }

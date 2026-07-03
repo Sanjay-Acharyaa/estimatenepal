@@ -97,6 +97,14 @@ export default async function SuperAdminPage() {
             className="inline-flex items-center gap-2 bg-green-600 border border-green-700 rounded-lg px-4 py-2 text-sm font-medium text-white hover:bg-green-700 shadow-sm">
             🟢 Live Activity
           </Link>
+          <Link href="/admin/payments"
+            className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-lg px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 shadow-sm">
+            💳 Payments
+          </Link>
+          <Link href="/admin/audit"
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+            📋 Audit Log
+          </Link>
         </div>
 
         {/* ── Paid customers highlight ── */}

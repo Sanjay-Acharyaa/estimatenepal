@@ -148,6 +148,32 @@ export function TrialHealthTable({
     );
   });
 
+  function exportCsv() {
+    const rows = [
+      ["Org", "Plan", "Owner", "Email", "Days Left", "Status", "Score", "Projects", "Members"],
+      ...filtered.map(item => {
+        const owner = item.org.users.find(u => u.role === "OWNER") ?? item.org.users[0];
+        return [
+          item.org.name,
+          item.org.planTier,
+          owner?.name ?? "",
+          owner?.email ?? "",
+          item.daysLeft ?? "",
+          item.status,
+          item.activityScore,
+          item.org._count.projects,
+          item.org._count.users,
+        ];
+      }),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `orgs-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       <div className="flex items-center gap-3 mb-3 flex-wrap">
@@ -158,6 +184,12 @@ export function TrialHealthTable({
           onChange={e => setSearch(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-64"
         />
+        <button
+          onClick={exportCsv}
+          className="ml-auto text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition"
+        >
+          Export CSV
+        </button>
         {activeFilter !== "all" && (
           <span className="text-xs text-gray-500">
             Filtered: <strong>{STATUS_LABELS[activeFilter]}</strong> ({filtered.length} orgs)

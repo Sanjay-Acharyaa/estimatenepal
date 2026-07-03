@@ -97,6 +97,22 @@ export default async function PricingPage() {
       disabled: false,
       badge: null,
     },
+    {
+      key: "academic",
+      name: "Academic",
+      price: null as number | null,
+      anchor: null as number | null,
+      users: "Up to 5 users",
+      storage: "10 GB",
+      features: ["Everything in Team of 3", "Educational institution use", "Up to 5 students/faculty", "Priority onboarding", "Discounted rate"],
+      cta: "Contact Us",
+      href: contactWa
+        ? `https://wa.me/${contactWa}?text=${encodeURIComponent("Hi, I represent an educational institution and am interested in the Academic plan for Estimate Nepal.")}`
+        : "/contact",
+      highlight: false,
+      disabled: false,
+      badge: "Edu",
+    },
   ];
 
   return (
@@ -149,7 +165,7 @@ export default async function PricingPage() {
         </div>
 
         {/* Plan cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {PLANS.map(plan => (
             <div
               key={plan.key}

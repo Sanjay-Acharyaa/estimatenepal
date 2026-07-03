@@ -3,7 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
-import { buildBOQExcel } from "@/lib/export";
+import { buildBOQExcel, ExportColConfig } from "@/lib/export";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const project = await prisma.project.findUnique({
       where: { id: params.id },
-      select: { id: true, orgId: true, name: true },
+      select: { id: true, orgId: true, name: true, exportConfig: true },
     });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
@@ -28,9 +28,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const boq = await generateBOQ(params.id);
 
-    // Limit concurrent ExcelJS workbook builds to 5 to cap synchronous CPU and memory use.
+    // Merge saved config with query-param overrides (query takes precedence for one-off exports)
+    const saved = (project.exportConfig ?? {}) as Record<string, boolean>;
+    const qp = req.nextUrl.searchParams;
+    const colConfig: ExportColConfig = {
+      showSno:    (qp.has("showSno")    ? qp.get("showSno")    === "1" : (saved.showSno    ?? true)),
+      showUnit:   (qp.has("showUnit")   ? qp.get("showUnit")   === "1" : (saved.showUnit   ?? true)),
+      showQty:    (qp.has("showQty")    ? qp.get("showQty")    === "1" : (saved.showQty    ?? true)),
+      showRate:   (qp.has("showRate")   ? qp.get("showRate")   === "1" : (saved.showRate   ?? true)),
+      showAmount: (qp.has("showAmount") ? qp.get("showAmount") === "1" : (saved.showAmount ?? true)),
+    };
+
     const result = await withSemaphore("excel", 5, async () => {
-      const buffer = await buildBOQExcel(boq);
+      const buffer = await buildBOQExcel(boq, colConfig);
       const filename = `BOQ_${project.name.replace(/[^a-z0-9]/gi, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       return new Response(new Uint8Array(buffer), {
         status: 200,

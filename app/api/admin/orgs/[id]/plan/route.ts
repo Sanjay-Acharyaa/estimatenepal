@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 
-const VALID_PLANS = ["TRIAL", "SOLO", "TEAM_3", "TEAM_5", "ENTERPRISE"] as const;
+const VALID_PLANS = ["TRIAL", "SOLO", "TEAM_3", "TEAM_5", "ENTERPRISE", "ACADEMIC"] as const;
 
 const schema = z.object({
   planTier: z.enum(VALID_PLANS),

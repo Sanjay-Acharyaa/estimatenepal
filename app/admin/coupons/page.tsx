@@ -11,6 +11,7 @@ type Coupon = {
   planTier: string | null;
   createdAt: string;
   redeemedByOrg: string | null;
+  redeemedByOrgName: string | null;
   redeemedAt: string | null;
 };
 
@@ -358,9 +359,16 @@ export default function AdminCouponsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs font-mono">
-                        {c.redeemedByOrg
-                          ? <span title={c.redeemedByOrg}>{c.redeemedByOrg.slice(0, 12)}…</span>
+                      <td className="px-4 py-3 text-gray-500 text-xs">
+                        {c.redeemedByOrgName
+                          ? (
+                            <div>
+                              <p className="font-medium text-gray-700">{c.redeemedByOrgName}</p>
+                              {c.redeemedAt && (
+                                <p className="text-gray-400">{new Date(c.redeemedAt).toLocaleDateString("en-NP", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                              )}
+                            </div>
+                          )
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">

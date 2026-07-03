@@ -1,6 +1,14 @@
 import ExcelJS from "exceljs";
 import type { BOQDocument, BOQGroup } from "./boq";
 
+export type ExportColConfig = {
+  showSno: boolean;
+  showUnit: boolean;
+  showQty: boolean;
+  showRate: boolean;
+  showAmount: boolean;
+};
+
 const NRS = (n: number) =>
   n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -63,7 +71,11 @@ function borderAll(cell: ExcelJS.Cell) {
 
 // ─── BOQ Excel Export ─────────────────────────────────────────────────────────
 
-export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
+const DEFAULT_COL_CONFIG: ExportColConfig = {
+  showSno: true, showUnit: true, showQty: true, showRate: true, showAmount: true,
+};
+
+export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DEFAULT_COL_CONFIG): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Estimate Nepal";
   wb.created = new Date();
@@ -71,12 +83,12 @@ export async function buildBOQExcel(boq: BOQDocument): Promise<Buffer> {
   // ── Summary Sheet ──────────────────────────────────────────────────────────
   const summary = wb.addWorksheet("Summary BOQ");
   summary.columns = [
-    { key: "sno", width: 8 },
-    { key: "desc", width: 42 },
-    { key: "unit", width: 10 },
-    { key: "qty", width: 14 },
-    { key: "rate", width: 14 },
-    { key: "amount", width: 16 },
+    { key: "sno",    width: 8,  hidden: !cols.showSno },
+    { key: "desc",   width: 42 },
+    { key: "unit",   width: 10, hidden: !cols.showUnit },
+    { key: "qty",    width: 14, hidden: !cols.showQty },
+    { key: "rate",   width: 14, hidden: !cols.showRate },
+    { key: "amount", width: 16, hidden: !cols.showAmount },
   ];
 
   // Project header

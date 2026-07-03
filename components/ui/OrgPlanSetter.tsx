@@ -8,6 +8,7 @@ const PLANS = [
   { value: "TEAM_3",     label: "Team of 3",  color: "bg-indigo-100 text-indigo-700" },
   { value: "TEAM_5",     label: "Team of 5",  color: "bg-purple-100 text-purple-700" },
   { value: "ENTERPRISE", label: "Enterprise", color: "bg-amber-100 text-amber-700" },
+  { value: "ACADEMIC",   label: "Academic",   color: "bg-teal-100 text-teal-700" },
 ] as const;
 
 export function OrgPlanSetter({ orgId, current }: { orgId: string; current: string }) {

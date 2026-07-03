@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       });
       if (org) {
         const PLAN_LIMITS: Record<string, number> = {
-          TRIAL: 3, SOLO: 1, TEAM_3: 3, TEAM_5: 5, ENTERPRISE: 999,
+          TRIAL: 3, SOLO: 1, TEAM_3: 3, TEAM_5: 5, ENTERPRISE: 999, ACADEMIC: 5,
         };
         const maxMembers = PLAN_LIMITS[org.planTier] ?? 3;
         if (org._count.users >= maxMembers) {
