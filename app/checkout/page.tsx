@@ -23,6 +23,8 @@ function CheckoutContent() {
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [waNumber, setWaNumber] = useState("");
   const [qrUrl, setQrUrl] = useState("");
+  const [email, setEmail] = useState("");
+  const [txnId, setTxnId] = useState("");
 
   const price = billing === "annual" ? plan.annual : plan.monthly;
   const saving = billing === "annual" ? plan.monthly * 2 : 0;
@@ -35,10 +37,14 @@ function CheckoutContent() {
         setQrUrl(cfg.paymentQrUrl ?? "");
       })
       .catch(() => {});
+    fetch("/api/auth/profile")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.email) setEmail(d.email); })
+      .catch(() => {});
   }, []);
 
   const waMsg = encodeURIComponent(
-    `Hi, I have paid for ${plan.name} (${billing === "annual" ? "Annual" : "Monthly"} — ${fmt(price)}) on EstimateNepal. Please send my activation code.`
+    `Hi, I have paid for ${plan.name} (${billing === "annual" ? "Annual" : "Monthly"} — ${fmt(price)}) on EstimateNepal.\nRegistered email: ${email || "[your email]"}\nTransaction ID: ${txnId || "[your txn ID]"}\nPlease send my activation code.`
   );
   const waLink = waNumber ? `https://wa.me/${waNumber}?text=${waMsg}` : "#";
 
@@ -97,14 +103,43 @@ function CheckoutContent() {
           <p className="text-xs text-gray-400 mt-2">Scan to pay via eSewa / Khalti / Bank</p>
         </div>
 
+        {/* Email + Txn ID fields */}
+        <div className="space-y-3 mb-6">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Your registered email <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Transaction ID from eSewa / Khalti <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={txnId}
+              onChange={e => setTxnId(e.target.value)}
+              placeholder="e.g. 0070ABC12345"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Find this in your eSewa / Khalti payment history.</p>
+          </div>
+        </div>
+
         {/* Instructions */}
         <div className="bg-blue-50 rounded-xl p-4 mb-6 text-sm text-blue-800 space-y-1">
           <p className="font-semibold mb-2">How it works:</p>
           <ol className="list-decimal list-inside space-y-1 text-blue-700">
             <li>Scan QR and pay <strong>{fmt(price)}</strong></li>
-            <li>Note your transaction ID from eSewa / Khalti</li>
-            <li>Click "Notify on WhatsApp" and share your transaction ID</li>
-            <li>We'll send your activation code within a few hours</li>
+            <li>Enter your email and transaction ID above</li>
+            <li>Click "Notify on WhatsApp" — message is pre-filled</li>
+            <li>We verify and send your activation code within a few hours</li>
             <li>Enter the code in <strong>Dashboard → Settings → Billing</strong></li>
           </ol>
         </div>
@@ -113,10 +148,20 @@ function CheckoutContent() {
           href={waLink}
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full text-center bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition mb-3"
+          className={`block w-full text-center font-semibold py-3 rounded-xl transition mb-3 ${
+            email && txnId
+              ? "bg-green-500 hover:bg-green-600 text-white"
+              : "bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none"
+          }`}
+          aria-disabled={!email || !txnId}
         >
           Notify on WhatsApp
         </a>
+        {(!email || !txnId) && (
+          <p className="text-center text-xs text-amber-600 mb-3">
+            Fill in your email and transaction ID above to enable this button.
+          </p>
+        )}
 
         <p className="text-center text-xs text-gray-400">
           Already have an account?{" "}
