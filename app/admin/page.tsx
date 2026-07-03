@@ -18,7 +18,12 @@ export default async function SuperAdminPage() {
     prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       take: 50,
-      include: { org: { select: { name: true } } },
+      select: {
+        id: true, name: true, email: true, phone: true, role: true,
+        isSuperAdmin: true, emailVerified: true, isTestAccount: true,
+        createdAt: true, lastLoginAt: true,
+        org: { select: { name: true } },
+      },
     }),
     prisma.user.count({ where: { isSuperAdmin: false, NOT: { email: { contains: LT } } } }),
     prisma.user.count({ where: { isSuperAdmin: false, createdAt: { gte: d7 }, NOT: { email: { contains: LT } } } }),
@@ -202,6 +207,9 @@ export default async function SuperAdminPage() {
                       {user.name}
                       {user.isSuperAdmin && (
                         <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded">SUPER</span>
+                      )}
+                      {(user.isTestAccount || user.email.includes(LT)) && (
+                        <span className="ml-2 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">TEST</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{user.email}</td>

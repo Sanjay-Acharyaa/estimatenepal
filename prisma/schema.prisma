@@ -29,6 +29,7 @@ model User {
   createdTasks   ProjectTask[]  @relation("CreatedTasks")
   lastLoginAt    DateTime?
   lastSeenPath   String?
+  isTestAccount  Boolean        @default(false)
   sessions       UserSession[]
   npsSentAt      DateTime?
   npsScore       Int?

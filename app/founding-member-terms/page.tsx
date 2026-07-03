@@ -1,12 +1,24 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { getSession } from "@/lib/auth";
+import { getConfig } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "Founding Member Terms | EstimateNepal",
   description: "Terms and conditions for EstimateNepal founding member pricing.",
 };
 
-export default function FoundingMemberTermsPage() {
+export default async function FoundingMemberTermsPage() {
+  const [session, contactEmail, contactWa] = await Promise.all([
+    getSession(),
+    getConfig("contact_email"),
+    getConfig("contact_whatsapp"),
+  ]);
+
+  const isLoggedIn = !!session;
+  const waNumber = contactWa.replace(/\D/g, "");
+  const waLink = waNumber ? `https://wa.me/${waNumber}` : null;
+
   return (
     <main className="min-h-screen bg-white py-16 px-4">
       <div className="max-w-3xl mx-auto">
@@ -106,25 +118,38 @@ export default function FoundingMemberTermsPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Contact</h2>
             <p>
               Questions about your subscription or these terms? Reach us at{" "}
-              <a href="mailto:support@estimatenepal.com" className="text-blue-600 hover:underline">
-                support@estimatenepal.com
-              </a>{" "}
-              or via WhatsApp on our{" "}
-              <Link href="/#contact" className="text-blue-600 hover:underline">
-                contact page
-              </Link>.
+              <a href={`mailto:${contactEmail}`} className="text-blue-600 hover:underline">
+                {contactEmail}
+              </a>
+              {waLink && (
+                <>
+                  {" "}or via{" "}
+                  <a href={waLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    WhatsApp
+                  </a>
+                </>
+              )}.
             </p>
           </section>
 
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-200 text-center">
-          <Link
-            href="/register"
-            className="inline-block bg-blue-600 text-white font-semibold px-8 py-3 rounded-full hover:bg-blue-700 transition"
-          >
-            Claim Founding Member Price
-          </Link>
+          {isLoggedIn ? (
+            <Link
+              href="/pricing"
+              className="inline-block bg-blue-600 text-white font-semibold px-8 py-3 rounded-full hover:bg-blue-700 transition"
+            >
+              View Plans →
+            </Link>
+          ) : (
+            <Link
+              href="/register"
+              className="inline-block bg-blue-600 text-white font-semibold px-8 py-3 rounded-full hover:bg-blue-700 transition"
+            >
+              Claim Founding Member Price
+            </Link>
+          )}
         </div>
       </div>
     </main>
