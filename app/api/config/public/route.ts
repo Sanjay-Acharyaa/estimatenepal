@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAllConfigs } from "@/lib/config";
 
+export const dynamic = "force-dynamic";
+
 // Returns only the subset of config values safe to expose publicly
 // (no maintenance_mode, registration_enabled — those are internal flags)
 export async function GET() {
