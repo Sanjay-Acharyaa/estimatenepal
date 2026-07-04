@@ -41,3 +41,5 @@ jobs:
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
           RESEND_API_KEY: "re_placeholder"
           REDIS_URL: "redis://localhost:6379"
+          STORAGE_ACCESS_KEY: "ci_placeholder"
+          STORAGE_SECRET_KEY: "ci_placeholder"
