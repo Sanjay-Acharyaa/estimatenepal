@@ -107,7 +107,7 @@ export async function setConfig(key: string, value: string): Promise<void> {
   await prisma.siteConfig.upsert({
     where: { key },
     update: { value },
-    create: { key, value, description: CONFIG_DESCRIPTIONS[key] },
+    create: { key, value },
   });
   // Bust cache immediately so the change is reflected within milliseconds
   await redis.del(`${PREFIX}${key}`).catch(() => {});
