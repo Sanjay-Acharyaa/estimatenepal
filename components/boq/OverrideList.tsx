@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { fmtNum } from "@/lib/format";
 
 interface Override {
   id: string;
@@ -143,19 +144,19 @@ export function OverrideList({ projectId, isAdmin }: Props) {
                 </span>
                 <span>
                   <span className="text-gray-600">Original: </span>
-                  <span>NRS {parseFloat(ov.originalValue).toLocaleString("en-NP", { minimumFractionDigits: 2 })}</span>
+                  <span>NRS {fmtNum(parseFloat(ov.originalValue), 2)}</span>
                 </span>
                 <span>
                   <span className="text-gray-600">Proposed: </span>
                   <span className="font-semibold text-blue-700">
-                    NRS {parseFloat(ov.proposedValue).toLocaleString("en-NP", { minimumFractionDigits: 2 })}
+                    NRS {fmtNum(parseFloat(ov.proposedValue), 2)}
                   </span>
                 </span>
                 {ov.approvedValue && (
                   <span>
                     <span className="text-gray-600">Approved: </span>
                     <span className="font-semibold text-green-700">
-                      NRS {parseFloat(ov.approvedValue).toLocaleString("en-NP", { minimumFractionDigits: 2 })}
+                      NRS {fmtNum(parseFloat(ov.approvedValue), 2)}
                     </span>
                   </span>
                 )}

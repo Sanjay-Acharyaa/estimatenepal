@@ -6,6 +6,7 @@ import type { CatalogItem } from "@/components/rates/CatalogBrowser";
 import type { RateItem } from "@/components/rates/RateSelector";
 import { COUNT_SHAPES } from "./TakeoffGroupDialog";
 import type { CountShape } from "./TakeoffGroupDialog";
+import { fmtNum } from "@/lib/format";
 
 type TakeoffItem = {
   id: string;
@@ -304,7 +305,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       )}
                       <p className="text-xs font-semibold text-blue-700 mt-1.5">
                         {selectedRate.baseRate != null
-                          ? `NRS ${selectedRate.baseRate.toLocaleString("en-NP", { minimumFractionDigits: 2 })} / ${selectedRate.unit ?? ""}`
+                          ? `NRS ${fmtNum(selectedRate.baseRate, 2)} / ${selectedRate.unit ?? ""}`
                           : selectedRate.unit ? `per ${selectedRate.unit}` : "Rate not set"}
                       </p>
                     </div>

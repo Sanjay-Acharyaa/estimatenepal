@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BidBoardClient } from "@/components/bid-board/BidBoardClient";
+import { fmtNPRCompact as formatNRS } from "@/lib/format";
 
 const COLUMNS = [
   { status: "ESTIMATING",    label: "Estimating",    color: "bg-blue-500" },
@@ -14,11 +15,6 @@ const COLUMNS = [
   { status: "ARCHIVED",      label: "Archived",      color: "bg-gray-400" },
 ];
 
-function formatNRS(value: number) {
-  if (value >= 10_000_000) return `Rs ${(value / 10_000_000).toFixed(1)}Cr`;
-  if (value >= 100_000)    return `Rs ${(value / 100_000).toFixed(1)}L`;
-  return `Rs ${value.toLocaleString("en-NP")}`;
-}
 
 export default async function BidBoardPage() {
   const session = await getSession();

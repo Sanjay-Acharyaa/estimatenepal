@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { fmtNum } from "@/lib/format";
 
 export interface RateItem {
   id: string;
@@ -103,7 +104,7 @@ export function RateSelector({ value, onSelect, placeholder = "Search rates…" 
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-xs font-semibold text-gray-800">
-                    NRS {r.baseRate.toLocaleString("en-NP", { minimumFractionDigits: 2 })}
+                    NRS {fmtNum(r.baseRate, 2)}
                   </p>
                   <p className="text-xs text-gray-600">/{r.unit}</p>
                 </div>

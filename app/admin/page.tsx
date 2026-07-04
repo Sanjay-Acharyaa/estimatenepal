@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { OrgPlanSetter } from "@/components/ui/OrgPlanSetter";
+import { fmtNPR } from "@/lib/format";
 
 const LT = "loadtest.estimatenepal.local";
 const PLAN_PRICE: Record<string, number> = { SOLO: 1499, TEAM3: 3499, TEAM5: 5499, ENTERPRISE: 9999 };
@@ -39,7 +40,7 @@ export default async function SuperAdminPage() {
   const kpis = [
     { label: "Total Orgs",     value: orgs.length,      color: "bg-blue-50 border-blue-200 text-blue-800",     href: "/admin/analytics" },
     { label: "Paid",           value: paidOrgs.length,  color: paidOrgs.length > 0 ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-gray-50 border-gray-200 text-gray-500", href: "/admin/analytics" },
-    { label: "Est. MRR",       value: estimatedMRR > 0 ? `NPR ${estimatedMRR.toLocaleString("en-NP")}` : "NPR 0", color: "bg-emerald-50 border-emerald-200 text-emerald-700", href: "/admin/analytics" },
+    { label: "Est. MRR",       value: estimatedMRR > 0 ? fmtNPR(estimatedMRR) : "NPR 0", color: "bg-emerald-50 border-emerald-200 text-emerald-700", href: "/admin/analytics" },
     { label: "Active Trials",  value: activeTrials,     color: "bg-green-50 border-green-200 text-green-800",   href: "/admin/analytics" },
     { label: "Expiring 7d",    value: expiringSoon,     color: expiringSoon > 0 ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-gray-50 border-gray-200 text-gray-500", href: "/admin/analytics" },
     { label: "Total Users",    value: totalUserCount,   color: "bg-purple-50 border-purple-200 text-purple-800", href: "/admin/analytics" },

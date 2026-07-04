@@ -34,6 +34,7 @@ model User {
   referralMedium   String?
   referralCampaign String?
   sessions         UserSession[]
+  drawingComments DrawingComment[] @relation("DrawingComments")
   npsSentAt      DateTime?
   npsScore       Int?
   createdAt      DateTime       @default(now())
@@ -151,10 +152,13 @@ model Project {
   shareLinks      ShareLink[]
   notes           ProjectNote[]
   tasks           ProjectTask[]
-  quotes          SubcontractorQuote[]
-  changeOrders    ChangeOrder[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  quotes            SubcontractorQuote[]
+  changeOrders      ChangeOrder[]
+  retentionEnabled  Boolean           @default(false)
+  retentionPct      Float             @default(5)
+  retentionReleases RetentionRelease[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@index([orgId])
   @@index([status])
@@ -228,21 +232,40 @@ model Drawing {
 }
 
 model DrawingPage {
-  id              String        @id @default(cuid())
+  id              String           @id @default(cuid())
   drawingId       String
-  drawing         Drawing       @relation(fields: [drawingId], references: [id])
+  drawing         Drawing          @relation(fields: [drawingId], references: [id])
   pageNumber      Int
   label           String?
   scale           Float?
-  scaleUnit       String        @default("m")
+  scaleUnit       String           @default("m")
   canvasJson      Json?
   annotationsJson Json?
-  hasAnnotations  Boolean       @default(false)
+  hasAnnotations  Boolean          @default(false)
   scaleZones      ScaleZone[]
   takeoffItems    TakeoffItem[]
+  comments        DrawingComment[]
 
   @@index([drawingId])
   @@index([drawingId, pageNumber])
+}
+
+model DrawingComment {
+  id         String      @id @default(cuid())
+  pageId     String
+  page       DrawingPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  projectId  String
+  x          Float
+  y          Float
+  text       String      @db.Text
+  authorId   String
+  author     User        @relation("DrawingComments", fields: [authorId], references: [id])
+  parentId   String?
+  resolvedAt DateTime?
+  createdAt  DateTime    @default(now())
+
+  @@index([pageId])
+  @@index([pageId, parentId])
 }
 
 model ScaleZone {
@@ -622,6 +645,20 @@ enum QuoteStatus {
   UNDER_REVIEW
   ACCEPTED
   REJECTED
+}
+
+model RetentionRelease {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  amount      Float
+  note        String?  @db.Text
+  releasedAt  DateTime @default(now())
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([projectId])
+  @@index([projectId, releasedAt(sort: Desc)])
 }
 
 enum UserRole {

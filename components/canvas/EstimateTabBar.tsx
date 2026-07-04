@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useConfirm } from "@/hooks/useConfirm";
 import type { Discipline } from "./DrawingCanvas";
+import { fmtNPRDecimal } from "@/lib/format";
 
 type Props = {
   projectId: string;
@@ -17,8 +18,7 @@ type Props = {
   onGroupsRefreshNeeded?: () => void;
 };
 
-const NRS = (n: number) =>
-  "NRS " + n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NRS = (n: number) => fmtNPRDecimal(n, 2);
 
 export function EstimateTabBar({
   projectId, disciplines, activeDisciplineId, disciplineTotals = {},

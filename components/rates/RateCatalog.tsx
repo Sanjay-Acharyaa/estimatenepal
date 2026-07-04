@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { RateForm } from "./RateForm";
 import { RateAnalysisBuilder } from "./RateAnalysisBuilder";
+import { fmtNum } from "@/lib/format";
 
 interface RateBatch {
   id: string;
@@ -576,7 +577,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                     <td className="px-3 py-2.5 text-gray-800 text-xs leading-relaxed">{rate.description}</td>
                     <td className="px-3 py-2.5 text-center text-gray-600 text-xs">{rate.unit}</td>
                     <td className="px-3 py-2.5 text-right font-medium text-gray-800">
-                      {rate.baseRate.toLocaleString("en-NP", { minimumFractionDigits: 2 })}
+                      {fmtNum(rate.baseRate, 2)}
                     </td>
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500">{rate.fiscalYear}</td>
                     <td className="px-3 py-2.5">

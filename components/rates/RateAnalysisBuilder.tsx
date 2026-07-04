@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { computeCompositeRate } from "@/lib/rateAnalysis";
+import { fmtNum } from "@/lib/format";
+import { getWastageDefault } from "@/lib/wastageDefaults";
 
 interface RateItem {
   id: string;
@@ -17,8 +19,7 @@ interface Props {
   onClose: () => void;
 }
 
-const NRS = (n: number) =>
-  n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 
 export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
   const [material, setMaterial] = useState("0");
@@ -100,6 +101,8 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
     }
   };
 
+  const wastageSuggestion = useMemo(() => getWastageDefault(rate.description), [rate.description]);
+
   const field = (label: string, value: string, set: (v: string) => void, suffix = "") => (
     <div>
       <label className="block text-xs text-gray-500 mb-1">{label}</label>
@@ -143,6 +146,19 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
                 {field("Overhead", overhead, setOverhead, "%")}
                 {field("Profit", profit, setProfit, "%")}
               </div>
+              {wastageSuggestion && n(wastage) === 0 && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs text-gray-500">Suggested wastage for this rate:</span>
+                  <button
+                    type="button"
+                    onClick={() => setWastage(String(wastageSuggestion.pct))}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-300 text-amber-800 text-xs rounded-full hover:bg-amber-100 transition"
+                  >
+                    <span className="font-semibold">{wastageSuggestion.pct}%</span>
+                    <span className="text-amber-600">— {wastageSuggestion.reason}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Live breakdown */}

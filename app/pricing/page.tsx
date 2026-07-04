@@ -2,15 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getAllConfigs } from "@/lib/config";
 import { getSession } from "@/lib/auth";
+import { fmtNPR } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "Pricing — Estimate Nepal",
   description: "Simple, transparent pricing for construction estimating in Nepal. Start free, upgrade when ready.",
 };
 
-function fmt(n: number) {
-  return `NPR ${n.toLocaleString("en-NP")}`;
-}
+const fmt = fmtNPR;
 
 export default async function PricingPage() {
   const [cfg, session] = await Promise.all([getAllConfigs(), getSession()]);

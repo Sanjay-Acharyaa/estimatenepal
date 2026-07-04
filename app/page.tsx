@@ -6,6 +6,7 @@ import { getAllConfigs } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { Logo } from "@/components/ui/Logo";
 import { PublicFooter } from "@/components/public/PublicFooter";
+import { fmtNPR as fmt } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "Estimate Nepal — Construction Estimating Software for Nepal",
@@ -81,9 +82,6 @@ const STEPS = [
   { n: "3", title: "Export & Win Bids", desc: "Generate BOQ, rate analysis, and tender documents in one click." },
 ];
 
-function fmt(n: number) {
-  return `NPR ${n.toLocaleString("en-NP")}`;
-}
 
 export default async function LandingPage() {
   const session = await getSession();

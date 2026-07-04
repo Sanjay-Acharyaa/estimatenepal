@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useState, Suspense, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { fmtNPR } from "@/lib/format";
 
 const PLANS: Record<string, { name: string; monthly: number; annual: number }> = {
   "solo-pro": { name: "Solo Pro",   monthly: 1499,  annual: 14990 },
@@ -11,9 +12,7 @@ const PLANS: Record<string, { name: string; monthly: number; annual: number }> =
   "team-5":   { name: "Team of 5",  monthly: 5499,  annual: 54990 },
 };
 
-function fmt(n: number) {
-  return "NPR " + n.toLocaleString("en-NP");
-}
+const fmt = fmtNPR;
 
 function PendingScreen({ plan, billing, price, txnId }: { plan: string; billing: string; price: number; txnId: string }) {
   return (

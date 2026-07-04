@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import type { BOQDocument, BOQGroup } from "@/lib/boq";
 import { OverrideDialog } from "./OverrideDialog";
+import { fmtNum } from "@/lib/format";
 
-const NRS = (n: number) =>
-  n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 
 const qty = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });

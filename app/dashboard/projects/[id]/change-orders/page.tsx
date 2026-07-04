@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { fmtNum } from "@/lib/format";
 
 type ChangeOrder = {
   id: string; number: number; title: string;
@@ -19,7 +20,7 @@ const STATUS_COLOR: Record<string, string> = {
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-600",
 };
-const NRS = (n: number) => n.toLocaleString("en-NP", { minimumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 
 export default function ChangeOrdersPage() {
   const params = useParams();

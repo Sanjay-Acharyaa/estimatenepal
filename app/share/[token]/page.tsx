@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { ShareApprovalForm } from "@/components/ui/ShareApprovalForm";
+import { generateBOQ } from "@/lib/boq";
+import { fmtNPR } from "@/lib/format";
 
 export default async function SharePage({ params }: { params: { token: string } }) {
   const link = await prisma.shareLink.findUnique({
@@ -40,6 +42,11 @@ export default async function SharePage({ params }: { params: { token: string } 
 
   const p = link.project;
   const alreadyResponded = !!link.approvalStatus;
+
+  // Compute BOQ totals — best-effort; if it fails (no rates set), show no amounts
+  let boq: Awaited<ReturnType<typeof generateBOQ>> | null = null;
+  try { boq = await generateBOQ(p.id); } catch { boq = null; }
+  const hasAmounts = boq && boq.grandTotal > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -89,6 +96,69 @@ export default async function SharePage({ params }: { params: { token: string } 
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Cost Estimate */}
+        {hasAmounts && boq && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">Cost Estimate</h2>
+
+            {/* Per-discipline breakdown */}
+            {boq.disciplines.length > 1 && (
+              <div className="space-y-2 mb-4">
+                {boq.disciplines.map((d) => (
+                  d.subtotal > 0 && (
+                    <div key={d.id} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">{d.name}</span>
+                      <span className="font-medium text-gray-800 tabular-nums">{fmtNPR(d.subtotal)}</span>
+                    </div>
+                  )
+                ))}
+                <div className="border-t border-gray-200 mt-2 pt-2" />
+              </div>
+            )}
+
+            {/* Summary rows */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Grand Total</span>
+                <span className="font-medium text-gray-800 tabular-nums">{fmtNPR(boq.grandTotal)}</span>
+              </div>
+              {boq.contingencyAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Contingency ({boq.project.contingencyPct}%)</span>
+                  <span className="font-medium text-gray-800 tabular-nums">{fmtNPR(boq.contingencyAmount)}</span>
+                </div>
+              )}
+              {boq.provisionalSum > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Provisional Sum</span>
+                  <span className="font-medium text-gray-800 tabular-nums">{fmtNPR(boq.provisionalSum)}</span>
+                </div>
+              )}
+              {boq.vatAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">VAT ({boq.project.vatRate}%)</span>
+                  <span className="font-medium text-gray-800 tabular-nums">{fmtNPR(boq.vatAmount)}</span>
+                </div>
+              )}
+              {boq.tdsAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">TDS ({boq.project.tdsRate}%)</span>
+                  <span className="font-medium text-red-600 tabular-nums">-{fmtNPR(boq.tdsAmount)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t-2 border-gray-900 flex justify-between items-center">
+              <span className="font-bold text-gray-900">Final Payable</span>
+              <span className="text-xl font-extrabold text-blue-700 tabular-nums">{fmtNPR(boq.finalPayable)}</span>
+            </div>
+
+            <p className="text-xs text-gray-400 mt-3">
+              Amounts are estimates based on current BOQ data and may be subject to revision.
+            </p>
           </div>
         )}
 

@@ -14,6 +14,7 @@ import { EstimateTabBar } from "./EstimateTabBar";
 import { TakeoffItemDetail } from "./TakeoffItemDetail";
 import type { TakeoffItem, Annotation } from "./types";
 import { getSocket, roomId } from "@/lib/socket";
+import { CommentPins } from "./CommentPins";
 
 if (typeof window !== "undefined") {
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -49,7 +50,7 @@ type Props = {
 
 type ActiveUser = { socketId: string; userId: string; name: string; initials: string };
 
-type Mode = "select" | "calibrate" | "zone" | "polyline" | "rectangle" | "circle" | "arc" | "count" | "measure" | "pen" | "markup-text" | "highlight" | "arrow" | "xline";
+type Mode = "select" | "calibrate" | "zone" | "polyline" | "rectangle" | "circle" | "arc" | "count" | "measure" | "pen" | "markup-text" | "highlight" | "arrow" | "xline" | "comment";
 
 const DEBOUNCE_MS = 1000;
 const SEL = "#38BDF8"; // selection highlight — sky-400, visible on white PDF and dark canvas
@@ -326,6 +327,9 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
   // Per-item detail panel
   const [detailItem, setDetailItem] = useState<TakeoffItem | null>(null);
+
+  // Comment pin state
+  const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
 
   // ─── Markup / annotation state ────────────────────────────────────────────
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -1220,6 +1224,11 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
       return;
     }
 
+    if (mode === "comment") {
+      setPendingPin({ x: imgPos.x, y: imgPos.y });
+      return;
+    }
+
     // Rectangle: start drag
     if (mode === "rectangle" && selectedGroupId) {
       if (!withinPdf(imgPos)) return;
@@ -1785,6 +1794,7 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
 
   // ─── Cursor ───────────────────────────────────────────────────────────
   const cursor =
+    mode === "comment" ? "cell" :
     mode === "pen" ? "crosshair" :
     mode === "markup-text" ? "text" :
     mode === "highlight" ? "crosshair" :
@@ -2150,6 +2160,17 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
               )}
             </div>
           )}
+          {/* Comment pin tool */}
+          <div className="h-4 w-px bg-gray-600 mx-0.5" />
+          <button
+            aria-label="Comment pin — click on drawing to place a comment"
+            onClick={() => { setMode(mode === "comment" ? "select" : "comment"); resetDrawingState(); }}
+            className={`text-xs px-2 py-1 rounded transition flex items-center gap-1 ${mode === "comment" ? "bg-yellow-500 text-gray-900 font-semibold" : "text-gray-600 hover:text-white hover:bg-gray-700"}`}
+            title="Comment pin — click on drawing to place a comment"
+          >
+            💬
+          </button>
+
           {measurements.length > 0 && (
             <>
               <div className="h-4 w-px bg-gray-600 mx-0.5" />
@@ -3025,6 +3046,20 @@ export function DrawingCanvas({ projectId, drawing, unitSystem, initialGroups, i
               />
             </div>
           )}
+
+          {/* Comment pins overlay */}
+          <CommentPins
+            projectId={projectId}
+            drawingId={drawing.id}
+            pageId={currentPage.id}
+            currentUserId={currentUser.id}
+            stagePos={stagePos}
+            stageScale={scale}
+            containerWidth={stageSize.width}
+            containerHeight={stageSize.height}
+            pendingPin={pendingPin}
+            onPendingPinConsumed={() => setPendingPin(null)}
+          />
 
           {/* Per-item detail panel */}
           {detailItem && (

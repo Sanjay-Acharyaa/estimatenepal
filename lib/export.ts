@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { BOQDocument, BOQGroup } from "./boq";
+import { fmtNum } from "./format";
 
 export type ExportColConfig = {
   showSno: boolean;
@@ -9,8 +10,7 @@ export type ExportColConfig = {
   showAmount: boolean;
 };
 
-const NRS = (n: number) =>
-  n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 
 const qty = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });

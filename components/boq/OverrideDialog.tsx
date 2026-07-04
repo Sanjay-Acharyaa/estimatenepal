@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { BOQGroup } from "@/lib/boq";
+import { fmtNum } from "@/lib/format";
 
 interface Props {
   projectId: string;
@@ -64,7 +65,7 @@ export function OverrideDialog({ projectId, group, onClose, onSuccess }: Props) 
           )}
           <div className="flex justify-between">
             <span className="text-gray-500">Current Rate</span>
-            <span className="font-medium text-gray-800">NRS {group.rate.toLocaleString("en-NP", { minimumFractionDigits: 2 })}</span>
+            <span className="font-medium text-gray-800">NRS {fmtNum(group.rate, 2)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Unit</span>
@@ -91,7 +92,7 @@ export function OverrideDialog({ projectId, group, onClose, onSuccess }: Props) 
 
         {group.pendingOverride && (
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs text-orange-700 mb-4">
-            A pending override for NRS {parseFloat(group.pendingOverride.proposedValue).toLocaleString("en-NP", { minimumFractionDigits: 2 })} is awaiting approval.
+            A pending override for NRS {fmtNum(parseFloat(group.pendingOverride.proposedValue), 2)} is awaiting approval.
             Submitting will create a duplicate — please wait for the existing one to be reviewed.
           </div>
         )}

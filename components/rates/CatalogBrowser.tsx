@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { fmtNum } from "@/lib/format";
 
 export interface CatalogItem {
   id: string;
@@ -23,8 +24,7 @@ const SOURCE_BADGE: Record<string, string> = {
   CUSTOM:   "bg-blue-100 text-blue-700",
 };
 
-const NRS = (n: number) =>
-  n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 
 export function CatalogBrowser({ onSelect, onClose }: Props) {
   const [search, setSearch] = useState("");

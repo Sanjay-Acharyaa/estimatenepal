@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { fmtNum } from "@/lib/format";
 
 export interface RateFormData {
   code: string;
@@ -77,8 +78,7 @@ const currentFY = (() => {
   return `${y}/${String(y + 1).slice(2)}`;
 })();
 
-const NRS = (n: number) =>
-  n.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 
 export function RateForm({ initial, onSave, onCancel, title, projectId, orgComputedRate }: Props) {
   // Item details

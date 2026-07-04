@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
+import { fmtNPRCompact } from "@/lib/format";
 
 const PAGE_SIZE = 20;
 
@@ -201,7 +202,7 @@ export default async function ProjectsPage({
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs">
                   {p.estimatedValue != null
-                    ? `Rs ${p.estimatedValue.toLocaleString("en-NP")}`
+                    ? fmtNPRCompact(p.estimatedValue)
                     : "—"}
                 </td>
                 <td className="px-4 py-3">

@@ -7,8 +7,9 @@ import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import { trackEvent } from "@/lib/analytics";
+import { fmtNum } from "@/lib/format";
 
-const NRS = (n: number) => n.toLocaleString("en-NP", { minimumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 
 function escHtml(str: string | null | undefined): string {
   if (!str) return "";

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { TakeoffItem } from "./types";
+import { getWastageDefault } from "@/lib/wastageDefaults";
 
 type Props = {
   item: TakeoffItem;
@@ -23,6 +24,8 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<{ label?: string; wastagePct?: string }>({});
+
+  const wastageSuggestion = useMemo(() => getWastageDefault(label), [label]);
 
   const qtyDisplay = item.unit === "each"
     ? `${Math.round(item.quantity)} ${item.unit}`
@@ -128,6 +131,19 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
             className={`w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 ${fieldErrors.wastagePct ? "border-red-500 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
           />
           {fieldErrors.wastagePct && <p id="tid-wastage-err" role="alert" className="text-red-600 text-xs mt-1">{fieldErrors.wastagePct}</p>}
+          {wastageSuggestion && parseFloat(wastagePct) === 0 && (
+            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-gray-500">Suggested for this material:</span>
+              <button
+                type="button"
+                onClick={() => setWastagePct(String(wastageSuggestion.pct))}
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-300 text-amber-800 text-xs rounded-full hover:bg-amber-100 transition"
+              >
+                <span className="font-semibold">{wastageSuggestion.pct}%</span>
+                <span className="text-amber-600">— {wastageSuggestion.reason}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div>

@@ -322,6 +322,75 @@ export function npsEmailHtml(name: string, scores: { score: number; url: string 
   `);
 }
 
+export function proposalResponseAdminEmailHtml(
+  projectName: string,
+  clientName: string,
+  action: "APPROVED" | "REJECTED",
+  note: string | null | undefined,
+  projectUrl: string
+): string {
+  const safeProject = escapeHtml(projectName);
+  const safeClient = escapeHtml(clientName);
+  const safeNote = note ? escapeHtml(note) : null;
+  const isApproved = action === "APPROVED";
+  const badgeColor = isApproved ? "#16a34a" : "#dc2626";
+  const badgeBg = isApproved ? "#f0fdf4" : "#fef2f2";
+  const badgeBorder = isApproved ? "#bbf7d0" : "#fecaca";
+  const label = isApproved ? "Approved" : "Rejected";
+
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Proposal ${label}</h2>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
+      <strong>${safeClient}</strong> has responded to the proposal for <strong>${safeProject}</strong>.
+    </p>
+    <div style="background:${badgeBg};border:1px solid ${badgeBorder};border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:${badgeColor};font-size:16px;font-weight:700;margin:0">${label} by ${safeClient}</p>
+      ${safeNote ? `<p style="color:#475569;font-size:14px;margin:10px 0 0"><strong>Note:</strong> ${safeNote}</p>` : ""}
+    </div>
+    ${ctaButton(projectUrl, "View Project →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Go to the project&apos;s Proposal tab to review details and take next steps.
+    </p>
+  `);
+}
+
+export function proposalResponseClientEmailHtml(
+  projectName: string,
+  clientName: string,
+  orgName: string,
+  action: "APPROVED" | "REJECTED",
+  note: string | null | undefined
+): string {
+  const safeProject = escapeHtml(projectName);
+  const safeClient = escapeHtml(clientName);
+  const safeOrg = escapeHtml(orgName);
+  const safeNote = note ? escapeHtml(note) : null;
+  const isApproved = action === "APPROVED";
+
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">
+      Response received — ${isApproved ? "Approved" : "Rejected"}
+    </h2>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      Hi ${safeClient}, thank you for reviewing the proposal from <strong>${safeOrg}</strong>.
+    </p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#475569;font-size:14px;font-weight:600;margin:0 0 4px">Project</p>
+      <p style="color:#1d4ed8;font-size:16px;font-weight:700;margin:0">${safeProject}</p>
+      <p style="color:#475569;font-size:14px;margin:10px 0 0">
+        Your response: <strong style="color:${isApproved ? "#16a34a" : "#dc2626"}">${isApproved ? "Approved" : "Rejected"}</strong>
+      </p>
+      ${safeNote ? `<p style="color:#475569;font-size:14px;margin:8px 0 0"><strong>Your note:</strong> ${safeNote}</p>` : ""}
+    </div>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      The project team at <strong>${safeOrg}</strong> has been notified of your response and will be in touch with next steps.
+    </p>
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      This is a confirmation of your response. You don&apos;t need to do anything else.
+    </p>
+  `);
+}
+
 export function trialExpiredEmailHtml(name: string, upgradeUrl: string): string {
   const safeName = escapeHtml(name);
 

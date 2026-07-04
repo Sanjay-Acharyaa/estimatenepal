@@ -4,11 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 
-function fmt(n: number) {
-  if (n >= 10_000_000) return `Rs ${(n / 10_000_000).toFixed(1)}Cr`;
-  if (n >= 100_000)    return `Rs ${(n / 100_000).toFixed(1)}L`;
-  return `Rs ${n.toLocaleString("en-NP")}`;
-}
+import { fmtNPRCompact as fmt } from "@/lib/format";
 
 const STATUS_COLOR: Record<string, string> = {
   DRAFT: "bg-gray-400", ESTIMATING: "bg-yellow-400", SUBMITTED: "bg-blue-400",

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { fmtNPR } from "@/lib/format";
 
 type Payment = {
   id: string;
@@ -102,7 +103,7 @@ export default function AdminPaymentsPage() {
                     <td className="px-4 py-3 text-gray-800 font-medium">{p.email}</td>
                     <td className="px-4 py-3 text-gray-600 capitalize">{p.planKey}</td>
                     <td className="px-4 py-3 text-gray-600 capitalize">{p.billing}</td>
-                    <td className="px-4 py-3 text-gray-900 font-semibold">NPR {p.amount.toLocaleString("en-NP")}</td>
+                    <td className="px-4 py-3 text-gray-900 font-semibold">{fmtNPR(p.amount)}</td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-700">{p.txnId}</td>
                     <td className="px-4 py-3 text-gray-400 text-xs">{new Date(p.createdAt).toLocaleDateString("en-NP", { day: "2-digit", month: "short" })}</td>
                     <td className="px-4 py-3">
@@ -154,7 +155,7 @@ export default function AdminPaymentsPage() {
                 <tr key={p.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-700">{p.email}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs capitalize">{p.planKey} / {p.billing}</td>
-                  <td className="px-4 py-3 text-gray-900 font-semibold text-xs">NPR {p.amount.toLocaleString("en-NP")}</td>
+                  <td className="px-4 py-3 text-gray-900 font-semibold text-xs">{fmtNPR(p.amount)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{p.txnId}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[p.status] ?? "bg-gray-100 text-gray-600"}`}>

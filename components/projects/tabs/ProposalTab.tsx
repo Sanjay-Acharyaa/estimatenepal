@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
+import { fmtNum } from "@/lib/format";
 
 type Quote = {
   id: string;
@@ -29,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
   REJECTED: "bg-red-100 text-red-600",
 };
 
-const NRS = (n: number) => n.toLocaleString("en-NP", { minimumFractionDigits: 2 });
+const NRS = (n: number) => fmtNum(n, 2);
 const inputCls = "w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 type ShareLink = { id: string; token: string; viewCount: number; clientEmail: string | null; approvalStatus: string | null; approvalNote: string | null; clientName: string | null; approvedAt: string | null; createdAt: string };
@@ -95,6 +96,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
       mb: `/api/projects/${projectId}/boq/export/mb`,
       tender: `/api/projects/${projectId}/boq/export/tender`,
       procurement: `/api/projects/${projectId}/boq/export/procurement`,
+      comparative: `/api/projects/${projectId}/quotes/export/comparative`,
     };
     try {
       const res = await fetch(urls[type]);
@@ -360,74 +362,139 @@ export function ProposalTab({ projectId, userRole }: Props) {
         )}
       </section>
 
-      {/* Bid Comparison Matrix */}
-      {quotes.length >= 2 && (
-        <section>
-          <h2 className="text-base font-semibold text-gray-800 mb-4">Bid Comparison Matrix</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium border-b border-gray-200">Criterion</th>
-                  {quotes.map(q => (
-                    <th key={q.id} className={`text-center px-4 py-3 font-medium border-b border-gray-200 ${q.status === "ACCEPTED" ? "bg-green-50 text-green-700" : "text-gray-600"}`}>
-                      {q.vendor}
-                      {q.status === "ACCEPTED" && <span className="block text-xs font-normal mt-0.5">✓ Accepted</span>}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                <tr className="bg-white">
-                  <td className="px-4 py-3 text-gray-600 font-medium">Amount (NRS)</td>
-                  {quotes.map(q => {
-                    const lowest = Math.min(...quotes.map(x => x.amount));
-                    return (
-                      <td key={q.id} className={`px-4 py-3 text-center font-mono font-semibold ${q.amount === lowest ? "text-green-600" : "text-gray-800"}`}>
+      {/* Comparative Statement */}
+      {quotes.length >= 2 && (() => {
+        const sorted = [...quotes].sort((a, b) => a.amount - b.amount);
+        const lowestAmount = sorted[0].amount;
+        const recommendedVendor = sorted[0].vendor;
+        // Group by discipline for sub-table
+        const disciplines = Array.from(new Set(quotes.map(q => q.discipline).filter(Boolean))) as string[];
+        const hasDisciplines = disciplines.length > 0;
+
+        return (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-800">Comparative Statement of Bids</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Formal comparison for bid evaluation and decision</p>
+              </div>
+              <button
+                onClick={() => handleDownload("comparative")}
+                disabled={downloading === "comparative"}
+                className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+              >
+                {downloading === "comparative" ? "Generating…" : "Export PDF"}
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+                <thead>
+                  <tr className="bg-gray-800 text-white">
+                    <th className="text-left px-4 py-3 font-medium w-8">S.N.</th>
+                    <th className="text-left px-4 py-3 font-medium">Particulars</th>
+                    {sorted.map((q, i) => (
+                      <th key={q.id} className={`text-center px-4 py-3 font-medium ${q.amount === lowestAmount ? "bg-green-700" : ""}`}>
+                        Bidder {i + 1}<br />
+                        <span className="text-xs font-normal opacity-90">{q.vendor}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  <tr className="bg-white">
+                    <td className="px-4 py-3 text-gray-500 text-xs">1</td>
+                    <td className="px-4 py-3 font-medium text-gray-700">Quoted Amount (NRS)</td>
+                    {sorted.map(q => (
+                      <td key={q.id} className={`px-4 py-3 text-center font-mono font-semibold ${q.amount === lowestAmount ? "text-green-700 bg-green-50" : "text-gray-800"}`}>
                         {NRS(q.amount)}
-                        {q.amount === lowest && quotes.length > 1 && <span className="block text-xs font-normal text-green-500">Lowest</span>}
+                        {q.amount === lowestAmount && <div className="text-xs font-normal text-green-600 mt-0.5">L-1 (Lowest)</div>}
                       </td>
+                    ))}
+                  </tr>
+
+                  {estimateTotal > 0 && (
+                    <>
+                      <tr className="bg-gray-50">
+                        <td className="px-4 py-3 text-gray-500 text-xs">2</td>
+                        <td className="px-4 py-3 font-medium text-gray-700">Engineer's Estimate (NRS)</td>
+                        {sorted.map(q => (
+                          <td key={q.id} className="px-4 py-3 text-center text-gray-500">{NRS(estimateTotal)}</td>
+                        ))}
+                      </tr>
+                      <tr className="bg-white">
+                        <td className="px-4 py-3 text-gray-500 text-xs">3</td>
+                        <td className="px-4 py-3 font-medium text-gray-700">Deviation from Estimate</td>
+                        {sorted.map(q => {
+                          const diff = ((q.amount - estimateTotal) / estimateTotal) * 100;
+                          return (
+                            <td key={q.id} className={`px-4 py-3 text-center font-semibold ${diff <= 0 ? "text-green-600" : "text-red-500"}`}>
+                              {diff <= 0 ? "▼" : "▲"} {Math.abs(diff).toFixed(2)}%
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </>
+                  )}
+
+                  {hasDisciplines && disciplines.map((disc, di) => {
+                    const discQuotes = sorted.map(q => quotes.find(x => x.id === q.id && x.discipline === disc));
+                    return (
+                      <tr key={disc} className={di % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{(estimateTotal > 0 ? 4 : 2) + di}</td>
+                        <td className="px-4 py-3 text-gray-600 pl-8 italic text-xs">{disc}</td>
+                        {sorted.map((q, i) => {
+                          const match = quotes.find(x => x.id === q.id);
+                          return (
+                            <td key={q.id} className="px-4 py-3 text-center text-gray-500 text-xs">
+                              {match?.discipline === disc ? NRS(match.amount) : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
                     );
                   })}
-                </tr>
-                {estimateTotal > 0 && (
-                  <tr className="bg-gray-50">
-                    <td className="px-4 py-3 text-gray-600 font-medium">vs Your Estimate</td>
-                    {quotes.map(q => {
-                      const diff = ((q.amount - estimateTotal) / estimateTotal) * 100;
-                      return (
-                        <td key={q.id} className={`px-4 py-3 text-center font-semibold ${diff <= 0 ? "text-green-600" : "text-red-500"}`}>
-                          {diff <= 0 ? "▼" : "▲"} {Math.abs(diff).toFixed(1)}%
-                        </td>
-                      );
-                    })}
+
+                  <tr className="bg-white">
+                    <td className="px-4 py-3 text-gray-500 text-xs">{estimateTotal > 0 ? 4 + disciplines.length : 2 + disciplines.length}</td>
+                    <td className="px-4 py-3 font-medium text-gray-700">Quote Validity</td>
+                    {sorted.map(q => (
+                      <td key={q.id} className="px-4 py-3 text-center text-gray-500 text-xs">
+                        {q.validUntil ? new Date(q.validUntil).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Not specified"}
+                      </td>
+                    ))}
                   </tr>
-                )}
-                <tr className="bg-white">
-                  <td className="px-4 py-3 text-gray-600 font-medium">Discipline</td>
-                  {quotes.map(q => <td key={q.id} className="px-4 py-3 text-center text-gray-500">{q.discipline ?? "—"}</td>)}
-                </tr>
-                <tr className="bg-gray-50">
-                  <td className="px-4 py-3 text-gray-600 font-medium">Valid Until</td>
-                  {quotes.map(q => (
-                    <td key={q.id} className="px-4 py-3 text-center text-gray-500">
-                      {q.validUntil ? new Date(q.validUntil).toLocaleDateString() : "—"}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="bg-white">
-                  <td className="px-4 py-3 text-gray-600 font-medium">Status</td>
-                  {quotes.map(q => (
-                    <td key={q.id} className="px-4 py-3 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[q.status]}`}>{STATUS_LABELS[q.status]}</span>
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+
+                  <tr className="bg-white">
+                    <td className="px-4 py-3 text-gray-500 text-xs"></td>
+                    <td className="px-4 py-3 font-medium text-gray-700">Status</td>
+                    {sorted.map(q => (
+                      <td key={q.id} className="px-4 py-3 text-center">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[q.status]}`}>{STATUS_LABELS[q.status]}</span>
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Recommendation row */}
+                  <tr className="bg-green-50 border-t-2 border-green-400">
+                    <td className="px-4 py-3"></td>
+                    <td className="px-4 py-3 font-bold text-green-800">Recommendation</td>
+                    {sorted.map(q => (
+                      <td key={q.id} className={`px-4 py-3 text-center font-semibold text-xs ${q.vendor === recommendedVendor ? "text-green-700" : "text-gray-400"}`}>
+                        {q.vendor === recommendedVendor ? "✓ Recommended (L-1)" : "—"}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p className="text-xs text-gray-400 mt-2">
+              L-1 = Lowest bidder. Recommendation is based on quoted amount only — evaluate technical compliance separately before awarding.
+            </p>
+          </section>
+        );
+      })()}
 
       {/* Add/Edit Quote Modal */}
       {showAddQuote && (

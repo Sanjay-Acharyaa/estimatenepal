@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
+import { fmtNum } from "@/lib/format";
 
 type RateItem = {
   id: string;
@@ -345,7 +346,7 @@ export default function AdminRatesPage() {
                       <td className="px-4 py-2 text-gray-800">{rate.description}</td>
                       <td className="px-4 py-2 text-gray-500">{rate.unit}</td>
                       <td className="px-4 py-2 text-right font-mono text-gray-700">
-                        {rate.baseRate.toLocaleString("en-NP", { minimumFractionDigits: 2 })}
+                        {fmtNum(rate.baseRate, 2)}
                       </td>
                       <td className="px-4 py-2 text-gray-500">{rate.fiscalYear}</td>
                       <td className="px-4 py-2 text-center">
@@ -412,7 +413,7 @@ export default function AdminRatesPage() {
                       <span className="text-sm text-gray-700 w-36 flex-shrink-0">{row.district}</span>
                       {districtRate.isPublished ? (
                         <span className="text-sm font-mono text-gray-600">
-                          {row.rate !== null ? row.rate.toLocaleString("en-NP", { minimumFractionDigits: 2 }) : <span className="text-gray-300">—</span>}
+                          {row.rate !== null ? fmtNum(row.rate, 2) : <span className="text-gray-300">—</span>}
                         </span>
                       ) : (
                         <input

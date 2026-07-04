@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import Link from "next/link";
 import { AnalyticsDashboardClient } from "./AnalyticsClient";
+import { fmtNPR } from "@/lib/format";
 
 export const revalidate = 0;
 
@@ -293,7 +294,7 @@ export default async function AnalyticsDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
             {[
               { label: "Paid Customers",   value: paidOrgs.length,          sub: `${conversionRate}% of trials`,     color: "text-emerald-700" },
-              { label: "Est. MRR",         value: `NPR ${estimatedMRR.toLocaleString("en-NP")}`, sub: "based on plan prices", color: "text-emerald-700" },
+              { label: "Est. MRR",         value: fmtNPR(estimatedMRR), sub: "based on plan prices", color: "text-emerald-700" },
               { label: "Coupons Issued",   value: coupons.length,           sub: `${couponsUsed} redeemed`,          color: "text-indigo-700" },
               { label: "Conversion Rate",  value: `${conversionRate}%`,     sub: `${paidOrgs.length} of ${totalOrgs} orgs`, color: paidOrgs.length > 0 ? "text-green-700" : "text-gray-500" },
             ].map(c => (

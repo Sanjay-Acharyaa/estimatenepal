@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAllConfigs } from "@/lib/config";
 import { CouponForm } from "@/components/trial/CouponForm";
+import { fmtNPR } from "@/lib/format";
 
 export default async function TrialExpiredPage() {
   const cfg = await getAllConfigs();
@@ -15,7 +16,7 @@ export default async function TrialExpiredPage() {
   const waMsg = encodeURIComponent(cfg.whatsapp_message || "Hi, I am interested in Estimate Nepal. Please share pricing details.");
   const waHref = `https://wa.me/${contactWa.replace(/\D/g, "")}?text=${waMsg}`;
 
-  const fmt = (n: number) => `NPR ${n.toLocaleString("en-NP")}`;
+  const fmt = fmtNPR;
 
   const PLANS = [
     { name: "Solo", price: priceSolo, users: "1 user", highlight: false },

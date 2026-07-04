@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { fmtNPRCompact as formatNRS } from "@/lib/format";
 
 type Project = {
   id: string;
@@ -23,12 +24,6 @@ type Column = {
   totalValue: number;
   projects: Project[];
 };
-
-function formatNRS(value: number) {
-  if (value >= 10_000_000) return `Rs ${(value / 10_000_000).toFixed(1)}Cr`;
-  if (value >= 100_000)    return `Rs ${(value / 100_000).toFixed(1)}L`;
-  return `Rs ${value.toLocaleString("en-NP")}`;
-}
 
 function deadlineBadge(bidDueDate: Date | null, status: string): { label: string; cls: string } | null {
   if (!bidDueDate || status === "COMPLETE" || status === "LOST" || status === "ARCHIVED") return null;
