@@ -160,7 +160,7 @@ function CheckoutContent() {
         <div className="flex flex-col items-center mb-6">
           <div className="border-2 border-dashed border-gray-200 rounded-xl p-3 w-52 h-52 flex items-center justify-center bg-gray-50">
             {qrUrl ? (
-              <Image src={qrUrl} alt="Payment QR" width={200} height={200} className="rounded-lg object-contain" />
+              <Image src={qrUrl} alt="Payment QR" width={200} height={200} className="rounded-lg object-contain" unoptimized />
             ) : (
               <p className="text-gray-400 text-sm text-center">QR code loading…</p>
             )}
