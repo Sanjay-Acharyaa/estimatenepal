@@ -8,6 +8,7 @@ export type ExportColConfig = {
   showQty: boolean;
   showRate: boolean;
   showAmount: boolean;
+  customCols?: string[];
 };
 
 const NRS = (n: number) => fmtNum(n, 2);
@@ -80,6 +81,10 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
   wb.creator = "Estimate Nepal";
   wb.created = new Date();
 
+  const customCols = cols.customCols ?? [];
+  const totalCols = 6 + customCols.length;
+  const lastColLetter = String.fromCharCode(64 + totalCols);
+
   // ── Summary Sheet ──────────────────────────────────────────────────────────
   const summary = wb.addWorksheet("Summary BOQ");
   summary.columns = [
@@ -89,11 +94,12 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
     { key: "qty",    width: 14, hidden: !cols.showQty },
     { key: "rate",   width: 14, hidden: !cols.showRate },
     { key: "amount", width: 16, hidden: !cols.showAmount },
+    ...customCols.map(label => ({ key: `custom_${label}`, width: 18 })),
   ];
 
   // Project header
   const titleRow = summary.addRow([`BILL OF QUANTITIES — ${boq.project.name.toUpperCase()}`]);
-  summary.mergeCells(`A${titleRow.number}:F${titleRow.number}`);
+  summary.mergeCells(`A${titleRow.number}:${lastColLetter}${titleRow.number}`);
   titleRow.getCell(1).font = { bold: true, size: 14, color: { argb: "FF1E3A5F" } };
   titleRow.getCell(1).alignment = { horizontal: "center" };
   titleRow.height = 24;
@@ -102,7 +108,7 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
     const clientRow = summary.addRow([
       `Client: ${[boq.project.clientCompany, boq.project.clientName].filter(Boolean).join(" — ")}`,
     ]);
-    summary.mergeCells(`A${clientRow.number}:F${clientRow.number}`);
+    summary.mergeCells(`A${clientRow.number}:${lastColLetter}${clientRow.number}`);
     clientRow.getCell(1).font = { size: 10, italic: true };
     clientRow.getCell(1).alignment = { horizontal: "center" };
   }
@@ -110,14 +116,17 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
   const metaRow = summary.addRow([
     `District: ${boq.project.district ?? "—"}  |  Date: ${new Date(boq.generatedAt).toLocaleDateString("en-NP")}`,
   ]);
-  summary.mergeCells(`A${metaRow.number}:F${metaRow.number}`);
+  summary.mergeCells(`A${metaRow.number}:${lastColLetter}${metaRow.number}`);
   metaRow.getCell(1).font = { size: 9, color: { argb: "FF6B7280" } };
   metaRow.getCell(1).alignment = { horizontal: "center" };
 
   summary.addRow([]);
 
-  // Column headers
-  const hdr = summary.addRow(["S.No.", "Description of Work", "Unit", "Quantity", "Rate (NRS)", "Amount (NRS)"]);
+  // Column headers (standard + custom)
+  const hdr = summary.addRow([
+    "S.No.", "Description of Work", "Unit", "Quantity", "Rate (NRS)", "Amount (NRS)",
+    ...customCols,
+  ]);
   hdr.eachCell((c) => applyHeaderStyle(c));
   hdr.height = 20;
 
@@ -539,4 +548,305 @@ export async function buildBOQPdf(boq: BOQDocument): Promise<Buffer> {
   } finally {
     await browser.close();
   }
+}
+
+// ─── Nepal Government BOQ Export (DUDBC Standard) ────────────────────────────
+
+export type GovtBOQMeta = {
+  ministry?: string;
+  department?: string;
+  office?: string;
+  projectName: string;
+  schemeNo?: string;
+  district?: string;
+  ward?: string;
+  fiscalYear?: string;
+  contractorName?: string;
+  preparedBy?: string;
+  checkedBy?: string;
+  approvedBy?: string;
+};
+
+function applyGovtHeaderStyle(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 11, color: { argb: "FF1E3A5F" } };
+  cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+}
+
+function applyGovtColHeader(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+  cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+}
+
+function applyGovtGroupRow(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 10 };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1D5DB" } };
+  cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+}
+
+function applyGovtItemRow(cell: ExcelJS.Cell) {
+  cell.font = { size: 10 };
+  cell.border = { top: { style: "hair" }, left: { style: "hair" }, bottom: { style: "hair" }, right: { style: "hair" } };
+}
+
+function applyGovtTotalRow(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 10 };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
+  cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+}
+
+function applyGovtGrandTotal(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+  cell.border = { top: { style: "medium" }, left: { style: "medium" }, bottom: { style: "medium" }, right: { style: "medium" } };
+  cell.alignment = { horizontal: "right", vertical: "middle" };
+}
+
+export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Estimate Nepal";
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet("Government BOQ", {
+    pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true },
+  });
+
+  // Column widths: SN | Description | Unit | Qty | Rate | Amount
+  ws.columns = [
+    { key: "sn",     width: 7 },
+    { key: "desc",   width: 44 },
+    { key: "unit",   width: 9 },
+    { key: "qty",    width: 12 },
+    { key: "rate",   width: 14 },
+    { key: "amount", width: 16 },
+  ];
+
+  const COLS = 6;
+  const mergeRow = (row: ExcelJS.Row, style?: (c: ExcelJS.Cell) => void) => {
+    ws.mergeCells(`A${row.number}:F${row.number}`);
+    if (style) style(row.getCell(1));
+  };
+
+  // ── Government Header ────────────────────────────────────────────────────
+  const r1 = ws.addRow(["नेपाल सरकार / Government of Nepal"]);
+  mergeRow(r1);
+  applyGovtHeaderStyle(r1.getCell(1));
+  r1.getCell(1).font = { bold: true, size: 12, color: { argb: "FF1E3A5F" } };
+  r1.height = 22;
+
+  const ministry = meta.ministry ?? "शहरी विकास मन्त्रालय / Ministry of Urban Development";
+  const r2 = ws.addRow([ministry]);
+  mergeRow(r2);
+  applyGovtHeaderStyle(r2.getCell(1));
+  r2.height = 18;
+
+  const department = meta.department ?? "शहरी विकास तथा भवन निर्माण विभाग / DUDBC";
+  const r3 = ws.addRow([department]);
+  mergeRow(r3);
+  applyGovtHeaderStyle(r3.getCell(1));
+  r3.height = 18;
+
+  if (meta.office) {
+    const rOff = ws.addRow([meta.office]);
+    mergeRow(rOff);
+    applyGovtHeaderStyle(rOff.getCell(1));
+    rOff.height = 16;
+  }
+
+  ws.addRow([]);
+
+  // ── Project Details ──────────────────────────────────────────────────────
+  const titleRow = ws.addRow([`आयोजना / Project: ${meta.projectName}`]);
+  mergeRow(titleRow);
+  titleRow.getCell(1).font = { bold: true, size: 11 };
+  titleRow.getCell(1).alignment = { horizontal: "center" };
+  titleRow.height = 18;
+
+  if (meta.schemeNo) {
+    const rScheme = ws.addRow([`योजना नं. / Scheme No.: ${meta.schemeNo}`]);
+    mergeRow(rScheme);
+    rScheme.getCell(1).font = { size: 10 };
+    rScheme.getCell(1).alignment = { horizontal: "center" };
+  }
+
+  const metaStr = [
+    meta.district ? `जिल्ला / District: ${meta.district}` : null,
+    meta.ward     ? `वडा नं. / Ward No.: ${meta.ward}` : null,
+    meta.fiscalYear ? `आ.व. / FY: ${meta.fiscalYear}` : null,
+  ].filter(Boolean).join("   |   ");
+  if (metaStr) {
+    const rMeta = ws.addRow([metaStr]);
+    mergeRow(rMeta);
+    rMeta.getCell(1).font = { size: 10, italic: true };
+    rMeta.getCell(1).alignment = { horizontal: "center" };
+  }
+
+  if (meta.contractorName) {
+    const rCont = ws.addRow([`ठेकेदार / Contractor: ${meta.contractorName}`]);
+    mergeRow(rCont);
+    rCont.getCell(1).font = { size: 10 };
+    rCont.getCell(1).alignment = { horizontal: "center" };
+  }
+
+  ws.addRow([]);
+
+  // ── BOQ Title ────────────────────────────────────────────────────────────
+  const boqTitle = ws.addRow(["लागत अनुमान (Bill of Quantities)"]);
+  mergeRow(boqTitle);
+  boqTitle.getCell(1).font = { bold: true, size: 12, underline: true };
+  boqTitle.getCell(1).alignment = { horizontal: "center" };
+  boqTitle.height = 20;
+
+  ws.addRow([]);
+
+  // ── Column Headers (bilingual) ───────────────────────────────────────────
+  const hdr1 = ws.addRow(["क्र.सं.", "काम/सामग्रीको विवरण", "एकाई", "परिमाण", "दर (रू.)", "जम्मा रकम (रू.)"]);
+  hdr1.eachCell((c) => applyGovtColHeader(c));
+  hdr1.height = 18;
+
+  const hdr2 = ws.addRow(["S.N.", "Description of Work", "Unit", "Quantity", "Rate (NRS)", "Amount (NRS)"]);
+  hdr2.eachCell((c) => applyGovtColHeader(c));
+  hdr2.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+  hdr2.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+  hdr2.getCell(3).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+  hdr2.getCell(4).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+  hdr2.getCell(5).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+  hdr2.getCell(6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+  hdr2.height = 16;
+
+  // ── BOQ Items ────────────────────────────────────────────────────────────
+  let sno = 1;
+  let grandTotal = 0;
+
+  for (const disc of boq.disciplines) {
+    // Discipline row
+    const dRow = ws.addRow([``, sanitizeCell(disc.name.toUpperCase()), "", "", "", ""]);
+    ws.mergeCells(`A${dRow.number}:F${dRow.number}`);
+    dRow.eachCell((c) => applyGovtGroupRow(c));
+    dRow.height = 16;
+
+    for (const grp of disc.groups) {
+      // Group row
+      const gRow = ws.addRow([`${sno}.`, sanitizeCell(grp.name), sanitizeCell(grp.unit), "", NRS(grp.rate), NRS(grp.amount)]);
+      gRow.eachCell((c) => applyGovtGroupRow(c));
+      gRow.getCell(1).alignment = { horizontal: "center" };
+      gRow.getCell(4).alignment = { horizontal: "right" };
+      gRow.getCell(5).alignment = { horizontal: "right" };
+      gRow.getCell(6).alignment = { horizontal: "right" };
+      gRow.height = 16;
+
+      // Sub-items (measurement lines)
+      for (const item of grp.items) {
+        const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(item.unit), item.quantity.toFixed(3), "", ""]);
+        iRow.eachCell((c) => applyGovtItemRow(c));
+        iRow.getCell(4).alignment = { horizontal: "right" };
+      }
+
+      // Group total
+      const tRow = ws.addRow(["", "जम्मा / Total", sanitizeCell(grp.unit), grp.totalQuantity.toFixed(3), NRS(grp.rate), NRS(grp.amount)]);
+      tRow.eachCell((c) => applyGovtTotalRow(c));
+      tRow.getCell(2).alignment = { horizontal: "right" };
+      tRow.getCell(4).alignment = { horizontal: "right" };
+      tRow.getCell(5).alignment = { horizontal: "right" };
+      tRow.getCell(6).alignment = { horizontal: "right" };
+
+      grandTotal += grp.amount;
+      sno++;
+    }
+
+    // Discipline subtotal
+    const stRow = ws.addRow(["", `उप-जम्मा / Sub-total — ${sanitizeCell(disc.name)}`, "", "", "", NRS(disc.subtotal)]);
+    ws.mergeCells(`A${stRow.number}:E${stRow.number}`);
+    stRow.eachCell((c) => applyGovtTotalRow(c));
+    stRow.getCell(1).alignment = { horizontal: "right" };
+    stRow.getCell(6).alignment = { horizontal: "right" };
+  }
+
+  // ── Totals Section ───────────────────────────────────────────────────────
+  ws.addRow([]);
+
+  const addSummaryRow = (label: string, value: string, isBold = false) => {
+    const r = ws.addRow(["", "", "", "", label, value]);
+    ws.mergeCells(`A${r.number}:D${r.number}`);
+    r.getCell(5).font = { bold: isBold, size: 10 };
+    r.getCell(5).border = { top: { style: "hair" }, left: { style: "hair" }, bottom: { style: "hair" }, right: { style: "hair" } };
+    r.getCell(5).alignment = { horizontal: "right" };
+    r.getCell(6).font = { bold: isBold, size: 10 };
+    r.getCell(6).border = { top: { style: "hair" }, left: { style: "hair" }, bottom: { style: "hair" }, right: { style: "hair" } };
+    r.getCell(6).alignment = { horizontal: "right" };
+  };
+
+  addSummaryRow("कुल जम्मा / Grand Total", NRS(boq.grandTotal));
+
+  if (boq.contingencyAmount > 0) {
+    addSummaryRow(`आकस्मिक खर्च / Contingency (${boq.project.contingencyPct ?? 0}%)`, NRS(boq.contingencyAmount));
+  }
+  if (boq.provisionalSum > 0) {
+    addSummaryRow("अनुमानित योग / Provisional Sum", NRS(boq.provisionalSum));
+  }
+
+  const vatRate = boq.project.vatRate ?? 13;
+  const vatAmount = boq.vatAmount > 0 ? boq.vatAmount : 0;
+  if (vatAmount > 0) {
+    addSummaryRow(`मूल्य अभिवृद्धि कर / VAT (${vatRate}%)`, NRS(vatAmount));
+  }
+
+  const finalRow = ws.addRow(["", "", "", "", "जम्मा भुक्तानी / Total Payable", NRS(boq.finalPayable)]);
+  ws.mergeCells(`A${finalRow.number}:D${finalRow.number}`);
+  applyGovtGrandTotal(finalRow.getCell(5));
+  applyGovtGrandTotal(finalRow.getCell(6));
+  finalRow.height = 20;
+
+  // ── Signature Block ──────────────────────────────────────────────────────
+  ws.addRow([]);
+  ws.addRow([]);
+
+  const today = new Date().toLocaleDateString("en-NP", { year: "numeric", month: "long", day: "numeric" });
+  const dateRow = ws.addRow([`मिति / Date: ${today}`]);
+  ws.mergeCells(`A${dateRow.number}:F${dateRow.number}`);
+  dateRow.getCell(1).font = { size: 10 };
+
+  ws.addRow([]);
+  ws.addRow([]);
+
+  const sig = ws.addRow([
+    "तयार गर्ने / Prepared by",
+    "",
+    "जाँच गर्ने / Checked by",
+    "",
+    "स्वीकृत गर्ने / Approved by",
+    "",
+  ]);
+  sig.eachCell((c) => { c.font = { bold: true, size: 10 }; c.alignment = { horizontal: "center" }; });
+
+  ws.addRow([]);
+  ws.addRow([]);
+
+  const sig2 = ws.addRow([
+    meta.preparedBy ?? "___________________",
+    "",
+    meta.checkedBy ?? "___________________",
+    "",
+    meta.approvedBy ?? "___________________",
+    "",
+  ]);
+  sig2.eachCell((c) => { c.font = { size: 10 }; c.alignment = { horizontal: "center" }; });
+
+  const sigTitle = ws.addRow([
+    "Estimator / Junior Engineer",
+    "",
+    "Sub-Engineer / Overseer",
+    "",
+    "कार्यकारी अभियन्ता / Executive Engineer",
+    "",
+  ]);
+  sigTitle.eachCell((c) => { c.font = { size: 9, italic: true, color: { argb: "FF6B7280" } }; c.alignment = { horizontal: "center" }; });
+
+  ws.addRow([]);
+  const disclaimer = ws.addRow(["* यो लागत अनुमान DUDBC मापदण्ड अनुसार तयार गरिएको हो। / This BOQ is prepared as per DUDBC standard specifications."]);
+  ws.mergeCells(`A${disclaimer.number}:F${disclaimer.number}`);
+  disclaimer.getCell(1).font = { size: 9, italic: true, color: { argb: "FF6B7280" } };
+
+  return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
 }

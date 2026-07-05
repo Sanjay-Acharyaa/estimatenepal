@@ -8,6 +8,7 @@ export type AnalyticsEventName =
   | "procurement_export"
   | "tender_export"
   | "mb_export"
+  | "govt_boq_export"
   | "assembly_applied"
   | "drawing_uploaded"
   | "invite_sent"

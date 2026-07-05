@@ -29,10 +29,11 @@ const nextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  // Only upload source maps when SENTRY_DSN is set (i.e. production)
   silent: true,
-  webpack: {
-    treeshake: { removeDebugLogging: true },
-    automaticVercelMonitors: false,
+  disableLogger: true,
+  automaticVercelMonitors: false,
+  // Only upload source maps when auth token is provided (production CI)
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
   },
 });

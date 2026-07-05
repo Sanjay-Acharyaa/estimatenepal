@@ -43,3 +43,6 @@ jobs:
           REDIS_URL: "redis://localhost:6379"
           STORAGE_ACCESS_KEY: "ci_placeholder"
           STORAGE_SECRET_KEY: "ci_placeholder"
+          NEXT_PUBLIC_SENTRY_DSN: ""
+          SENTRY_AUTH_TOKEN: ""
+          CRON_SECRET: "ci_placeholder"

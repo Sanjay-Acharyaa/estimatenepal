@@ -29,14 +29,21 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const boq = await generateBOQ(params.id);
 
     // Merge saved config with query-param overrides (query takes precedence for one-off exports)
-    const saved = (project.exportConfig ?? {}) as Record<string, boolean>;
+    const saved = (project.exportConfig ?? {}) as Record<string, unknown>;
     const qp = req.nextUrl.searchParams;
+
+    const customColsParam = qp.get("customCols");
+    const customCols = customColsParam
+      ? customColsParam.split(",").map(s => s.trim()).filter(Boolean)
+      : ((saved.customCols as string[] | undefined) ?? []);
+
     const colConfig: ExportColConfig = {
-      showSno:    (qp.has("showSno")    ? qp.get("showSno")    === "1" : (saved.showSno    ?? true)),
-      showUnit:   (qp.has("showUnit")   ? qp.get("showUnit")   === "1" : (saved.showUnit   ?? true)),
-      showQty:    (qp.has("showQty")    ? qp.get("showQty")    === "1" : (saved.showQty    ?? true)),
-      showRate:   (qp.has("showRate")   ? qp.get("showRate")   === "1" : (saved.showRate   ?? true)),
-      showAmount: (qp.has("showAmount") ? qp.get("showAmount") === "1" : (saved.showAmount ?? true)),
+      showSno:    (qp.has("showSno")    ? qp.get("showSno")    === "1" : ((saved.showSno    as boolean) ?? true)),
+      showUnit:   (qp.has("showUnit")   ? qp.get("showUnit")   === "1" : ((saved.showUnit   as boolean) ?? true)),
+      showQty:    (qp.has("showQty")    ? qp.get("showQty")    === "1" : ((saved.showQty    as boolean) ?? true)),
+      showRate:   (qp.has("showRate")   ? qp.get("showRate")   === "1" : ((saved.showRate   as boolean) ?? true)),
+      showAmount: (qp.has("showAmount") ? qp.get("showAmount") === "1" : ((saved.showAmount as boolean) ?? true)),
+      customCols,
     };
 
     const result = await withSemaphore("excel", 5, async () => {
