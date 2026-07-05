@@ -23,6 +23,7 @@ export default async function SuperAdminPage() {
         id: true, name: true, email: true, phone: true, role: true,
         isSuperAdmin: true, emailVerified: true, isTestAccount: true,
         createdAt: true, lastLoginAt: true,
+        referralSource: true, referralMedium: true,
         org: { select: { name: true } },
       },
     }),
@@ -205,6 +206,7 @@ export default async function SuperAdminPage() {
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Phone</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Org</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Role</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">Source</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Verified</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Joined</th>
                 </tr>
@@ -231,6 +233,16 @@ export default async function SuperAdminPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{user.org?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{user.role}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {(user as any).referralSource ? (
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium capitalize">
+                          {(user as any).referralSource}
+                          {(user as any).referralMedium ? ` / ${(user as any).referralMedium}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">Direct</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${user.emailVerified ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
                         {user.emailVerified ? "Yes" : "No"}
