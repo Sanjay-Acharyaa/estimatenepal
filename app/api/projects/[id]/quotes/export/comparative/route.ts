@@ -3,7 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import { fmtNum } from "@/lib/format";
 import { generateBOQ } from "@/lib/boq";
@@ -18,7 +18,7 @@ const NRS = (n: number) => fmtNum(n, 2);
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const ip = getClientIp(req);
-    const limited = await checkApiRateLimit(ip);
+    const limited = await checkExportRateLimit(ip);
     if (limited) return limited;
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });

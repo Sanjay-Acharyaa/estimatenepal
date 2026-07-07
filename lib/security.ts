@@ -146,3 +146,66 @@ export async function checkUploadRateLimit(ip: string) {
   }
 }
 
+// Export: 10 per minute per IP — Puppeteer/ExcelJS exports are CPU/memory-intensive
+const exportLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: "rl_export",
+  points: 10,
+  duration: 60,
+  insuranceLimiter: new RateLimiterMemory({ points: 2, duration: 60 }),
+});
+
+// OCR: 20 per minute per IP — each request runs Tesseract on up to 4 MB of image data
+const ocrLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: "rl_ocr",
+  points: 20,
+  duration: 60,
+  insuranceLimiter: new RateLimiterMemory({ points: 4, duration: 60 }),
+});
+
+// Coupon: 5 attempts per hour per org — prevents brute-force of coupon codes
+const couponLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: "rl_coupon",
+  points: 5,
+  duration: 3600,
+  insuranceLimiter: new RateLimiterMemory({ points: 1, duration: 3600 }),
+});
+
+export async function checkExportRateLimit(ip: string) {
+  try {
+    await exportLimiter.consume(ip);
+    return null;
+  } catch (e) {
+    if (e instanceof RateLimiterRes) {
+      return NextResponse.json({ error: "Export rate limit exceeded. Please wait a moment." }, { status: 429 });
+    }
+    throw e;
+  }
+}
+
+export async function checkOcrRateLimit(ip: string) {
+  try {
+    await ocrLimiter.consume(ip);
+    return null;
+  } catch (e) {
+    if (e instanceof RateLimiterRes) {
+      return NextResponse.json({ error: "OCR rate limit exceeded. Please wait a moment." }, { status: 429 });
+    }
+    throw e;
+  }
+}
+
+export async function checkCouponRateLimit(orgId: string) {
+  try {
+    await couponLimiter.consume(orgId);
+    return null;
+  } catch (e) {
+    if (e instanceof RateLimiterRes) {
+      return NextResponse.json({ error: "Too many coupon attempts. Please wait before trying again." }, { status: 429 });
+    }
+    throw e;
+  }
+}
+

@@ -5,7 +5,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
 import { buildBOQPdf } from "@/lib/export";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
-import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import { trackEvent } from "@/lib/analytics";
 
@@ -14,7 +14,7 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const ip = getClientIp(req);
-    const limited = await checkApiRateLimit(ip);
+    const limited = await checkExportRateLimit(ip);
     if (limited) return limited;
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });

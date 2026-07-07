@@ -2,7 +2,7 @@ export function getSecurityHeaders(): Record<string, string> {
   const storageEndpoint = process.env.STORAGE_ENDPOINT ?? "";
   // Include storage endpoint for pre-signed upload/download URLs
   const connectSrc = [
-    "'self'", "ws:", "wss:", storageEndpoint,
+    "'self'", "wss://estimatenepal.com", storageEndpoint,
     // Facebook Pixel
     "https://*.facebook.com",
     // Google Analytics / Tag Manager

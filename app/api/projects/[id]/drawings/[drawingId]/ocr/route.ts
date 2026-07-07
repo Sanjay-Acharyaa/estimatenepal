@@ -4,7 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
-import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { checkOcrRateLimit, getClientIp } from "@/lib/security";
 import { recognizeText } from "@/lib/ocr";
 import { withSemaphore } from "@/lib/semaphore";
 
@@ -24,7 +24,7 @@ export async function POST(
 ) {
   try {
     const ip = getClientIp(req);
-    const limited = await checkApiRateLimit(ip);
+    const limited = await checkOcrRateLimit(ip);
     if (limited) return limited;
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });

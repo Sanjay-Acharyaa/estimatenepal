@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const VALID_REASONS = ["too_expensive", "missing_features", "just_exploring", "competitor"];
 
 export async function GET(req: NextRequest) {
+  const limited = await checkApiRateLimit(getClientIp(req));
+  if (limited) return limited;
+
   const { searchParams } = req.nextUrl;
   const reason = searchParams.get("reason");
   const orgId = searchParams.get("org");

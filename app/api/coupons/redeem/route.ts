@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { handleApiError, apiError, unauthorized } from "@/lib/errors";
-import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { checkApiRateLimit, checkCouponRateLimit, getClientIp } from "@/lib/security";
 
 const schema = z.object({
   code: z.string().min(1).max(50),
@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
     if (!orgId) {
       return apiError("FORBIDDEN", "No organisation associated with your account.", 403);
     }
+
+    // Per-org limit: 5 attempts per hour to prevent coupon brute-forcing
+    const couponLimited = await checkCouponRateLimit(orgId);
+    if (couponLimited) return couponLimited;
 
     const body = await req.json();
     const parsed = schema.safeParse(body);

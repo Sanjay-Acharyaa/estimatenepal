@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
+  const limited = await checkApiRateLimit(getClientIp(req));
+  if (limited) return limited;
+
   const { searchParams } = req.nextUrl;
   const scoreStr = searchParams.get("score");
   const userId = searchParams.get("user");
