@@ -217,19 +217,23 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
           return s + raw;
         }, 0);
+        // Derive imperial vs metric from item units (set by computeQuantity using scaleUnit)
+        const itemUnit = layer.items[0]?.unit ?? "ft";
+        const isMetric = itemUnit.endsWith("m");
         if (method === "lbh") {
           const b = ap?.breadth ? safeNum(ap.breadth.ft) + safeNum(ap.breadth.in) / 12 : 0;
           totalQuantity = rawTotal * b * h * layer.multiplier;
-          unit = b > 0 && h > 0 ? "cu ft" : "sq ft";
+          unit = b > 0 && h > 0 ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
         } else {
           totalQuantity = rawTotal * h * layer.multiplier;
-          unit = h > 0 ? "cu ft" : "sq ft";
+          unit = h > 0 ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
         }
       } else if (layer.type === "VERTICAL_WALL_AREA") {
         const wallH = ap?.wall ? safeNum(ap.wall.heightFt) + safeNum(ap.wall.heightIn) / 12 : 0;
         const rawTotal = layer.items.reduce((s, i) => s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
         totalQuantity = wallH > 0 ? rawTotal * wallH * layer.multiplier : 0;
-        unit = wallH > 0 ? "sq ft" : "ft";
+        const wallItemUnit = layer.items[0]?.unit ?? "ft";
+        unit = wallH > 0 ? (wallItemUnit.endsWith("m") ? "sq m" : "sq ft") : wallItemUnit;
       } else if (layer.type === "COUNT_BY_DISTANCE") {
         const sp = ap?.spacing;
         const spacingFt = sp ? safeNum(sp.ft) + safeNum(sp.in) / 12 : 0;

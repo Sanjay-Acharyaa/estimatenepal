@@ -99,6 +99,16 @@ app.prepare().then(async () => {
   io.on("connection", (socket) => {
     const joinedRooms = new Set();
 
+    // Per-socket rate limiter — drops bursts above the per-second threshold.
+    // Stored in closure so it's automatically GC'd when the socket disconnects.
+    const _rl = new Map(); // eventKey -> { count, resetAt }
+    function allow(eventKey, maxPerSec) {
+      const now = Date.now();
+      let e = _rl.get(eventKey);
+      if (!e || now > e.resetAt) { e = { count: 1, resetAt: now + 1000 }; _rl.set(eventKey, e); return true; }
+      return ++e.count <= maxPerSec;
+    }
+
     socket.on("join:room", async (roomId) => {
       if (typeof roomId !== "string" || roomId.length > 200) return;
 
@@ -186,6 +196,7 @@ app.prepare().then(async () => {
 
     // ─── Cursor sharing (throttled on client, just relay here) ──────────────
     socket.on("cursor:move", ({ roomId, x, y }) => {
+      if (!allow("cursor", 20)) return;
       if (typeof roomId !== "string" || typeof x !== "number" || typeof y !== "number") return;
       socket.to(roomId).emit("cursor:move", {
         socketId: socket.id,
@@ -197,6 +208,7 @@ app.prepare().then(async () => {
 
     // ─── Shape lock / unlock ─────────────────────────────────────────────────
     socket.on("shape:lock", ({ roomId, itemId }) => {
+      if (!allow("shape", 10)) return;
       if (typeof roomId !== "string" || typeof itemId !== "string") return;
       if (!joinedRooms.has(roomId)) return;
       if (!roomLocks.has(roomId)) roomLocks.set(roomId, new Map());
@@ -219,6 +231,7 @@ app.prepare().then(async () => {
     });
 
     socket.on("shape:unlock", ({ roomId, itemId }) => {
+      if (!allow("shape", 10)) return;
       if (typeof roomId !== "string" || typeof itemId !== "string") return;
       if (!joinedRooms.has(roomId)) return;
       const locks = roomLocks.get(roomId);
@@ -238,18 +251,21 @@ app.prepare().then(async () => {
     // so a socket in joinedRooms is guaranteed to belong to the correct org.
 
     socket.on("takeoff:add", ({ roomId, item }) => {
+      if (!allow("shape", 10)) return;
       if (typeof roomId === "string" && item && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:add", item);
       }
     });
 
     socket.on("takeoff:update", ({ roomId, item }) => {
+      if (!allow("shape", 10)) return;
       if (typeof roomId === "string" && item && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:update", item);
       }
     });
 
     socket.on("takeoff:delete", ({ roomId, itemId }) => {
+      if (!allow("shape", 10)) return;
       if (typeof roomId === "string" && typeof itemId === "string" && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:delete", itemId);
       }
