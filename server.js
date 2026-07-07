@@ -198,6 +198,7 @@ app.prepare().then(async () => {
     // ─── Shape lock / unlock ─────────────────────────────────────────────────
     socket.on("shape:lock", ({ roomId, itemId }) => {
       if (typeof roomId !== "string" || typeof itemId !== "string") return;
+      if (!joinedRooms.has(roomId)) return;
       if (!roomLocks.has(roomId)) roomLocks.set(roomId, new Map());
       const locks = roomLocks.get(roomId);
       const existing = locks.get(itemId);
@@ -219,6 +220,7 @@ app.prepare().then(async () => {
 
     socket.on("shape:unlock", ({ roomId, itemId }) => {
       if (typeof roomId !== "string" || typeof itemId !== "string") return;
+      if (!joinedRooms.has(roomId)) return;
       const locks = roomLocks.get(roomId);
       if (!locks) return;
       const lock = locks.get(itemId);
@@ -231,21 +233,24 @@ app.prepare().then(async () => {
     });
 
     // ─── Shape events ────────────────────────────────────────────────────────
+    // Guard: only relay if this socket has actually joined the room.
+    // joinedRooms is populated in join:room which already runs the tenant check,
+    // so a socket in joinedRooms is guaranteed to belong to the correct org.
 
     socket.on("takeoff:add", ({ roomId, item }) => {
-      if (typeof roomId === "string" && item) {
+      if (typeof roomId === "string" && item && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:add", item);
       }
     });
 
     socket.on("takeoff:update", ({ roomId, item }) => {
-      if (typeof roomId === "string" && item) {
+      if (typeof roomId === "string" && item && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:update", item);
       }
     });
 
     socket.on("takeoff:delete", ({ roomId, itemId }) => {
-      if (typeof roomId === "string" && typeof itemId === "string") {
+      if (typeof roomId === "string" && typeof itemId === "string" && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:delete", itemId);
       }
     });
