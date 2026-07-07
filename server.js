@@ -48,7 +48,7 @@ app.prepare().then(async () => {
   });
 
   const io = new Server(httpServer, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: { origin: "https://estimatenepal.com", methods: ["GET", "POST"] },
   });
 
   // Redis pub/sub adapter — required for PM2 cluster mode.
