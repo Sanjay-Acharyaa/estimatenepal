@@ -8,8 +8,8 @@ module.exports = {
       env_production: {
         NODE_ENV: "production",
       },
-      // Restart a worker if it exceeds 512 MB — prevents memory leaks from taking down all workers
-      max_memory_restart: "512M",
+      // Restart a worker if it exceeds 1 GB — Next.js production can grow to 500-700MB under load
+      max_memory_restart: "1024M",
       // Wait for process.send('ready') before marking worker as online and killing the old one
       wait_ready: true,
       listen_timeout: 30000,
