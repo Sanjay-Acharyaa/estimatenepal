@@ -124,9 +124,9 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
     where: { projectId, parentId: { not: null } },
     include: {
       items: { orderBy: { sortOrder: "asc" } },
-      parent: { select: { name: true } },
+      parent: { select: { name: true, sortOrder: true } },
     },
-    orderBy: { sortOrder: "asc" },
+    orderBy: [{ parent: { sortOrder: "asc" } }, { sortOrder: "asc" }],
   });
 
   // Gather rateItemIds from group-level assignments (preferred) and fall back to items
