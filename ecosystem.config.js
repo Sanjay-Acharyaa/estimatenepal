@@ -1,23 +1,21 @@
 module.exports = {
   apps: [
     {
-      name: "nepaliestimate",
+      name: "nepali-estimate",
       script: "server.js",
-      instances: "max",   // one worker per CPU core
+      instances: 2,
       exec_mode: "cluster",
-      env_production: {
+      // env (not env_production) so NODE_ENV=production is always applied
+      env: {
         NODE_ENV: "production",
+        PORT: 3000,
       },
-      // Restart a worker if it exceeds 1 GB — Next.js production can grow to 500-700MB under load
       max_memory_restart: "1024M",
-      // Wait for process.send('ready') before marking worker as online and killing the old one
       wait_ready: true,
-      listen_timeout: 30000,
-      // Wait 5s before restarting a crashed worker to avoid rapid restart loops
+      listen_timeout: 60000,
       restart_delay: 5000,
-      // Log to files so all workers' output goes to one place
-      out_file: "/var/log/pm2/nepaliestimate-out.log",
-      error_file: "/var/log/pm2/nepaliestimate-err.log",
+      out_file: "/var/log/pm2/nepali-estimate-out.log",
+      error_file: "/var/log/pm2/nepali-estimate-err.log",
       merge_logs: true,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
