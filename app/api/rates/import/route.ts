@@ -233,7 +233,8 @@ export async function POST(req: NextRequest) {
       orgId: token.orgId as string,
       userId: token.id as string,
       event: "rate_items.bulk_imported",
-      meta: { batchId, batchName: finalBatchName, created: toInsert.length, skipped, fileName: file.name } as unknown as Record<string, unknown>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      meta: { batchId, batchName: finalBatchName, created: toInsert.length, skipped, fileName: file.name } as any,
       ipAddress: getClientIp(req),
     });
 
