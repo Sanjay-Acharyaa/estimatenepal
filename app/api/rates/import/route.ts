@@ -6,7 +6,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 import { invalidateRatesCache } from "@/lib/rates";
-import ExcelJS from "exceljs";
+import * as XLSX from "xlsx";
 
 // POST /api/rates/import
 // Accepts: multipart/form-data, field "file" (.xlsx)
@@ -25,22 +25,14 @@ import ExcelJS from "exceljs";
 //
 // Validates ALL rows before inserting any. Skips duplicate codes (same org).
 
-function cellStr(row: ExcelJS.Row, col: number): string {
-  const val = row.getCell(col).value;
+function toStr(val: unknown): string {
   if (val === null || val === undefined) return "";
-  if (typeof val === "object" && "richText" in (val as any)) {
-    return ((val as any).richText as any[]).map((r: any) => r.text).join("").trim();
-  }
-  if (typeof val === "object" && "result" in (val as any)) {
-    return String((val as any).result ?? "").trim();
-  }
   return String(val).trim();
 }
 
-function cellNum(row: ExcelJS.Row, col: number): number | null {
-  const val = row.getCell(col).value;
+function toNum(val: unknown): number | null {
   if (val === null || val === undefined) return null;
-  const n = typeof val === "number" ? val : parseFloat(String(val).replace(/,/g, ""));
+  const n = parseFloat(String(val).replace(/,/g, ""));
   return isNaN(n) ? null : n;
 }
 
@@ -87,29 +79,37 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     _log("buffer ready");
 
+    // SheetJS is fully synchronous — no streams or async ZIP callbacks that can crash the worker.
+    const wb = XLSX.read(buffer, { type: "buffer" });
+    _log("workbook loaded");
+
+    const wsName = wb.SheetNames[0];
+    if (!wsName) {
+      return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
+    }
+
+    const ws = wb.Sheets[wsName];
+    // header:1 → array of arrays; raw:false → all values as strings; defval:"" → empty string for missing cells
+    const aoa: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+    _log(`sheet parsed, aoa=${aoa.length}`);
+
     interface ParsedRow { code: string; description: string; unit: string; baseRate: number; fiscalYear: string; rowNum: number; }
     const rows: ParsedRow[] = [];
     const errors: string[] = [];
     let headerRowNum: number | null = null;
 
-    // Non-streaming parse — safe for files up to 5 MB on this server (2 GB RAM + 2 GB swap, 1 GB PM2 limit).
-    // ExcelJS streaming API has reliability issues in v4.x that caused indefinite hangs in production.
-    const workbook = new ExcelJS.Workbook();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await workbook.xlsx.load(buffer as any);
-    _log("workbook loaded");
+    for (let i = 0; i < aoa.length; i++) {
+      const rowArr = aoa[i];
+      const rowNum = i + 1;
 
-    const worksheet = workbook.worksheets[0];
-    if (!worksheet) {
-      return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
-    }
+      // Skip completely empty rows
+      if (!rowArr.some(c => toStr(c) !== "")) continue;
 
-    worksheet.eachRow({ includeEmpty: false }, (row, rowNum) => {
       // Phase 1 — scan first 50 rows to locate the header
       if (headerRowNum === null) {
         if (rowNum <= 50) {
-          const a = cellStr(row, 1).toLowerCase().replace(/[\s.]/g, "");
-          const b = cellStr(row, 2).toLowerCase().replace(/[\s.]/g, "");
+          const a = toStr(rowArr[0]).toLowerCase().replace(/[\s.]/g, "");
+          const b = toStr(rowArr[1]).toLowerCase().replace(/[\s.]/g, "");
           if (
             (a === "code" || a === "sn" || a === "s.n" || a === "itemcode") &&
             (b === "description" || b === "descriptionofwork" || b === "itemdescription")
@@ -117,20 +117,20 @@ export async function POST(req: NextRequest) {
             headerRowNum = rowNum;
           }
         }
-        return;
+        continue;
       }
 
       // Phase 2 — data rows after header
-      const firstCell = cellStr(row, 1);
-      if (firstCell.startsWith("↓") || firstCell.startsWith("→")) return;
+      const firstCell = toStr(rowArr[0]);
+      if (firstCell.startsWith("↓") || firstCell.startsWith("→")) continue;
 
-      const code = cellStr(row, 1);
-      if (!code) return;
+      const code = toStr(rowArr[0]);
+      if (!code) continue;
 
-      const description = cellStr(row, 2);
-      const unit = cellStr(row, 3);
-      const baseRate = cellNum(row, 4);
-      const fiscalYear = cellStr(row, 5) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
+      const description = toStr(rowArr[1]);
+      const unit = toStr(rowArr[2]);
+      const baseRate = toNum(rowArr[3]);
+      const fiscalYear = toStr(rowArr[4]) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
 
       if (!description) errors.push(`Row ${rowNum}: Description (column B) is empty.`);
       if (!unit) errors.push(`Row ${rowNum}: Unit (column C) is empty.`);
@@ -139,8 +139,8 @@ export async function POST(req: NextRequest) {
       if (!errors.length) {
         rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
       }
-    });
-    _log(`eachRow done, rows=${rows.length}, errors=${errors.length}`);
+    }
+    _log(`rows parsed, rows=${rows.length}, errors=${errors.length}`);
 
     if (!headerRowNum) {
       return NextResponse.json({
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
         });
         batchId = batch.id;
         _log("db insert done");
-      } catch (dbErr: any) {
+      } catch (dbErr: unknown) {
         console.error("[rates/import] DB insert failed:", dbErr);
         return NextResponse.json({
           error: {
@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
       orgId: token.orgId as string,
       userId: token.id as string,
       event: "rate_items.bulk_imported",
-      meta: { batchId, batchName: finalBatchName, created: toInsert.length, skipped, fileName: file.name } as any,
+      meta: { batchId, batchName: finalBatchName, created: toInsert.length, skipped, fileName: file.name } as unknown as Record<string, unknown>,
       ipAddress: getClientIp(req),
     });
 
