@@ -69,8 +69,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [renamingBatchId, setRenamingBatchId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // Save as Assembly state
-  const [selectedRateIds, setSelectedRateIds] = useState<Set<string>>(new Set());
+  // Save as Assembly state — Map<id, RateItem> so the full object is available across page navigations
+  const [selectedRateIds, setSelectedRateIds] = useState<Map<string, RateItem>>(new Map());
   const [showSaveAsAssembly, setShowSaveAsAssembly] = useState(false);
   const [assemblyForm, setAssemblyForm] = useState({ name: "", description: "", category: "" });
   const [savingAssembly, setSavingAssembly] = useState(false);
@@ -260,30 +260,38 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   }
 
   async function handleSaveAsAssembly() {
-    const selectedRates = rates.filter(r => selectedRateIds.has(r.id));
+    const selectedRates = Array.from(selectedRateIds.values());
     if (!selectedRates.length || !assemblyForm.name.trim()) return;
     setSavingAssembly(true);
-    const groups = selectedRates.map((r, i) => ({
-      name: r.description.slice(0, 100),
-      type: unitToGroupType(r.unit),
-      colour: "#3B82F6",
-      lineWidth: 2,
-      rateCode: r.code,
-      sortOrder: i,
-      children: [],
-    }));
-    const res = await fetch("/api/assemblies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: assemblyForm.name.trim(), description: assemblyForm.description || undefined, category: assemblyForm.category || undefined, groups }),
-    });
-    setSavingAssembly(false);
-    if (res.ok) {
-      toast.success(`Assembly "${assemblyForm.name}" saved to your library.`);
-      setShowSaveAsAssembly(false);
-      setSelectedRateIds(new Set());
-      setAssemblyForm({ name: "", description: "", category: "" });
-    } else { toast.error("Failed to save assembly."); }
+    try {
+      const groups = selectedRates.map((r, i) => ({
+        name: r.description.slice(0, 100).trim() || r.code,
+        type: unitToGroupType(r.unit),
+        colour: "#3B82F6",
+        lineWidth: 2,
+        rateCode: r.code.slice(0, 50),
+        sortOrder: i,
+        children: [],
+      }));
+      const res = await fetch("/api/assemblies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: assemblyForm.name.trim(), description: assemblyForm.description || undefined, category: assemblyForm.category || undefined, groups }),
+      });
+      if (res.ok) {
+        toast.success(`Assembly "${assemblyForm.name}" saved to your library.`);
+        setShowSaveAsAssembly(false);
+        setSelectedRateIds(new Map());
+        setAssemblyForm({ name: "", description: "", category: "" });
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error?.message ?? "Failed to save assembly.");
+      }
+    } catch {
+      toast.error("Could not reach the server. Check your connection.");
+    } finally {
+      setSavingAssembly(false);
+    }
   }
 
   // Use live pagination total when on "All Rates" so unbatched legacy rates are counted
@@ -303,7 +311,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition">
             Save as Assembly
           </button>
-          <button onClick={() => setSelectedRateIds(new Set())} className="text-gray-600 hover:text-white text-sm">✕ Clear</button>
+          <button onClick={() => setSelectedRateIds(new Map())} className="text-gray-600 hover:text-white text-sm">✕ Clear</button>
         </div>
       )}
 
@@ -565,7 +573,12 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                       className="rounded"
                       aria-label="Select all rates on this page"
                       checked={rates.length > 0 && rates.every(r => selectedRateIds.has(r.id))}
-                      onChange={e => setSelectedRateIds(e.target.checked ? new Set(rates.map(r => r.id)) : new Set())}
+                      onChange={e => setSelectedRateIds(prev => {
+                        const next = new Map(prev);
+                        if (e.target.checked) { rates.forEach(r => next.set(r.id, r)); }
+                        else { rates.forEach(r => next.delete(r.id)); }
+                        return next;
+                      })}
                     />
                   </th>
                   <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Description</th>
@@ -584,7 +597,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                         className="rounded"
                         aria-label={`Select rate ${rate.code} — ${rate.description.slice(0, 40)}`}
                         checked={selectedRateIds.has(rate.id)}
-                        onChange={e => setSelectedRateIds(prev => { const s = new Set(prev); e.target.checked ? s.add(rate.id) : s.delete(rate.id); return s; })}
+                        onChange={e => setSelectedRateIds(prev => { const s = new Map(prev); e.target.checked ? s.set(rate.id, rate) : s.delete(rate.id); return s; })}
                       />
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{rate.code}</td>
