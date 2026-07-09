@@ -140,10 +140,21 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       form.append("batchName", importBatchName.trim());
       form.append("batchType", importBatchType);
       const res = await fetch("/api/rates/import", { method: "POST", body: form });
-      const data = await res.json();
+
+      // Parse JSON safely — server may return HTML on 502/session-expiry
+      let data: any = {};
+      try { data = await res.json(); } catch {
+        setImportError(`Server returned an unexpected response (HTTP ${res.status}). Please refresh the page and try again.`);
+        return;
+      }
+
       if (!res.ok) {
+        // data.error may be a string (rate-limit) or an object with .message + .errors
+        const msg = typeof data.error === "string"
+          ? data.error
+          : (data.error?.message ?? `Import failed (HTTP ${res.status}).`);
         const errs = data.error?.errors as string[] | undefined;
-        setImportError(data.error?.message + (errs ? "\n" + errs.slice(0, 5).join("\n") : ""));
+        setImportError(msg + (errs?.length ? "\n" + errs.slice(0, 5).join("\n") : ""));
       } else {
         setImportResult(data);
         setShowImportDialog(false);
@@ -153,8 +164,11 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         setSelectedBatchId(data.batchId ?? "all");
         loadRates();
       }
-    } catch { setImportError("Network error."); }
-    finally { setImporting(false); }
+    } catch (err) {
+      setImportError(err instanceof TypeError
+        ? "Could not reach the server. Check your connection and try again."
+        : "Unexpected error. Please refresh and try again.");
+    } finally { setImporting(false); }
   };
 
   const deleteAll = async (batchId: string | "all" | "none", label: string, count: number) => {
