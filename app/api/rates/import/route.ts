@@ -88,12 +88,11 @@ export async function POST(req: NextRequest) {
 
     const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(
       Readable.from(buffer),
-      { worksheets: "emit", sharedStrings: "cache", hyperlinks: "ignore", styles: "ignore", entries: "emit" },
+      { worksheets: "emit", sharedStrings: "cache", hyperlinks: "ignore", styles: "ignore", entries: "ignore" },
     );
     workbookReader.read();
 
     for await (const worksheetReader of workbookReader) {
-      if (worksheetSeen) continue; // only process the first sheet
       worksheetSeen = true;
 
       for await (const row of worksheetReader) {
@@ -134,6 +133,7 @@ export async function POST(req: NextRequest) {
           rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
         }
       }
+      break; // only parse the first worksheet; leaving subsequent readers unconsumed would deadlock the WorkbookReader
     }
 
     if (!worksheetSeen) {
