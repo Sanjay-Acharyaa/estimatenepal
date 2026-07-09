@@ -20,7 +20,12 @@ const nextConfig = {
       "@aws-sdk/s3-request-presigner",
     ],
   },
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // exceljs bundles JSZip which has async ZIP callbacks that hang when webpack-bundled;
+      // marking it external forces Node.js native require() and fixes the hang.
+      config.externals.push({ exceljs: "commonjs exceljs" });
+    }
     // pdf.js requires these to be aliased to false in non-browser environments
     config.resolve.alias.canvas = false;
     config.resolve.alias.encoding = false;
