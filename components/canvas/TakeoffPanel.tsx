@@ -219,13 +219,17 @@ export function TakeoffPanel({
     );
   }
 
-  async function handleChangeCatalog(groupId: string, rateItemId: string | null, rateItem?: { code: string; source: string } | null) {
+  async function handleChangeCatalog(groupId: string, rateItemId: string | null) {
     await apiCall(
       () => fetch(`/api/projects/${projectId}/takeoff-groups/${groupId}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rateItemId }),
       }),
-      async () => { updateGroups(groups.map(g => g.id === groupId ? { ...g, rateItemId, rateItem: rateItem ?? null } : g)); }
+      async (res) => {
+        const updated = await res.json();
+        updateGroups(groups.map(g => g.id === groupId ? { ...g, ...updated } : g));
+        setDetailGroup(prev => prev?.id === groupId ? { ...prev, ...updated } as TakeoffGroup : prev);
+      }
     );
   }
 
@@ -628,10 +632,14 @@ export function TakeoffPanel({
                                   {layer.multiplier !== 1 && <span className="text-gray-500 font-normal"> ×{layer.multiplier}</span>}
                                 </p>
                               );
-                            })() : layer.tag ? (
-                              <p className="text-xs text-gray-500 truncate">{layer.tag}</p>
-                            ) : null}
+                            })() : null}
                           </div>
+
+                          {layer.tag && (
+                            <span className="text-[10px] text-gray-400 flex-shrink-0 max-w-[4rem] truncate" title={layer.tag}>
+                              {layer.tag}
+                            </span>
+                          )}
 
                           <span className="text-xs text-gray-600 flex-shrink-0" title="shapes drawn (all pages)">
                             {allPageGroupTotals[layer.id]?.count ?? liveItemCounts[layer.id] ?? layer._count.items}
@@ -734,7 +742,7 @@ export function TakeoffPanel({
 
       {changeCatalogId && (
         <CatalogBrowser
-          onSelect={item => { handleChangeCatalog(changeCatalogId, item.id, { code: item.code, source: item.source }); setChangeCatalogId(null); }}
+          onSelect={item => { handleChangeCatalog(changeCatalogId, item.id); setChangeCatalogId(null); }}
           onClose={() => setChangeCatalogId(null)}
         />
       )}
