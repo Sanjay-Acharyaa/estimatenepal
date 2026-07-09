@@ -11,12 +11,14 @@ type Props = {
   disciplines: Discipline[];
   activeDisciplineId: string | null;
   projectId: string;
+  groups: TakeoffGroup[];
   onCopied: (result: { category?: TakeoffGroup; layers?: TakeoffGroup[]; layer?: TakeoffGroup; targetParentId?: string | null; copiedItems?: unknown[] }, withObjects: boolean) => void;
   onCancel: () => void;
 };
 
-export function CopyGroupDialog({ group, isCategory, childLayerCount, disciplines, activeDisciplineId, projectId, onCopied, onCancel }: Props) {
+export function CopyGroupDialog({ group, isCategory, childLayerCount, disciplines, activeDisciplineId, projectId, groups, onCopied, onCancel }: Props) {
   const [targetDisciplineId, setTargetDisciplineId] = useState(activeDisciplineId ?? disciplines[0]?.id ?? "");
+  const [targetGroupId, setTargetGroupId] = useState("");
   const [withObjects, setWithObjects] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,7 +30,7 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
       const res = await fetch(`/api/projects/${projectId}/takeoff-groups/${group.id}/copy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetDisciplineId, withObjects }),
+        body: JSON.stringify({ targetDisciplineId, withObjects, ...(targetGroupId ? { targetGroupId } : {}) }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -46,6 +48,8 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
 
   const targetTabName = disciplines.find(d => d.id === targetDisciplineId)?.name ?? "";
   const isSameTab = targetDisciplineId === activeDisciplineId;
+  const availableGroups = groups.filter(g => g.parentId === null && g.disciplineId === targetDisciplineId);
+  const selectedGroupName = availableGroups.find(g => g.id === targetGroupId)?.name ?? "";
 
   return (
     <div
@@ -66,12 +70,12 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
         )}
 
         {/* Destination tab */}
-        <div className="mb-4">
+        <div className="mb-3">
           <label htmlFor="cgd-target-tab" className="block text-xs font-medium text-gray-700 mb-1.5">Copy to tab</label>
           <select
             id="cgd-target-tab"
             value={targetDisciplineId}
-            onChange={e => setTargetDisciplineId(e.target.value)}
+            onChange={e => { setTargetDisciplineId(e.target.value); setTargetGroupId(""); }}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             {disciplines.map(d => (
@@ -81,6 +85,26 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
             ))}
           </select>
         </div>
+
+        {/* Destination group — only for layer copies */}
+        {!isCategory && availableGroups.length > 0 && (
+          <div className="mb-4">
+            <label htmlFor="cgd-target-group" className="block text-xs font-medium text-gray-700 mb-1.5">Copy into group</label>
+            <select
+              id="cgd-target-group"
+              value={targetGroupId}
+              onChange={e => setTargetGroupId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">
+                {groups.find(g => g.id === group.parentId)?.name ?? "Current group"} (default)
+              </option>
+              {availableGroups.filter(g => g.id !== group.parentId).map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* With objects toggle */}
         <div className="mb-5">
@@ -112,7 +136,11 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
               {" "}→ <strong>{targetTabName}</strong>
             </>
           ) : (
-            <>Copy layer &ldquo;{group.name}&rdquo;{withObjects ? " + all measured shapes" : " (no shapes)"} → <strong>{isSameTab ? "same tab" : targetTabName}</strong></>
+            <>
+              Copy layer &ldquo;{group.name}&rdquo;{withObjects ? " + all measured shapes" : " (no shapes)"} →{" "}
+              <strong>{selectedGroupName || (isSameTab ? "same group" : targetTabName)}</strong>
+              {selectedGroupName && !isSameTab && <> ({targetTabName})</>}
+            </>
           )}
         </div>
 

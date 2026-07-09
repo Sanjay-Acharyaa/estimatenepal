@@ -276,6 +276,9 @@ export function TakeoffPanel({
       if (result.category) {
         setExpandedIds(prev => { const n = new Set(prev); n.add((result.category as TakeoffGroup).id); return n; });
       }
+      if (result.layer && result.targetParentId) {
+        setExpandedIds(prev => { const n = new Set(prev); n.add(result.targetParentId as string); return n; });
+      }
       setTimeout(() => {
         listScrollRef.current?.scrollTo({ top: listScrollRef.current.scrollHeight, behavior: "smooth" });
       }, 50);
@@ -723,6 +726,7 @@ export function TakeoffPanel({
           disciplines={disciplines}
           activeDisciplineId={activeDisciplineId}
           projectId={projectId}
+          groups={groups}
           onCopied={(result, withObjects) => handleCopied(result, withObjects)}
           onCancel={() => setCopyTarget(null)}
         />

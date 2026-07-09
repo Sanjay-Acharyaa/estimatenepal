@@ -11,6 +11,7 @@ import { randomUUID } from "crypto";
 const copySchema = z.object({
   targetDisciplineId: z.string(),
   withObjects: z.boolean().default(false),
+  targetGroupId: z.string().optional(),
 });
 
 // Copies all TakeoffItems from originalGroupId to newGroupId using createMany (no N+1).
@@ -69,7 +70,7 @@ export async function POST(
     const parsed = copySchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
 
-    const { targetDisciplineId, withObjects } = parsed.data;
+    const { targetDisciplineId, withObjects, targetGroupId } = parsed.data;
 
     // Verify target discipline belongs to this project
     const targetDisc = await prisma.discipline.findUnique({ where: { id: targetDisciplineId } });
@@ -172,8 +173,15 @@ export async function POST(
       // ── Copy single layer ─────────────────────────────────────────────────
       let targetParentId: string | null = original.parentId;
 
-      // If copying to a different tab, find or create the parent category there
-      if (targetDisciplineId !== original.disciplineId && original.parentId) {
+      // If a specific target group is requested, validate and use it directly
+      if (targetGroupId) {
+        const targetGroup = await prisma.takeoffGroup.findUnique({ where: { id: targetGroupId } });
+        if (!targetGroup || targetGroup.projectId !== params.id || targetGroup.parentId !== null || targetGroup.disciplineId !== targetDisciplineId) {
+          return apiError("NOT_FOUND", "Target group not found in this project.", 404);
+        }
+        targetParentId = targetGroupId;
+      // If copying to a different tab (and no explicit group chosen), find or create the parent category there
+      } else if (targetDisciplineId !== original.disciplineId && original.parentId) {
         const origParent = await prisma.takeoffGroup.findUnique({ where: { id: original.parentId } });
         if (origParent) {
           const existing = await prisma.takeoffGroup.findFirst({
