@@ -48,18 +48,26 @@ function cellNum(row: ExcelJS.Row, col: number): number | null {
 
 export async function POST(req: NextRequest) {
   try {
+    const _t0 = Date.now();
+    const _log = (msg: string) => console.log(`[import] ${msg} +${Date.now()-_t0}ms`);
+    _log("start");
+
     const ip = getClientIp(req);
     const limited = await checkUploadRateLimit(ip);
+    _log("rate-limit done");
     if (limited) return limited;
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    _log("getToken done");
     if (!token) throw unauthorized();
     if (!token.orgId) throw forbidden();
 
     const user = await withTenantGuard(token.id as string, token.orgId as string);
+    _log("tenantGuard done");
     if (!["OWNER", "ADMIN"].includes(user.role)) throw forbidden();
 
     const formData = await req.formData();
+    _log("formData done");
     const file = formData.get("file") as File | null;
     const batchName = (formData.get("batchName") as string | null)?.trim() || null;
     const batchType = (formData.get("batchType") as string | null) || "CUSTOM";
@@ -91,8 +99,10 @@ export async function POST(req: NextRequest) {
       { worksheets: "emit", sharedStrings: "cache", hyperlinks: "ignore", styles: "ignore", entries: "ignore" },
     );
     workbookReader.read();
+    _log("workbookReader.read() called");
 
     for await (const worksheetReader of workbookReader) {
+      _log("got worksheetReader");
       worksheetSeen = true;
 
       for await (const row of worksheetReader) {
@@ -133,8 +143,10 @@ export async function POST(req: NextRequest) {
           rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
         }
       }
+      _log(`worksheet rows done, rows=${rows.length}`);
       break; // only parse the first worksheet; leaving subsequent readers unconsumed would deadlock the WorkbookReader
     }
+    _log("for-await workbookReader done");
 
     if (!worksheetSeen) {
       return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
@@ -185,6 +197,7 @@ export async function POST(req: NextRequest) {
 
     let batchId: string | null = null;
 
+    _log(`validation done, toInsert=${toInsert.length}`);
     if (toInsert.length > 0) {
       try {
         const batch = await prisma.$transaction(async (tx) => {
@@ -212,6 +225,7 @@ export async function POST(req: NextRequest) {
           return batch;
         });
         batchId = batch.id;
+        _log("db insert done");
       } catch (dbErr: any) {
         console.error("[rates/import] DB insert failed:", dbErr);
         return NextResponse.json({
