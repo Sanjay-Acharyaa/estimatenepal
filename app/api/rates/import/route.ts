@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { Readable } from "stream";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
@@ -25,7 +24,6 @@ import ExcelJS from "exceljs";
 //   E=5: Fiscal Year
 //
 // Validates ALL rows before inserting any. Skips duplicate codes (same org).
-// Uses ExcelJS streaming mode to avoid loading the entire workbook into memory.
 
 function cellStr(row: ExcelJS.Row, col: number): string {
   const val = row.getCell(col).value;
@@ -84,87 +82,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "File must be under 5 MB." } }, { status: 413 });
     }
 
-    // Stream-parse the workbook row-by-row to avoid loading the full workbook into memory.
-    // A 5 MB .xlsx can inflate to 1 GB+ with wb.xlsx.load(); streaming keeps peak usage ~50 MB.
+    _log(`file: ${file.name} size=${file.size}`);
+
     const buffer = Buffer.from(await file.arrayBuffer());
+    _log("buffer ready");
 
     interface ParsedRow { code: string; description: string; unit: string; baseRate: number; fiscalYear: string; rowNum: number; }
     const rows: ParsedRow[] = [];
     const errors: string[] = [];
     let headerRowNum: number | null = null;
-    let worksheetSeen = false;
 
-    // Use the event-based API (the primary ExcelJS streaming interface).
-    // The async-iterator wrapper on WorkbookReader has reliability issues in ExcelJS 4.x
-    // and can deadlock if the underlying yauzl ZIP reader stalls between entries.
-    await new Promise<void>((resolve, reject) => {
-      const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(
-        Readable.from(buffer),
-        { worksheets: "emit", sharedStrings: "cache", hyperlinks: "ignore", styles: "ignore", entries: "emit" },
-      );
+    // Non-streaming parse — safe for files up to 5 MB on this server (2 GB RAM + 2 GB swap, 1 GB PM2 limit).
+    // ExcelJS streaming API has reliability issues in v4.x that caused indefinite hangs in production.
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    _log("workbook loaded");
 
-      workbookReader.on("worksheet", (worksheetReader: any) => {
-        if (worksheetSeen) {
-          worksheetReader.autodrain?.();
-          return;
-        }
-        worksheetSeen = true;
-        _log("got worksheetReader");
-
-        worksheetReader.on("row", (row: ExcelJS.Row) => {
-          const rowNum = row.number;
-
-          // Phase 1 — scan first 50 rows to locate the header
-          if (headerRowNum === null) {
-            if (rowNum <= 50) {
-              const a = cellStr(row, 1).toLowerCase().replace(/[\s.]/g, "");
-              const b = cellStr(row, 2).toLowerCase().replace(/[\s.]/g, "");
-              if (
-                (a === "code" || a === "sn" || a === "s.n" || a === "itemcode") &&
-                (b === "description" || b === "descriptionofwork" || b === "itemdescription")
-              ) {
-                headerRowNum = rowNum;
-              }
-            }
-            return;
-          }
-
-          // Phase 2 — data rows after header
-          const firstCell = cellStr(row, 1);
-          if (firstCell.startsWith("↓") || firstCell.startsWith("→")) return;
-
-          const code = cellStr(row, 1);
-          if (!code) return;
-
-          const description = cellStr(row, 2);
-          const unit = cellStr(row, 3);
-          const baseRate = cellNum(row, 4);
-          const fiscalYear = cellStr(row, 5) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
-
-          if (!description) errors.push(`Row ${rowNum}: Description (column B) is empty.`);
-          if (!unit) errors.push(`Row ${rowNum}: Unit (column C) is empty.`);
-          if (baseRate === null || baseRate < 0) errors.push(`Row ${rowNum}: Base Rate (column D) is missing or invalid.`);
-
-          if (!errors.length) {
-            rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
-          }
-        });
-
-        worksheetReader.on("end", () => _log(`worksheet rows done, rows=${rows.length}`));
-        worksheetReader.on("error", reject);
-        worksheetReader.read();
-      });
-
-      workbookReader.on("entry", (entry: any) => entry.autodrain?.());
-      workbookReader.on("end", () => { _log("workbookReader end"); resolve(); });
-      workbookReader.on("error", reject);
-      workbookReader.read();
-      _log("workbookReader.read() called");
-    });
-
-    if (!worksheetSeen) {
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
       return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
     }
+
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNum) => {
+      // Phase 1 — scan first 50 rows to locate the header
+      if (headerRowNum === null) {
+        if (rowNum <= 50) {
+          const a = cellStr(row, 1).toLowerCase().replace(/[\s.]/g, "");
+          const b = cellStr(row, 2).toLowerCase().replace(/[\s.]/g, "");
+          if (
+            (a === "code" || a === "sn" || a === "s.n" || a === "itemcode") &&
+            (b === "description" || b === "descriptionofwork" || b === "itemdescription")
+          ) {
+            headerRowNum = rowNum;
+          }
+        }
+        return;
+      }
+
+      // Phase 2 — data rows after header
+      const firstCell = cellStr(row, 1);
+      if (firstCell.startsWith("↓") || firstCell.startsWith("→")) return;
+
+      const code = cellStr(row, 1);
+      if (!code) return;
+
+      const description = cellStr(row, 2);
+      const unit = cellStr(row, 3);
+      const baseRate = cellNum(row, 4);
+      const fiscalYear = cellStr(row, 5) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
+
+      if (!description) errors.push(`Row ${rowNum}: Description (column B) is empty.`);
+      if (!unit) errors.push(`Row ${rowNum}: Unit (column C) is empty.`);
+      if (baseRate === null || baseRate < 0) errors.push(`Row ${rowNum}: Base Rate (column D) is missing or invalid.`);
+
+      if (!errors.length) {
+        rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
+      }
+    });
+    _log(`eachRow done, rows=${rows.length}, errors=${errors.length}`);
 
     if (!headerRowNum) {
       return NextResponse.json({
@@ -211,7 +186,6 @@ export async function POST(req: NextRequest) {
 
     let batchId: string | null = null;
 
-    _log(`validation done, toInsert=${toInsert.length}`);
     if (toInsert.length > 0) {
       try {
         const batch = await prisma.$transaction(async (tx) => {
@@ -262,6 +236,7 @@ export async function POST(req: NextRequest) {
       ipAddress: getClientIp(req),
     });
 
+    _log("done");
     return NextResponse.json({
       batchId,
       batchName: finalBatchName,
@@ -272,6 +247,7 @@ export async function POST(req: NextRequest) {
         (skipped > 0 ? ` ${skipped} duplicate row${skipped !== 1 ? "s" : ""} in the file were skipped.` : ""),
     });
   } catch (err) {
+    console.error("[rates/import] unhandled error:", err);
     return handleApiError(err);
   }
 }
