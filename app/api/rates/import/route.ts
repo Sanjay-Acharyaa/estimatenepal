@@ -132,13 +132,15 @@ export async function POST(req: NextRequest) {
       const baseRate = toNum(rowArr[3]);
       const fiscalYear = toStr(rowArr[4]) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
 
-      if (!description) errors.push(`Row ${rowNum}: Description (column B) is empty.`);
-      if (!unit) errors.push(`Row ${rowNum}: Unit (column C) is empty.`);
-      if (baseRate === null || baseRate < 0) errors.push(`Row ${rowNum}: Base Rate (column D) is missing or invalid.`);
+      // Skip section headers, subtotal rows, etc. that have no unit or rate — these are not rate items.
+      if (!description || !unit || baseRate === null) continue;
 
-      if (!errors.length) {
-        rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
+      if (baseRate < 0) {
+        errors.push(`Row ${rowNum}: Base Rate cannot be negative (${baseRate}).`);
+        continue;
       }
+
+      rows.push({ code, description, unit, baseRate, fiscalYear, rowNum });
     }
     _log(`rows parsed, rows=${rows.length}, errors=${errors.length}`);
 
