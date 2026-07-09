@@ -242,7 +242,7 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
           item.breadth ?? null,
           item.height ?? null,
           item.quantity,
-          item.unit,
+          grp.unit,
           null,
           null,
         ]);
@@ -338,7 +338,7 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
           item.breadth ?? null,
           item.height ?? null,
           item.quantity,
-          item.unit,
+          grp.unit,
           item.siteLocation ?? "",
           item.measuredDate ? new Date(item.measuredDate).toLocaleDateString("en-NP") : "",
           item.notes ?? "",
@@ -398,7 +398,7 @@ export function buildBOQHtml(boq: BOQDocument): string {
         <td class="num">${item.breadth != null ? qty(item.breadth) : ""}</td>
         <td class="num">${item.height != null ? qty(item.height) : ""}</td>
         <td class="num">${qty(item.quantity)}</td>
-        <td>${item.unit}</td>
+        <td>${grp.unit}</td>
         <td></td>
         <td></td>
       </tr>`
@@ -737,7 +737,7 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
 
       // Sub-items (measurement lines)
       for (const item of grp.items) {
-        const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(item.unit), item.quantity.toFixed(3), "", ""]);
+        const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(grp.unit), item.quantity.toFixed(3), "", ""]);
         iRow.eachCell((c) => applyGovtItemRow(c));
         iRow.getCell(4).alignment = { horizontal: "right" };
       }
