@@ -73,6 +73,9 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [selectedRateIds, setSelectedRateIds] = useState<Map<string, RateItem>>(new Map());
   const [showSaveAsAssembly, setShowSaveAsAssembly] = useState(false);
   const [assemblyForm, setAssemblyForm] = useState({ name: "", description: "", category: "" });
+  // "flat"  → each rate becomes a top-level group (good for 1–5 items)
+  // "nested" → all rates become layers inside one parent group (good for many items)
+  const [assemblyStructure, setAssemblyStructure] = useState<"flat" | "nested">("nested");
   const [savingAssembly, setSavingAssembly] = useState(false);
 
   // Import state
@@ -264,7 +267,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     if (!selectedRates.length || !assemblyForm.name.trim()) return;
     setSavingAssembly(true);
     try {
-      const groups = selectedRates.map((r, i) => ({
+      const layers = selectedRates.map((r, i) => ({
         name: r.description.slice(0, 100).trim() || r.code,
         type: unitToGroupType(r.unit),
         colour: "#3B82F6",
@@ -273,6 +276,20 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         sortOrder: i,
         children: [],
       }));
+
+      // nested: one parent group containing all rates as layers
+      // flat: each rate is its own top-level group (no layers)
+      const groups = assemblyStructure === "nested"
+        ? [{
+            name: assemblyForm.name.trim().slice(0, 100),
+            type: "LINEAR" as const,
+            colour: "#3B82F6",
+            lineWidth: 2,
+            rateCode: undefined,
+            sortOrder: 0,
+            children: layers,
+          }]
+        : layers;
       const res = await fetch("/api/assemblies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -283,6 +300,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         setShowSaveAsAssembly(false);
         setSelectedRateIds(new Map());
         setAssemblyForm({ name: "", description: "", category: "" });
+        setAssemblyStructure("nested");
       } else {
         const d = await res.json().catch(() => ({}));
         toast.error(d.error?.message ?? "Failed to save assembly.");
@@ -343,6 +361,25 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                   <option value="">— None —</option>
                   {["Structural","Civil","MEP","Architectural","Road","Irrigation"].map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Structure</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button"
+                    onClick={() => setAssemblyStructure("nested")}
+                    className={`p-2.5 rounded-lg border-2 text-left transition ${assemblyStructure === "nested" ? "border-orange-400 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
+                  >
+                    <p className={`text-xs font-semibold ${assemblyStructure === "nested" ? "text-orange-700" : "text-gray-700"}`}>Grouped (recommended)</p>
+                    <p className="text-xs text-gray-500 mt-0.5">1 group → {selectedRateIds.size} layers inside</p>
+                  </button>
+                  <button type="button"
+                    onClick={() => setAssemblyStructure("flat")}
+                    className={`p-2.5 rounded-lg border-2 text-left transition ${assemblyStructure === "flat" ? "border-orange-400 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
+                  >
+                    <p className={`text-xs font-semibold ${assemblyStructure === "flat" ? "text-orange-700" : "text-gray-700"}`}>Flat</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{selectedRateIds.size} separate groups</p>
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Description (optional)</label>
