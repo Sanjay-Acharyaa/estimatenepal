@@ -95,7 +95,8 @@ export async function POST(req: NextRequest) {
     // Non-streaming parse — safe for files up to 5 MB on this server (2 GB RAM + 2 GB swap, 1 GB PM2 limit).
     // ExcelJS streaming API has reliability issues in v4.x that caused indefinite hangs in production.
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as unknown as Buffer);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await workbook.xlsx.load(buffer as any);
     _log("workbook loaded");
 
     const worksheet = workbook.worksheets[0];
