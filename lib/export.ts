@@ -142,7 +142,7 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
     let dSno = 1;
     for (const grp of disc.groups) {
       const grpLabel = `${sno}.${dSno}  ${grp.name}`;
-      const gRow = summary.addRow([`${sno}.${dSno}`, sanitizeCell(grp.name), grp.unit, +qty(grp.totalQuantity), grp.rate, grp.amount]);
+      const gRow = summary.addRow([`${sno}.${dSno}`, sanitizeCell(grp.name), grp.unit, grp.totalQuantity, grp.rate, grp.amount]);
       gRow.eachCell((c) => { applyGroupStyle(c); borderAll(c); });
 
       // Yellow for overridden rate
@@ -241,7 +241,7 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
           item.length ?? null,
           item.breadth ?? null,
           item.height ?? null,
-          +qty(item.quantity),
+          item.quantity,
           item.unit,
           null,
           null,
@@ -258,10 +258,9 @@ export async function buildBOQExcel(boq: BOQDocument, cols: ExportColConfig = DE
 
       // Group total row
       const safeTotal = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
-      const totalQty = +qty(safeTotal);
       const tRow = ws.addRow([
         "", `Total — ${sanitizeCell(grp.name)}`, "", "", "", "",
-        totalQty, grp.unit, grp.rate, grp.amount,
+        safeTotal, grp.unit, grp.rate, grp.amount,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
       tRow.getCell(7).numFmt = '#,##0.000';
@@ -338,7 +337,7 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
           item.length ?? null,
           item.breadth ?? null,
           item.height ?? null,
-          +qty(item.quantity),
+          item.quantity,
           item.unit,
           item.siteLocation ?? "",
           item.measuredDate ? new Date(item.measuredDate).toLocaleDateString("en-NP") : "",
@@ -358,7 +357,7 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
 
       const safeTotalMB = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
       const tRow = ws.addRow([
-        "", `Total — ${grp.name}`, "", "", "", "", +qty(safeTotalMB), grp.unit,
+        "", `Total — ${grp.name}`, "", "", "", "", safeTotalMB, grp.unit,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
       tRow.getCell(7).numFmt = '#,##0.000';
