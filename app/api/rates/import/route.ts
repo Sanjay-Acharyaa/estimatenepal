@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { Readable } from "stream";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
@@ -24,6 +25,7 @@ import ExcelJS from "exceljs";
 //   E=5: Fiscal Year
 //
 // Validates ALL rows before inserting any. Skips duplicate codes (same org).
+// Uses ExcelJS streaming mode to avoid loading the entire workbook into memory.
 
 function cellStr(row: ExcelJS.Row, col: number): string {
   const val = row.getCell(col).value;
@@ -35,22 +37,6 @@ function cellStr(row: ExcelJS.Row, col: number): string {
     return String((val as any).result ?? "").trim();
   }
   return String(val).trim();
-}
-
-// Scan up to 50 rows to find the header row
-// Matches any row where col A ≈ "code" AND col B ≈ "description"
-function findHeaderRow(ws: ExcelJS.Worksheet): number | null {
-  let found: number | null = null;
-  ws.eachRow((row, rowNum) => {
-    if (found || rowNum > 50) return;
-    const a = cellStr(row, 1).toLowerCase().replace(/[\s.]/g, "");
-    const b = cellStr(row, 2).toLowerCase().replace(/[\s.]/g, "");
-    if ((a === "code" || a === "sn" || a === "s.n" || a === "itemcode") &&
-        (b === "description" || b === "descriptionofwork" || b === "itemdescription")) {
-      found = rowNum;
-    }
-  });
-  return found;
 }
 
 function cellNum(row: ExcelJS.Row, col: number): number | null {
@@ -90,17 +76,69 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "File must be under 5 MB." } }, { status: 413 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(arrayBuffer as any);
+    // Stream-parse the workbook row-by-row to avoid loading the full workbook into memory.
+    // A 5 MB .xlsx can inflate to 1 GB+ with wb.xlsx.load(); streaming keeps peak usage ~50 MB.
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    const ws = wb.worksheets[0];
-    if (!ws) {
-      return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
+    interface ParsedRow { code: string; description: string; unit: string; baseRate: number; fiscalYear: string; rowNum: number; }
+    const rows: ParsedRow[] = [];
+    const errors: string[] = [];
+    let headerRowNum: number | null = null;
+    let worksheetSeen = false;
+
+    const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(
+      Readable.from(buffer),
+      { worksheets: "emit", sharedStrings: "cache", hyperlinks: "ignore", styles: "ignore", entries: "emit" },
+    );
+    workbookReader.read();
+
+    for await (const worksheetReader of workbookReader) {
+      if (worksheetSeen) continue; // only process the first sheet
+      worksheetSeen = true;
+
+      for await (const row of worksheetReader) {
+        const rowNum = row.number;
+
+        // Phase 1 — scan first 50 rows to locate the header
+        if (headerRowNum === null) {
+          if (rowNum <= 50) {
+            const a = cellStr(row, 1).toLowerCase().replace(/[\s.]/g, "");
+            const b = cellStr(row, 2).toLowerCase().replace(/[\s.]/g, "");
+            if (
+              (a === "code" || a === "sn" || a === "s.n" || a === "itemcode") &&
+              (b === "description" || b === "descriptionofwork" || b === "itemdescription")
+            ) {
+              headerRowNum = rowNum;
+            }
+          }
+          continue; // skip header row itself and all rows before it
+        }
+
+        // Phase 2 — data rows after header
+        const firstCell = cellStr(row, 1);
+        if (firstCell.startsWith("↓") || firstCell.startsWith("→")) continue;
+
+        const code = cellStr(row, 1);
+        if (!code) continue; // blank row — skip silently
+
+        const description = cellStr(row, 2);
+        const unit = cellStr(row, 3);
+        const baseRate = cellNum(row, 4);
+        const fiscalYear = cellStr(row, 5) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
+
+        if (!description) errors.push(`Row ${rowNum}: Description (column B) is empty.`);
+        if (!unit) errors.push(`Row ${rowNum}: Unit (column C) is empty.`);
+        if (baseRate === null || baseRate < 0) errors.push(`Row ${rowNum}: Base Rate (column D) is missing or invalid.`);
+
+        if (!errors.length) {
+          rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
+        }
+      }
     }
 
-    // Auto-detect header row (works wherever user pastes the template in their file)
-    const headerRowNum = findHeaderRow(ws);
+    if (!worksheetSeen) {
+      return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
+    }
 
     if (!headerRowNum) {
       return NextResponse.json({
@@ -112,39 +150,6 @@ export async function POST(req: NextRequest) {
         }
       }, { status: 400 });
     }
-
-    // Data starts from the row after the header
-    // Skip rows that look like the template separator (starts with "↓") or are empty
-    const dataStart = headerRowNum + 1;
-
-    // Parse data rows
-    interface ParsedRow { code: string; description: string; unit: string; baseRate: number; fiscalYear: string; rowNum: number; }
-    const rows: ParsedRow[] = [];
-    const errors: string[] = [];
-
-    ws.eachRow((row, rowNum) => {
-      if (rowNum < dataStart) return;
-
-      // Skip template separator rows (start with ↓ or similar)
-      const firstCell = cellStr(row, 1);
-      if (firstCell.startsWith("↓") || firstCell.startsWith("→")) return;
-
-      const code = cellStr(row, 1);
-      if (!code) return; // blank row — skip silently
-
-      const description = cellStr(row, 2);
-      const unit = cellStr(row, 3);
-      const baseRate = cellNum(row, 4);
-      const fiscalYear = cellStr(row, 5) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
-
-      if (!description) errors.push(`Row ${rowNum}: Description (column B) is empty.`);
-      if (!unit) errors.push(`Row ${rowNum}: Unit (column C) is empty.`);
-      if (baseRate === null || baseRate < 0) errors.push(`Row ${rowNum}: Base Rate (column D) is missing or invalid.`);
-
-      if (!errors.length) {
-        rows.push({ code, description, unit, baseRate: baseRate!, fiscalYear, rowNum });
-      }
-    });
 
     if (errors.length > 0) {
       return NextResponse.json({
