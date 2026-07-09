@@ -18,6 +18,7 @@ const nextConfig = {
       "tesseract.js",
       "@aws-sdk/client-s3",
       "@aws-sdk/s3-request-presigner",
+      "exceljs",
     ],
   },
   webpack: (config) => {
