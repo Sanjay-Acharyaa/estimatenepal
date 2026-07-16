@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { TEMPLATE_TYPES, TEMPLATE_LABELS, type TemplateType } from "@/lib/email-template-constants";
 
 type OrgRow = {
   id: string;
@@ -108,6 +109,97 @@ const STATUS_COLORS = {
   paid:    "bg-emerald-100 text-emerald-700",
 };
 
+// ── Bulk Email Button ───────────────────────────────────────────────────────
+function BulkEmailButton({ users }: { users: { email: string; name: string }[] }) {
+  const [open, setOpen]         = useState(false);
+  const [emailType, setEmailType] = useState<string>("trial_expired");
+  const [sending, setSending]   = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 });
+  const [finished, setFinished] = useState(false);
+
+  function reset() { setOpen(false); setFinished(false); setProgress({ done: 0, total: 0, failed: 0 }); }
+
+  async function handleSend() {
+    const label = TEMPLATE_LABELS[emailType as TemplateType] ?? emailType;
+    if (!window.confirm(`Send "${label}" to ${users.length} user${users.length !== 1 ? "s" : ""}?\n\nUsers who have unsubscribed will be skipped automatically.`)) return;
+    setSending(true);
+    let failed = 0;
+    for (let i = 0; i < users.length; i++) {
+      try {
+        const res = await fetch("/api/admin/emails/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userEmail: users[i].email, emailType }),
+        });
+        if (!res.ok) failed++;
+      } catch {
+        failed++;
+      }
+      setProgress({ done: i + 1, total: users.length, failed });
+    }
+    setSending(false);
+    setFinished(true);
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        disabled={users.length === 0}
+        className="text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg font-medium transition"
+      >
+        Email All ({users.length})
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 border border-indigo-300 bg-indigo-50 rounded-lg px-3 py-1.5 flex-wrap">
+      {!finished ? (
+        <>
+          <select
+            value={emailType}
+            onChange={e => setEmailType(e.target.value)}
+            disabled={sending}
+            className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 max-w-[240px]"
+          >
+            {TEMPLATE_TYPES.map(t => (
+              <option key={t} value={t}>{TEMPLATE_LABELS[t]}</option>
+            ))}
+          </select>
+          {sending ? (
+            <span className="text-xs text-indigo-700 font-medium">
+              Sending {progress.done}/{progress.total}…{progress.failed > 0 ? ` (${progress.failed} failed)` : ""}
+            </span>
+          ) : (
+            <>
+              <button
+                onClick={handleSend}
+                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg font-medium transition"
+              >
+                Send to {users.length}
+              </button>
+              <button onClick={reset} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">
+                Cancel
+              </button>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <span className="text-xs text-green-700 font-medium">
+            ✓ {progress.done - progress.failed}/{progress.total} sent
+            {progress.failed > 0 && ` — ${progress.failed} failed/skipped`}
+          </span>
+          <button onClick={reset} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">
+            Done
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Trial Health Table ──────────────────────────────────────────────────────
 export function TrialHealthTable({
   orgAnalytics,
@@ -184,12 +276,20 @@ export function TrialHealthTable({
           onChange={e => setSearch(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-64"
         />
-        <button
-          onClick={exportCsv}
-          className="ml-auto text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition"
-        >
-          Export CSV
-        </button>
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          <BulkEmailButton
+            users={filtered.map(item => {
+              const owner = item.org.users.find(u => u.role === "OWNER") ?? item.org.users[0];
+              return { email: owner?.email ?? "", name: owner?.name ?? "" };
+            }).filter(u => !!u.email)}
+          />
+          <button
+            onClick={exportCsv}
+            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition"
+          >
+            Export CSV
+          </button>
+        </div>
         {activeFilter !== "all" && (
           <span className="text-xs text-gray-500">
             Filtered: <strong>{STATUS_LABELS[activeFilter]}</strong> ({filtered.length} orgs)
