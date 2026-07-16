@@ -218,21 +218,21 @@ export async function GET(req: NextRequest) {
       sentSet.add(`nps:${n.recipientEmail}`);
     }
 
-    function alreadySent(orgId: string, emailType: string): boolean {
-      return sentSet.has(`${orgId}:${emailType}`);
-    }
-    function markSent(orgId: string, emailType: string): void {
-      sentSet.add(`${orgId}:${emailType}`);
-    }
+    const alreadySent = (orgId: string, emailType: string): boolean =>
+      sentSet.has(`${orgId}:${emailType}`);
 
-    async function sendAndLog(params: {
+    const markSent = (orgId: string, emailType: string): void => {
+      sentSet.add(`${orgId}:${emailType}`);
+    };
+
+    const sendAndLog = async (params: {
       to: string;
       subject: string;
       html: string;
       orgId?: string | null;
       recipientName: string;
       emailType: string;
-    }): Promise<boolean> {
+    }): Promise<boolean> => {
       let status: "sent" | "failed" = "sent";
       let errorMessage: string | undefined;
       let resendEmailId: string | null = null;
@@ -254,12 +254,12 @@ export async function GET(req: NextRequest) {
         resendEmailId,
       });
       return status === "sent";
-    }
+    };
 
-    function tally(results: PromiseSettledResult<boolean>[]) {
+    const tally = (results: PromiseSettledResult<boolean>[]) => {
       const s = results.filter(r => r.status === "fulfilled" && r.value).length;
       return { sent: s, failed: results.length - s };
-    }
+    };
 
     // ── A1: Build ALL send queues synchronously (dedup is safe since loops are sync),
     // then fire everything in one outer Promise.all for maximum throughput. ──────────
