@@ -391,6 +391,170 @@ export function proposalResponseClientEmailHtml(
   `);
 }
 
+export function welcomeEmailHtml(name: string, dashboardUrl: string): string {
+  const safeName = escapeHtml(name);
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Welcome to Estimate Nepal!</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
+      Your email is verified and your 14-day free trial has started. Here&apos;s how to get the most out of it:
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px">
+      <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:8px 0;border-bottom:1px solid #dbeafe">
+              <span style="color:#1d4ed8;font-weight:700;font-size:15px">1.</span>
+              <span style="color:#1e40af;font-size:14px;padding-left:8px">Create your first project</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;border-bottom:1px solid #dbeafe">
+              <span style="color:#1d4ed8;font-weight:700;font-size:15px">2.</span>
+              <span style="color:#1e40af;font-size:14px;padding-left:8px">Upload a drawing and set the scale</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0">
+              <span style="color:#1d4ed8;font-weight:700;font-size:15px">3.</span>
+              <span style="color:#1e40af;font-size:14px;padding-left:8px">Measure quantities and export your BOQ</span>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      Need help getting started? Just reply to this email — we respond within a few hours.
+    </p>
+    ${ctaButton(dashboardUrl, "Go to Dashboard →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      You have <strong>14 days</strong> to explore everything for free. No credit card required.
+    </p>
+  `);
+}
+
+export function trialReengagement7EmailHtml(name: string, upgradeUrl: string): string {
+  const safeName = escapeHtml(name);
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">We miss you at Estimate Nepal</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      Your trial ended a week ago. Your projects and all your work are still safe — you just need to upgrade to get back in.
+    </p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0">
+        Estimate Nepal helps construction professionals generate accurate BOQs in a fraction of the time —
+        with PDF takeoff measurements, rate analysis, and one-click tender document export.
+      </p>
+    </div>
+    <p style="color:#334155;font-size:15px;margin:0 0 4px">
+      Plans start from <strong>NPR 999/month</strong>. Upgrade now and pick up exactly where you left off.
+    </p>
+    ${ctaButton(upgradeUrl, "Upgrade Now →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Questions? Reply to this email and we&apos;ll help you find the right plan.
+    </p>
+  `);
+}
+
+export function trialReengagement14EmailHtml(name: string, upgradeUrl: string): string {
+  const safeName = escapeHtml(name);
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your data is still waiting for you</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      It&apos;s been two weeks since your trial ended. Everything you built — your projects, drawings, measurements, and BOQs — is still intact and ready when you are.
+    </p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#15803d;font-size:14px;font-weight:600;margin:0 0 4px">Your work is safe</p>
+      <p style="color:#166534;font-size:14px;margin:0">
+        Upgrade at any time and continue working — nothing is lost.
+      </p>
+    </div>
+    <p style="color:#334155;font-size:15px;margin:0 0 4px">
+      Plans from <strong>NPR 999/month</strong>. No long-term commitment.
+    </p>
+    ${ctaButton(upgradeUrl, "Come Back →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Need help or have concerns about pricing? Reply to this email — we&apos;re happy to talk.
+    </p>
+  `);
+}
+
+export function trialReengagement21EmailHtml(name: string, upgradeUrl: string): string {
+  const safeName = escapeHtml(name);
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Last chance to keep your data</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      Your trial ended 3 weeks ago. We&apos;ll be removing inactive trial data in <strong>9 days</strong> —
+      upgrade now to keep your projects, drawings, and measurements permanently.
+    </p>
+    <div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#92400e;font-size:14px;font-weight:600;margin:0 0 4px">Data removal in 9 days</p>
+      <p style="color:#78350f;font-size:14px;margin:0">
+        Upgrade before day 30 to preserve all your work permanently.
+      </p>
+    </div>
+    ${ctaButton(upgradeUrl, "Upgrade and Keep My Data →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Your account will remain active — only project data is removed. Reply to this email if you have questions.
+    </p>
+  `);
+}
+
+export function trialDataWarningEmailHtml(name: string, upgradeUrl: string): string {
+  const safeName = escapeHtml(name);
+  return emailBase(`
+    <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">Your data will be deleted in 24 hours</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      This is your final notice. Your Estimate Nepal trial data — including all projects, drawings, measurements, and BOQs —
+      will be permanently deleted in <strong>24 hours</strong>.
+    </p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#991b1b;font-size:14px;font-weight:600;margin:0 0 8px">Will be deleted tomorrow:</p>
+      <ul style="color:#7f1d1d;font-size:14px;margin:0;padding-left:20px;line-height:1.8">
+        <li>All projects and drawings</li>
+        <li>All takeoff measurements</li>
+        <li>All BOQs and rate analyses</li>
+      </ul>
+    </div>
+    <p style="color:#334155;font-size:15px;font-weight:600;margin:0 0 4px">
+      Upgrade now to save everything permanently.
+    </p>
+    ${ctaButton(upgradeUrl, "Upgrade Now — Save My Data →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Your login account will remain active. Only project data will be removed.
+      Reply to this email immediately if you need help.
+    </p>
+  `);
+}
+
+export function trialDataWipedEmailHtml(name: string): string {
+  const safeName = escapeHtml(name);
+  return emailBase(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial data has been removed</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      As notified, your Estimate Nepal trial data has been permanently deleted. Your login account remains active.
+    </p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0">
+        If you ever decide to come back, you can upgrade at any time and start fresh with a new project.
+        Your account and login credentials are preserved.
+      </p>
+    </div>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      We&apos;re sorry to see you go. If there&apos;s anything we could have done better,
+      please reply to this email — your feedback helps us improve.
+    </p>
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      &copy; 2026 Estimate Nepal. You can still log in at estimatenepal.com.
+    </p>
+  `);
+}
+
 export function trialExpiredEmailHtml(name: string, upgradeUrl: string): string {
   const safeName = escapeHtml(name);
 

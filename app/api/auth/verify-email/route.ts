@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { apiError, handleApiError } from "@/lib/errors";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { sendEmail, welcomeEmailHtml } from "@/lib/email";
+
+const DASHBOARD_URL = `${process.env.NEXTAUTH_URL ?? "https://estimatenepal.com"}/dashboard`;
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,8 +19,18 @@ export async function GET(req: NextRequest) {
     const userId = await redis.get(`verify:${token}`);
     if (!userId) return apiError("VALIDATION_ERROR", "Invalid or expired token.", 400);
 
-    await prisma.user.update({ where: { id: userId }, data: { emailVerified: true } });
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { emailVerified: true },
+      select: { name: true, email: true },
+    });
     await redis.del(`verify:${token}`);
+
+    sendEmail({
+      to: user.email,
+      subject: "Welcome to Estimate Nepal — here's how to get started",
+      html: welcomeEmailHtml(user.name, DASHBOARD_URL),
+    }).catch((err: Error) => console.error("[verify-email] welcome email failed:", err.message));
 
     return NextResponse.redirect(new URL("/login?verified=1", process.env.NEXTAUTH_URL));
   } catch (err) {

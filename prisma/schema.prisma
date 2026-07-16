@@ -57,6 +57,7 @@ model Org {
   storageUsedBytes BigInt      @default(0)
   adminNotes       String?     @db.Text
   churnReason      String?
+  dataWipedAt      DateTime?
   users            User[]
   projects         Project[]
   invites          OrgInvite[]

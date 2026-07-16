@@ -10,6 +10,11 @@ import {
   trialExpiredEmailHtml,
   churnReasonEmailHtml,
   npsEmailHtml,
+  trialReengagement7EmailHtml,
+  trialReengagement14EmailHtml,
+  trialReengagement21EmailHtml,
+  trialDataWarningEmailHtml,
+  trialDataWipedEmailHtml,
 } from "@/lib/email";
 
 function feedbackKey(id: string): string {
@@ -52,7 +57,7 @@ export async function GET(req: NextRequest) {
   }
 
   const now = new Date();
-  const counts = { day7: 0, day12: 0, reminder3d: 0, expired: 0, churn: 0, nps: 0 };
+  const counts = { day7: 0, day12: 0, reminder3d: 0, expired: 0, churn: 0, nps: 0, reengagement7: 0, reengagement14: 0, reengagement21: 0, dataWarning: 0, dataWiped: 0 };
 
   try {
     // ── Day 7 check-in: org created 7-8 days ago, still on trial ─────────────
@@ -80,7 +85,7 @@ export async function GET(req: NextRequest) {
     const d12From = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
     const d12To   = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
     const day12Orgs = await prisma.org.findMany({
-      where: { trialEndsAt: { gte: d12From, lte: d12To }, planTier: "TRIAL" },
+      where: { trialEndsAt: { gte: d12From, lt: d12To }, planTier: "TRIAL" },
       select: {
         id: true, trialEndsAt: true,
         users: { where: { role: "OWNER" }, select: { name: true, email: true }, take: 1 },
@@ -164,6 +169,105 @@ export async function GET(req: NextRequest) {
         subject: "One quick question about your trial",
         html: churnReasonEmailHtml(owner.name, reasons),
       }).catch((err: Error) => console.error(`[trial-reminder] churn email failed org ${org.id}:`, err.message));
+    }
+
+    // ── Day 7 post-expiry re-engagement ──────────────────────────────────────
+    const re7From = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
+    const re7To   = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const re7Orgs = await prisma.org.findMany({
+      where: { trialEndsAt: { gte: re7From, lte: re7To }, planTier: "TRIAL", dataWipedAt: null },
+      select: { id: true, users: { where: { role: "OWNER" }, select: { name: true, email: true }, take: 1 } },
+    });
+    for (const org of re7Orgs) {
+      const owner = org.users[0];
+      if (!owner) continue;
+      counts.reengagement7++;
+      sendEmail({
+        to: owner.email,
+        subject: "We miss you — your Estimate Nepal data is still safe",
+        html: trialReengagement7EmailHtml(owner.name, UPGRADE_URL),
+      }).catch((err: Error) => console.error(`[trial-reminder] re7 email failed org ${org.id}:`, err.message));
+    }
+
+    // ── Day 14 post-expiry ────────────────────────────────────────────────────
+    const re14From = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+    const re14To   = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const re14Orgs = await prisma.org.findMany({
+      where: { trialEndsAt: { gte: re14From, lte: re14To }, planTier: "TRIAL", dataWipedAt: null },
+      select: { id: true, users: { where: { role: "OWNER" }, select: { name: true, email: true }, take: 1 } },
+    });
+    for (const org of re14Orgs) {
+      const owner = org.users[0];
+      if (!owner) continue;
+      counts.reengagement14++;
+      sendEmail({
+        to: owner.email,
+        subject: "Your data is still waiting — come back to Estimate Nepal",
+        html: trialReengagement14EmailHtml(owner.name, UPGRADE_URL),
+      }).catch((err: Error) => console.error(`[trial-reminder] re14 email failed org ${org.id}:`, err.message));
+    }
+
+    // ── Day 21 post-expiry ────────────────────────────────────────────────────
+    const re21From = new Date(now.getTime() - 22 * 24 * 60 * 60 * 1000);
+    const re21To   = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const re21Orgs = await prisma.org.findMany({
+      where: { trialEndsAt: { gte: re21From, lte: re21To }, planTier: "TRIAL", dataWipedAt: null },
+      select: { id: true, users: { where: { role: "OWNER" }, select: { name: true, email: true }, take: 1 } },
+    });
+    for (const org of re21Orgs) {
+      const owner = org.users[0];
+      if (!owner) continue;
+      counts.reengagement21++;
+      sendEmail({
+        to: owner.email,
+        subject: "Last chance — your Estimate Nepal data will be removed in 9 days",
+        html: trialReengagement21EmailHtml(owner.name, UPGRADE_URL),
+      }).catch((err: Error) => console.error(`[trial-reminder] re21 email failed org ${org.id}:`, err.message));
+    }
+
+    // ── Day 30 post-expiry: data deleted in 24 hours warning ─────────────────
+    const dw30From = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000);
+    const dw30To   = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const dw30Orgs = await prisma.org.findMany({
+      where: { trialEndsAt: { gte: dw30From, lte: dw30To }, planTier: "TRIAL", dataWipedAt: null },
+      select: { id: true, users: { where: { role: "OWNER" }, select: { name: true, email: true }, take: 1 } },
+    });
+    for (const org of dw30Orgs) {
+      const owner = org.users[0];
+      if (!owner) continue;
+      counts.dataWarning++;
+      sendEmail({
+        to: owner.email,
+        subject: "Your Estimate Nepal data will be deleted in 24 hours",
+        html: trialDataWarningEmailHtml(owner.name, UPGRADE_URL),
+      }).catch((err: Error) => console.error(`[trial-reminder] dataWarning email failed org ${org.id}:`, err.message));
+    }
+
+    // ── Day 31+ post-expiry: wipe project data + notify ──────────────────────
+    const wipeOrgs = await prisma.org.findMany({
+      where: {
+        trialEndsAt: { lte: new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000) },
+        planTier: "TRIAL",
+        dataWipedAt: null,
+      },
+      select: {
+        id: true,
+        users: { where: { role: "OWNER" }, select: { name: true, email: true }, take: 1 },
+        projects: { select: { id: true }, take: 1 },
+      },
+    });
+    for (const org of wipeOrgs) {
+      const owner = org.users[0];
+      if (!owner) continue;
+      // Delete all project data (cascades to drawings, takeoff items, etc.)
+      await prisma.project.deleteMany({ where: { orgId: org.id } });
+      await prisma.org.update({ where: { id: org.id }, data: { dataWipedAt: now } });
+      counts.dataWiped++;
+      sendEmail({
+        to: owner.email,
+        subject: "Your Estimate Nepal trial data has been removed",
+        html: trialDataWipedEmailHtml(owner.name),
+      }).catch((err: Error) => console.error(`[trial-reminder] dataWiped email failed org ${org.id}:`, err.message));
     }
 
     // ── NPS: users who registered 7-8 days ago, haven't received NPS yet ──────
