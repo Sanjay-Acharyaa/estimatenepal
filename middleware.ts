@@ -22,6 +22,7 @@ const PUBLIC_PATHS = [
   "/api/config/public", // Public pricing + contact config for client components
   "/api/testimonials",  // Public GET for approved testimonials
   "/api/branding",      // Public branding endpoint
+  "/api/cron",          // Cron endpoints — protected by CRON_SECRET Bearer token, not session
   "/api/feedback",      // Public churn reason + NPS feedback (links from emails)
   "/share",          // Public read-only share link viewer
   "/api/invite",     // Public invite accept
