@@ -21,13 +21,23 @@ export type TemplateFull = {
   isCustom: boolean;
 };
 
-// Replace {{key}} placeholders with values and wrap in the full email HTML shell
-export function renderTemplate(bodyHtml: string, vars: Record<string, string>): string {
+// Replace {{key}} placeholders with values and wrap in the full email HTML shell.
+// L5: {{name}} substitutes the first word of the name so greetings feel personal.
+// M1: unsubscribeUrl is injected into the wrapper footer, not via string-replace.
+export function renderTemplate(
+  bodyHtml: string,
+  vars: Record<string, string>,
+  unsubscribeUrl?: string,
+): string {
+  const resolved: Record<string, string> = { ...vars };
+  if (resolved.name) {
+    resolved.name = resolved.name.split(" ")[0] || resolved.name;
+  }
   let html = bodyHtml;
-  for (const [key, value] of Object.entries(vars)) {
+  for (const [key, value] of Object.entries(resolved)) {
     html = html.replaceAll(`{{${key}}}`, value);
   }
-  return wrapEmailHtml(html);
+  return wrapEmailHtml(html, unsubscribeUrl);
 }
 
 // Load all templates: DB rows merged with defaults (DB wins on conflict)

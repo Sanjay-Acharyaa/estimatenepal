@@ -1,3 +1,8 @@
+export const metadata = {
+  title: "Re-subscribed — Estimate Nepal",
+  description: "You have been re-subscribed to Estimate Nepal lifecycle emails.",
+};
+
 export default function ResubscribedPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">

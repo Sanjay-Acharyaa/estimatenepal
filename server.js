@@ -9,6 +9,26 @@ const { PrismaClient } = require("@prisma/client");
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
 
+// H4: Validate required env vars at startup — fail fast with a clear message instead
+// of a cryptic runtime error when the first request hits a misconfigured handler.
+const REQUIRED_ENV = [
+  "DATABASE_URL",
+  "NEXTAUTH_SECRET",
+  "NEXTAUTH_URL",
+  "EMAIL_FROM",
+  "RESEND_API_KEY",
+  "CRON_SECRET",
+  "REDIS_URL",
+  "RESEND_WEBHOOK_SECRET",
+];
+const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k]);
+if (missingEnv.length > 0) {
+  console.error("[server] Missing required environment variables:");
+  missingEnv.forEach((k) => console.error(`  • ${k}`));
+  console.error("Check your .env.local or DigitalOcean App Platform environment settings.");
+  process.exit(1);
+}
+
 const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
 const prisma = new PrismaClient();

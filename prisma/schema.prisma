@@ -38,12 +38,14 @@ model User {
   npsSentAt              DateTime?
   npsScore               Int?
   emailUnsubscribedAt    DateTime?
+  emailBouncedAt         DateTime?
   createdAt              DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   @@index([orgId])
   @@index([email])
-  @@index([emailUnsubscribedAt])   // M2: fast unsubscribed-count query on dashboard load
+  @@index([emailUnsubscribedAt])
+  @@index([emailBouncedAt])
 }
 
 model Org {
@@ -832,7 +834,10 @@ model EmailLog {
   subject        String
   status         String   @default("sent")  // sent | failed
   errorMessage   String?  @db.Text
-  resendEmailId  String?  @db.VarChar(50)   // L2: Resend delivery ID for webhook tracking
+  resendEmailId  String?  @db.VarChar(50)
+  deliveredAt    DateTime?
+  openedAt       DateTime?
+  clickedAt      DateTime?
   sentAt         DateTime @default(now())
 
   @@index([orgId, sentAt(sort: Desc)])

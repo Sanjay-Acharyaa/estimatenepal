@@ -35,14 +35,16 @@ export async function sendEmail({
   subject: string;
   html: string;
 }): Promise<string | null> {
-  const result = await resend.emails.send({
-    from: process.env.EMAIL_FROM ?? "noreply@estimatenepal.com",
-    to,
-    subject,
-    html,
-  });
+  const from = process.env.EMAIL_FROM;
+  if (!from) throw new Error("EMAIL_FROM env var is not set");
+  const result = await resend.emails.send({ from, to, subject, html });
   // Resend SDK v1 wraps in { data, error }; v2 returns { id } directly.
   return (result as any)?.data?.id ?? (result as any)?.id ?? null;
+}
+
+// L5: Use first name only in lifecycle email greetings ("Hi Ram" not "Hi Ram Kumar Sharma")
+function firstName(name: string): string {
+  return name.split(" ")[0] || name;
 }
 
 function ctaButton(url: string, label: string): string {
@@ -133,9 +135,10 @@ export function passwordResetEmailHtml(url: string) {
 export function trialReminderEmailHtml(
   name: string,
   trialEndsAt: Date,
-  upgradeUrl: string
+  upgradeUrl: string,
+  unsubscribeUrl?: string,
 ): string {
-  const safeName = escapeHtml(name);
+  const safeName = escapeHtml(firstName(name));
   const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
@@ -165,11 +168,11 @@ export function trialReminderEmailHtml(
       Plans start from ${PLAN_PRICE} for a single user. Annual billing saves you 2 months free.
       If you have any questions, reply to this email and we&apos;ll help you find the right plan.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialDay7EmailHtml(name: string, dashboardUrl: string): string {
-  const safeName = escapeHtml(name);
+export function trialDay7EmailHtml(name: string, dashboardUrl: string, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">How&apos;s your first week going?</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
@@ -192,11 +195,11 @@ export function trialDay7EmailHtml(name: string, dashboardUrl: string): string {
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       You have 7 days remaining on your free trial.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsAt: Date): string {
-  const safeName = escapeHtml(name);
+export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsAt: Date, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   return wrapEmailHtml(`
     <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">2 days left on your trial</h2>
@@ -220,11 +223,11 @@ export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsA
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Questions about pricing? Reply to this email — we&apos;re happy to help find the right plan.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function churnReasonEmailHtml(name: string, reasons: { label: string; url: string }[]): string {
-  const safeName = escapeHtml(name);
+export function churnReasonEmailHtml(name: string, reasons: { label: string; url: string }[], unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   const reasonButtons = reasons.map(r =>
     `<tr><td style="padding:6px 0">
       <a href="${safeUrl(r.url)}" style="display:block;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 20px;color:#334155;text-decoration:none;font-size:14px;font-weight:500;text-align:center">
@@ -246,12 +249,11 @@ export function churnReasonEmailHtml(name: string, reasons: { label: string; url
     <p style="color:#94a3b8;font-size:13px;margin:28px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Changed your mind? Your data is still safe — reply to this email and we&apos;ll help you get back in.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-// M1: NPS score label row uses table layout instead of display:flex (email client safe).
-export function npsEmailHtml(name: string, scores: { score: number; url: string }[]): string {
-  const safeName = escapeHtml(name);
+export function npsEmailHtml(name: string, scores: { score: number; url: string }[], unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   const scoreButtons = scores.map(s =>
     `<td style="padding:2px"><a href="${safeUrl(s.url)}" style="display:inline-block;width:36px;height:36px;line-height:36px;text-align:center;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155;text-decoration:none;font-size:13px;font-weight:600">${s.score}</a></td>`
   ).join("");
@@ -274,7 +276,7 @@ export function npsEmailHtml(name: string, scores: { score: number; url: string 
     <p style="color:#94a3b8;font-size:13px;margin:0;padding-top:24px;border-top:1px solid #f1f5f9">
       This takes 1 click and helps us improve. Thank you for your time.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
 export function proposalResponseAdminEmailHtml(
@@ -346,8 +348,8 @@ export function proposalResponseClientEmailHtml(
   `);
 }
 
-export function welcomeEmailHtml(name: string, dashboardUrl: string, trialEndsAt?: Date | null): string {
-  const safeName = escapeHtml(name);
+export function welcomeEmailHtml(name: string, dashboardUrl: string, trialEndsAt?: Date | null, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   const trialLine = trialEndsAt
     ? `Your free trial runs until <strong>${trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong> — no credit card required.`
     : `You have <strong>14 days</strong> to explore everything for free. No credit card required.`;
@@ -393,11 +395,11 @@ export function welcomeEmailHtml(name: string, dashboardUrl: string, trialEndsAt
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       ${trialLine}
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialReengagement7EmailHtml(name: string, upgradeUrl: string): string {
-  const safeName = escapeHtml(name);
+export function trialReengagement7EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">We miss you at Estimate Nepal</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
@@ -417,11 +419,11 @@ export function trialReengagement7EmailHtml(name: string, upgradeUrl: string): s
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Questions? Reply to this email and we&apos;ll help you find the right plan.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialReengagement14EmailHtml(name: string, upgradeUrl: string): string {
-  const safeName = escapeHtml(name);
+export function trialReengagement14EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your data is still waiting for you</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
@@ -437,11 +439,11 @@ export function trialReengagement14EmailHtml(name: string, upgradeUrl: string): 
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Need help or have concerns about pricing? Reply to this email — we&apos;re happy to talk.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialReengagement21EmailHtml(name: string, upgradeUrl: string): string {
-  const safeName = escapeHtml(name);
+export function trialReengagement21EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Last chance to keep your data</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
@@ -457,11 +459,11 @@ export function trialReengagement21EmailHtml(name: string, upgradeUrl: string): 
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Your account will remain active — only project data is removed. Reply to this email if you have questions.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialDataWarningEmailHtml(name: string, upgradeUrl: string): string {
-  const safeName = escapeHtml(name);
+export function trialDataWarningEmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   return wrapEmailHtml(`
     <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">Your data will be deleted in 24 hours</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
@@ -483,11 +485,11 @@ export function trialDataWarningEmailHtml(name: string, upgradeUrl: string): str
       Your login account will remain active. Only project data will be removed.
       Reply to this email immediately if you need help.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialDataWipedEmailHtml(name: string, baseUrl?: string): string {
-  const safeName = escapeHtml(name);
+export function trialDataWipedEmailHtml(name: string, baseUrl?: string, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
   const siteUrl = baseUrl ?? process.env.NEXTAUTH_URL ?? "https://estimatenepal.com";
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial data has been removed</h2>
@@ -508,11 +510,11 @@ export function trialDataWipedEmailHtml(name: string, baseUrl?: string): string 
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       You can still log in at <a href="${siteUrl}" style="color:#94a3b8">${siteUrl}</a>.
     </p>
-  `);
+  `, unsubscribeUrl);
 }
 
-export function trialExpiredEmailHtml(name: string, upgradeUrl: string): string {
-  const safeName = escapeHtml(name);
+export function trialExpiredEmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+  const safeName = escapeHtml(firstName(name));
 
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial has ended</h2>
@@ -533,5 +535,5 @@ export function trialExpiredEmailHtml(name: string, upgradeUrl: string): string 
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Need help choosing a plan or have questions about pricing? Reply to this email or WhatsApp us — we&apos;re happy to help.
     </p>
-  `);
+  `, unsubscribeUrl);
 }

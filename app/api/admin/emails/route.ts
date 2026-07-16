@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
       churnReasons,
       trialCohortTotal,
       trialCohortUpgraded,
+      bouncedCount,             // A4: hard-bounced users — never retry
     ] = await Promise.all([
       prisma.emailLog.findMany({
         where: logWhere,
@@ -70,8 +71,12 @@ export async function GET(req: NextRequest) {
         orderBy: { _count: { churnReason: "desc" } },
         take: 1,
       }),
-      prisma.org.count({ where: { trialEndsAt: { not: null } } }),
-      prisma.org.count({ where: { trialEndsAt: { not: null }, plan: { not: "FREE" } } }),
+      // A2: denominator = only expired trials (trialEndsAt <= now), not all orgs that ever had a trial.
+      // Using all orgs with a trialEndsAt inflated the rate by counting active trials as non-converted.
+      prisma.org.count({ where: { trialEndsAt: { lte: now } } }),
+      prisma.org.count({ where: { trialEndsAt: { lte: now }, plan: { not: "FREE" } } }),
+      // A4: users with a hard bounce or spam complaint — useful for deliverability health monitoring.
+      prisma.user.count({ where: { emailBouncedAt: { not: null } } }),
     ]);
 
     const topChurnReason = churnReasons[0]?.churnReason ?? null;
@@ -101,6 +106,7 @@ export async function GET(req: NextRequest) {
         activeTrials,
         expiredTrials,
         unsubscribedCount,
+        bouncedCount,
       },
       // filteredCount drives pagination (is scoped by emailType when active)
       filteredCount,

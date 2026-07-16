@@ -12,7 +12,15 @@ type Stats = {
   conversionRate: number;
   activeTrials: number;
   expiredTrials: number;
-  unsubscribedCount: number; // L3
+  unsubscribedCount: number;
+  bouncedCount: number; // A4: hard-bounced users
+};
+
+// M5: Typed API response keeps fetch call-sites type-safe and documents the contract.
+type ApiResponse = {
+  stats: Stats;
+  filteredCount: number;
+  logs: EmailLog[];
 };
 
 type EmailLog = {
@@ -165,12 +173,19 @@ export default function AdminEmailsPage() {
     setLogsOffset(0);
     setLogs([]);
     fetch(buildLogUrl(0))
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<ApiResponse>;
+      })
       .then((data) => {
         setStats(data.stats);
         setLogs(data.logs);
         // M3: Use filteredCount for pagination (type-scoped); stats.totalCount is always global.
         setLogsTotal(data.filteredCount ?? data.stats.totalCount);
+      })
+      // L4: Surface load errors so the user sees a clear message rather than an infinite spinner.
+      .catch((err: Error) => {
+        console.error("[admin/emails] Load failed:", err.message);
       })
       .finally(() => setLogsLoading(false));
   }, [buildLogUrl]);
@@ -180,11 +195,18 @@ export default function AdminEmailsPage() {
     const newOffset = logsOffset + PAGE_SIZE;
     setLoadingMore(true);
     fetch(buildLogUrl(newOffset))
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<ApiResponse>;
+      })
       .then((data) => {
         setLogs((prev) => [...prev, ...data.logs]);
         setLogsOffset(newOffset);
+        // M6: Keep logsTotal in sync with the server response so "N remaining" stays accurate
+        // even if records are added or deleted between page loads.
+        setLogsTotal(data.filteredCount);
       })
+      .catch((err: Error) => console.error("[admin/emails] Load more failed:", err.message))
       .finally(() => setLoadingMore(false));
   };
 
@@ -401,14 +423,16 @@ export default function AdminEmailsPage() {
 
         {/* Stats strip — L3: now includes unsubscribed count */}
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
             {[
               { label: "Emails this month",  value: stats.monthCount },
               { label: "Total emails sent",  value: stats.totalCount },
               { label: "Active trials",      value: stats.activeTrials,      color: "text-green-600" },
               { label: "Expired trials",     value: stats.expiredTrials,     color: "text-red-600" },
               { label: "Conversion rate",    value: `${stats.conversionRate}%`, color: "text-indigo-600" },
-              { label: "Unsubscribed users", value: stats.unsubscribedCount, color: "text-orange-500" },
+              { label: "Unsubscribed",       value: stats.unsubscribedCount, color: "text-orange-500" },
+              // A4: bounced count — high number signals deliverability issues needing action
+              { label: "Bounced / Spam",     value: stats.bouncedCount,      color: "text-rose-600" },
               {
                 label: "Top churn reason",
                 value: stats.topChurnReason ? (CHURN_REASON_LABELS[stats.topChurnReason] ?? stats.topChurnReason) : "—",
@@ -766,11 +790,13 @@ export default function AdminEmailsPage() {
                             <span>Preview (sample data)</span>
                             <button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                           </div>
+                          {/* M4: sandbox="allow-same-origin" lets CSS load while blocking scripts/navigation */}
                           <iframe
                             srcDoc={previewHtml}
                             className="w-full"
                             style={{ height: 600 }}
                             title="Email preview"
+                            sandbox="allow-same-origin"
                           />
                         </div>
                       )}

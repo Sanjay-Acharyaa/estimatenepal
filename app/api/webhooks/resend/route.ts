@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/webhooks/resend
 // Resend delivery event webhook. Protected by Svix HMAC signature (whsec_ secret).
 // Set RESEND_WEBHOOK_SECRET in env to the webhook signing secret from Resend dashboard.
-// Updates EmailLog.status to "bounced" or "complained" for true delivery failures.
+// Updates EmailLog status and User.emailBouncedAt for hard delivery failures.
 
 function verifyResendWebhook(body: string, headers: Headers): boolean {
   const svixId        = headers.get("svix-id");
@@ -16,32 +16,41 @@ function verifyResendWebhook(body: string, headers: Headers): boolean {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) return false;
 
-  // H1: Reject replays — timestamp must be within 5 minutes of now.
+  // H1: Reject replays — timestamp must be within 5 minutes + 30s clock-skew buffer (L3).
   const ts  = parseInt(svixTimestamp, 10);
   const age = Math.abs(Date.now() / 1000 - ts);
-  if (isNaN(ts) || age > 300) return false;
+  if (isNaN(ts) || age > 330) return false;
 
   const secretBytes = Buffer.from(secret.replace("whsec_", ""), "base64");
   const msgToSign   = `${svixId}.${svixTimestamp}.${body}`;
   const hmac        = createHmac("sha256", secretBytes).update(msgToSign).digest("base64");
 
-  // svix-signature is a space-delimited list of "v1,<base64>" strings
   const signatures = svixSignature
     .split(" ")
     .map((s) => s.split("v1,")[1])
     .filter(Boolean);
 
-  return signatures.some((sig) => sig === hmac);
+  // C2: Timing-safe comparison prevents HMAC oracle attacks on the webhook secret.
+  return signatures.some((sig) => {
+    try {
+      const sigBuf  = Buffer.from(sig, "base64");
+      const hmacBuf = Buffer.from(hmac, "base64");
+      return sigBuf.length === hmacBuf.length && timingSafeEqual(sigBuf, hmacBuf);
+    } catch {
+      return false;
+    }
+  });
 }
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
   if (!verifyResendWebhook(rawBody, req.headers)) {
+    console.warn("[webhooks/resend] Signature verification failed — rejected");
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  let payload: { type?: string; data?: { email_id?: string } };
+  let payload: { type?: string; data?: { email_id?: string; to?: string[] } };
   try {
     payload = JSON.parse(rawBody);
   } catch {
@@ -50,21 +59,51 @@ export async function POST(req: NextRequest) {
 
   const emailId   = payload?.data?.email_id;
   const eventType = payload?.type;
+  const toAddrs   = payload?.data?.to ?? [];
 
-  if (emailId && eventType) {
-    // H2: Only treat hard/permanent failures as "failed".
-    // email.delivery_delayed is transient — the email may still deliver.
-    const hardFailures = new Set(["email.bounced", "email.complained"]);
+  if (!emailId || !eventType) {
+    return NextResponse.json({ received: true });
+  }
 
-    if (hardFailures.has(eventType)) {
-      await prisma.emailLog.updateMany({
+  // H2: Hard failures — permanently mark as failed and suppress future sends.
+  if (eventType === "email.bounced" || eventType === "email.complained") {
+    await Promise.all([
+      // Mark log as failed
+      prisma.emailLog.updateMany({
         where: { resendEmailId: emailId },
         data: { status: "failed", errorMessage: eventType },
-      }).catch((err: Error) =>
-        console.error("[webhooks/resend] DB update failed:", err.message)
-      );
-    }
-    // email.delivered — could set status="delivered" in a future enhancement.
+      }).catch((err: Error) => console.error("[webhooks/resend] EmailLog update failed:", err.message)),
+
+      // C3/M7: Set emailBouncedAt on the User so the cron never sends to this address again.
+      ...(toAddrs.length > 0 ? [
+        prisma.user.updateMany({
+          where: { email: { in: toAddrs }, emailBouncedAt: null },
+          data: { emailBouncedAt: new Date() },
+        }).catch((err: Error) => console.error("[webhooks/resend] User bounce update failed:", err.message)),
+      ] : []),
+    ]);
+  }
+
+  // L6: Track delivery, open, and click events for dashboard visibility.
+  if (eventType === "email.delivered") {
+    await prisma.emailLog.updateMany({
+      where: { resendEmailId: emailId, deliveredAt: null },
+      data: { status: "delivered", deliveredAt: new Date() },
+    }).catch((err: Error) => console.error("[webhooks/resend] Delivered update failed:", err.message));
+  }
+
+  if (eventType === "email.opened") {
+    await prisma.emailLog.updateMany({
+      where: { resendEmailId: emailId, openedAt: null },
+      data: { openedAt: new Date() },
+    }).catch((err: Error) => console.error("[webhooks/resend] Opened update failed:", err.message));
+  }
+
+  if (eventType === "email.clicked") {
+    await prisma.emailLog.updateMany({
+      where: { resendEmailId: emailId, clickedAt: null },
+      data: { clickedAt: new Date() },
+    }).catch((err: Error) => console.error("[webhooks/resend] Clicked update failed:", err.message));
   }
 
   return NextResponse.json({ received: true });

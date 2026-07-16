@@ -71,9 +71,11 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 8px">
       Your email is verified and your 14-day free trial has started.
     </p>
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin:0 0 20px;display:inline-block">
-      <p style="color:#1e40af;font-size:14px;font-weight:600;margin:0">Trial expires: {{trialEndsAt}}</p>
-    </div>
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 20px">
+      <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px">
+        <p style="color:#1e40af;font-size:14px;font-weight:600;margin:0">Trial expires: {{trialEndsAt}}</p>
+      </td></tr>
+    </table>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">Here&apos;s how to get the most out of it:</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px">
       <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px">
@@ -355,8 +357,13 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
 // H2: This is the single source of truth. lib/email.ts imports this instead of duplicating.
 const LOGO_ICON = `<svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle"><rect width="40" height="40" rx="10" fill="#1d4ed8"/><rect x="7" y="22" width="6" height="13" rx="1" fill="white" opacity="0.9"/><rect x="17" y="15" width="6" height="20" rx="1" fill="white"/><rect x="27" y="19" width="6" height="16" rx="1" fill="white" opacity="0.85"/><rect x="5" y="36" width="30" height="1.5" rx="0.75" fill="white" opacity="0.45"/></svg>`;
 
-export function wrapEmailHtml(content: string): string {
+export function wrapEmailHtml(content: string, unsubscribeUrl?: string): string {
   const year = new Date().getFullYear();
+  const unsubFooter = unsubscribeUrl
+    ? `<p style="text-align:center;font-size:11px;color:#94a3b8;margin:16px 0 0">
+        <a href="${unsubscribeUrl}" style="color:#94a3b8;text-decoration:underline">Unsubscribe from marketing emails</a>
+       </p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -380,6 +387,7 @@ export function wrapEmailHtml(content: string): string {
       </td></tr>
       <tr><td style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:36px 32px">
         ${content}
+        ${unsubFooter}
       </td></tr>
       <tr><td style="padding:24px 0;text-align:center">
         <p style="color:#94a3b8;font-size:12px;margin:0">

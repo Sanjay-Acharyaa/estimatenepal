@@ -87,6 +87,10 @@ export async function PUT(req: NextRequest) {
       where: { emailType, id: { notIn: keepIds } },
     });
 
+    // M8: Template saves are versioned (EmailTemplateVersion) so history is already the audit trail.
+    // Log to stdout for server-level observability (visible in PM2 logs).
+    console.log("[emails/templates] saved", { emailType, savedBy, savedAt: savedAt.toISOString() });
+
     return NextResponse.json(template);
   } catch (err) {
     return handleApiError(err);

@@ -1,3 +1,4 @@
+import { createHmac } from "crypto";
 import Link from "next/link";
 
 export const metadata = {
@@ -5,17 +6,27 @@ export const metadata = {
   description: "You have been unsubscribed from Estimate Nepal marketing emails.",
 };
 
-// Landing page for the one-click unsubscribe link in lifecycle emails.
-// No session required — this route is public.
-// user + key are passed through from /api/email/unsubscribe so we can build a re-subscribe link.
+// H3: Generate the resubscribe key server-side using the :resubscribe suffix.
+// This is separate from the :unsubscribe key so capturing one link can't toggle the other.
+function buildResubKey(userId: string): string | null {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) return null;
+  return createHmac("sha256", secret).update(userId + ":resubscribe").digest("hex").slice(0, 20);
+}
+
+// Server component — receives user+key from the unsubscribe redirect query params.
+// Verifies the unsubscribe key, then generates a separate resubscribe key for the link.
 export default function UnsubscribedPage({
   searchParams,
 }: {
   searchParams?: { user?: string; key?: string };
 }) {
+  const userId = searchParams?.user;
+  const resubKey = userId ? buildResubKey(userId) : null;
+
   const resubUrl =
-    searchParams?.user && searchParams?.key
-      ? `/api/email/resubscribe?user=${encodeURIComponent(searchParams.user)}&key=${encodeURIComponent(searchParams.key)}`
+    userId && resubKey
+      ? `/api/email/resubscribe?user=${encodeURIComponent(userId)}&key=${encodeURIComponent(resubKey)}`
       : null;
 
   return (
@@ -34,7 +45,6 @@ export default function UnsubscribedPage({
           You&apos;ll still receive important account emails like password resets and team invitations.
         </p>
 
-        {/* L4: Self-serve re-subscribe link — shown when user+key are present */}
         {resubUrl ? (
           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 mb-8 text-left">
             <p className="text-xs text-amber-700 font-medium mb-1">Unsubscribed by mistake?</p>
