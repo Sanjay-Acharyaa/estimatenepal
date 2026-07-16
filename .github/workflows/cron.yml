@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Send trial reminder emails
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-redirs 3 -X GET \
             "https://estimatenepal.com/api/cron/trial-reminder" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
           echo "Response status: $STATUS"
