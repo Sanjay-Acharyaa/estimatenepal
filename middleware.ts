@@ -22,8 +22,10 @@ const PUBLIC_PATHS = [
   "/api/config/public", // Public pricing + contact config for client components
   "/api/testimonials",  // Public GET for approved testimonials
   "/api/branding",      // Public branding endpoint
-  "/api/cron",          // Cron endpoints — protected by CRON_SECRET Bearer token, not session
-  "/api/feedback",      // Public churn reason + NPS feedback (links from emails)
+  "/api/cron",              // Cron endpoints — protected by CRON_SECRET Bearer token, not session
+  "/api/feedback",          // Public churn reason + NPS feedback (links from emails)
+  "/api/email/unsubscribe", // One-click unsubscribe from lifecycle emails (no session needed)
+  "/api/webhooks",         // Resend/Svix delivery webhooks — verified by HMAC, not session
   "/share",          // Public read-only share link viewer
   "/api/invite",     // Public invite accept
   "/trial-expired",  // Must be accessible without auth

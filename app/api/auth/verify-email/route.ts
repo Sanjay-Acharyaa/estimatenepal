@@ -19,17 +19,18 @@ export async function GET(req: NextRequest) {
     const userId = await redis.get(`verify:${token}`);
     if (!userId) return apiError("VALIDATION_ERROR", "Invalid or expired token.", 400);
 
+    // L4: Fetch org.trialEndsAt alongside the user so welcome email can show the trial expiry date
     const user = await prisma.user.update({
       where: { id: userId },
       data: { emailVerified: true },
-      select: { name: true, email: true },
+      select: { name: true, email: true, org: { select: { trialEndsAt: true } } },
     });
     await redis.del(`verify:${token}`);
 
     sendEmail({
       to: user.email,
       subject: "Welcome to Estimate Nepal — here's how to get started",
-      html: welcomeEmailHtml(user.name, DASHBOARD_URL),
+      html: welcomeEmailHtml(user.name, DASHBOARD_URL, user.org?.trialEndsAt ?? null),
     }).catch((err: Error) => console.error("[verify-email] welcome email failed:", err.message));
 
     return NextResponse.redirect(new URL("/login?verified=1", process.env.NEXTAUTH_URL));

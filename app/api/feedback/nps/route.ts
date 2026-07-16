@@ -3,31 +3,41 @@ import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
+const NO_CACHE = { "Cache-Control": "no-store, max-age=0" };
+
 export async function GET(req: NextRequest) {
   const limited = await checkApiRateLimit(getClientIp(req));
   if (limited) return limited;
 
   const { searchParams } = req.nextUrl;
   const scoreStr = searchParams.get("score");
-  const userId = searchParams.get("user");
-  const key = searchParams.get("key");
-  const score = parseInt(scoreStr ?? "", 10);
+  const userId   = searchParams.get("user");
+  const key      = searchParams.get("key");
+  const score    = parseInt(scoreStr ?? "", 10);
 
   if (!userId || isNaN(score) || score < 0 || score > 10) {
-    return new NextResponse("Invalid NPS link.", { status: 400 });
+    return new NextResponse("Invalid NPS link.", { status: 400, headers: NO_CACHE });
   }
 
-  const expected = createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "fallback").update(userId).digest("hex").slice(0, 20);
+  // CS1: Throw hard if secret is not configured — never fall back to a known string.
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error("NEXTAUTH_SECRET not set");
+
+  const expected = createHmac("sha256", secret).update(userId).digest("hex").slice(0, 20);
   if (!key || key !== expected) {
-    return new Response("<h2>Invalid or expired link.</h2>", { status: 400, headers: { "Content-Type": "text/html" } });
+    return new Response("<h2>Invalid or expired link.</h2>", {
+      status: 400,
+      headers: { "Content-Type": "text/html", ...NO_CACHE },
+    });
   }
 
-  await prisma.user.update({
-    where: { id: userId },
+  // CS2: First-click-wins — only update if npsScore has not been recorded yet.
+  await prisma.user.updateMany({
+    where: { id: userId, npsScore: null },
     data: { npsScore: score },
   }).catch(() => {});
 
-  const emoji = score >= 9 ? "😍" : score >= 7 ? "😊" : score >= 5 ? "😐" : "😕";
+  const emoji   = score >= 9 ? "&#x1F60D;" : score >= 7 ? "&#x1F60A;" : score >= 5 ? "&#x1F610;" : "&#x1F615;";
   const message = score >= 9
     ? "Amazing! We're so glad you love it."
     : score >= 7
@@ -47,6 +57,6 @@ export async function GET(req: NextRequest) {
       <p>${message}</p>
       <p>Thank you for helping us improve Estimate Nepal.</p>
     </div></body></html>`,
-    { headers: { "Content-Type": "text/html" } }
+    { headers: { "Content-Type": "text/html", ...NO_CACHE } }
   );
 }

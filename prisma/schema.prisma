@@ -35,13 +35,15 @@ model User {
   referralCampaign String?
   sessions         UserSession[]
   drawingComments DrawingComment[] @relation("DrawingComments")
-  npsSentAt      DateTime?
-  npsScore       Int?
-  createdAt      DateTime       @default(now())
+  npsSentAt              DateTime?
+  npsScore               Int?
+  emailUnsubscribedAt    DateTime?
+  createdAt              DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   @@index([orgId])
   @@index([email])
+  @@index([emailUnsubscribedAt])   // M2: fast unsubscribed-count query on dashboard load
 }
 
 model Org {
@@ -818,6 +820,49 @@ model UserSession {
   @@index([userId, startedAt(sort: Desc)])
   @@index([date(sort: Desc)])
   @@index([userId, date])
+}
+
+// Email audit log — written after every lifecycle email send
+model EmailLog {
+  id             String   @id @default(cuid())
+  orgId          String?
+  recipientEmail String
+  recipientName  String
+  emailType      String   @db.VarChar(64)
+  subject        String
+  status         String   @default("sent")  // sent | failed
+  errorMessage   String?  @db.Text
+  resendEmailId  String?  @db.VarChar(50)   // L2: Resend delivery ID for webhook tracking
+  sentAt         DateTime @default(now())
+
+  @@index([orgId, sentAt(sort: Desc)])
+  @@index([emailType, sentAt(sort: Desc)])
+  @@index([sentAt(sort: Desc)])
+  @@index([resendEmailId])
+}
+
+// Customisable email templates — superadmin edits these in /admin/emails
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  emailType   String   @unique @db.VarChar(64)
+  subject     String
+  bodyHtml    String   @db.LongText
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?  // superadmin email who last saved
+
+  @@index([emailType])
+}
+
+// Snapshot of each template before it is overwritten (version history)
+model EmailTemplateVersion {
+  id        String   @id @default(cuid())
+  emailType String   @db.VarChar(64)
+  subject   String
+  bodyHtml  String   @db.LongText
+  savedAt   DateTime @default(now())
+  savedBy   String?
+
+  @@index([emailType, savedAt(sort: Desc)])
 }
 
 // Analytics event log — fire-and-forget, never blocks requests, powers admin analytics dashboard

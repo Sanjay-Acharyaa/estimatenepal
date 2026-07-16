@@ -107,6 +107,10 @@ export default async function SuperAdminPage() {
             className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
             📋 Audit Log
           </Link>
+          <Link href="/admin/emails"
+            className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-300 rounded-lg px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 shadow-sm">
+            ✉️ Email Dashboard
+          </Link>
         </div>
 
         {/* ── Paid customers highlight ── */}

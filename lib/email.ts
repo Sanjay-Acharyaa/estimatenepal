@@ -1,4 +1,8 @@
 import { Resend } from "resend";
+import { wrapEmailHtml } from "@/lib/email-template-constants"; // H2: single wrapper source
+
+// M4: Single source of truth for plan pricing string used across all lifecycle emails.
+const PLAN_PRICE = "NPR 999/month";
 
 function escapeHtml(str: string): string {
   return str
@@ -21,6 +25,7 @@ function safeUrl(url: string): string {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// L2: Returns the Resend email ID so callers can store it for delivery webhook tracking.
 export async function sendEmail({
   to,
   subject,
@@ -29,67 +34,15 @@ export async function sendEmail({
   to: string;
   subject: string;
   html: string;
-}) {
-  await resend.emails.send({
+}): Promise<string | null> {
+  const result = await resend.emails.send({
     from: process.env.EMAIL_FROM ?? "noreply@estimatenepal.com",
     to,
     subject,
     html,
   });
-}
-
-// Shared building icon SVG (inline, email-safe)
-const LOGO_ICON = `<svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle">
-  <rect width="40" height="40" rx="10" fill="#1d4ed8"/>
-  <rect x="7" y="22" width="6" height="13" rx="1" fill="white" opacity="0.9"/>
-  <rect x="17" y="15" width="6" height="20" rx="1" fill="white"/>
-  <rect x="27" y="19" width="6" height="16" rx="1" fill="white" opacity="0.85"/>
-  <rect x="5" y="36" width="30" height="1.5" rx="0.75" fill="white" opacity="0.45"/>
-</svg>`;
-
-function emailBase(content: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Estimate Nepal</title>
-</head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 16px">
-  <tr><td align="center">
-    <table width="100%" style="max-width:560px">
-
-      <!-- Header -->
-      <tr><td style="background:#1d4ed8;border-radius:12px 12px 0 0;padding:24px 32px">
-        <table width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td style="vertical-align:middle">${LOGO_ICON}</td>
-          <td style="vertical-align:middle;padding-left:10px">
-            <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px">
-              Estimate<span style="color:#93c5fd"> Nepal</span>
-            </span>
-          </td>
-        </tr></table>
-      </td></tr>
-
-      <!-- Body -->
-      <tr><td style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:36px 32px">
-        ${content}
-      </td></tr>
-
-      <!-- Footer -->
-      <tr><td style="padding:24px 0;text-align:center">
-        <p style="color:#94a3b8;font-size:12px;margin:0">
-          &copy; 2026 Estimate Nepal &mdash; estimatenepal.com<br/>
-          <span style="color:#cbd5e1">Nepal&apos;s Smart Construction Platform</span>
-        </p>
-      </td></tr>
-
-    </table>
-  </td></tr>
-</table>
-</body>
-</html>`;
+  // Resend SDK v1 wraps in { data, error }; v2 returns { id } directly.
+  return (result as any)?.data?.id ?? (result as any)?.id ?? null;
 }
 
 function ctaButton(url: string, label: string): string {
@@ -102,7 +55,7 @@ function ctaButton(url: string, label: string): string {
 
 export function verificationEmailHtml(url: string, name: string) {
   const safeName = escapeHtml(name);
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Verify your email address</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 8px">
@@ -111,7 +64,7 @@ export function verificationEmailHtml(url: string, name: string) {
     <p style="color:#94a3b8;font-size:13px;margin:0 0 4px">This link expires in <strong>24 hours</strong>.</p>
     ${ctaButton(url, "Verify Email Address →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      If you didn&apos;t create a Estimate Nepal account, you can safely ignore this email.
+      If you didn&apos;t create an Estimate Nepal account, you can safely ignore this email.
     </p>
   `);
 }
@@ -120,7 +73,7 @@ export function inviteEmailHtml(inviteUrl: string, orgName: string, inviterName:
   const safeOrgName = escapeHtml(orgName);
   const safeInviterName = escapeHtml(inviterName);
   const safeRole = escapeHtml(role);
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 20px">You&apos;ve been invited</h2>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
       <strong>${safeInviterName}</strong> has invited you to join <strong>${safeOrgName}</strong> on Estimate Nepal as a <strong>${safeRole}</strong>.
@@ -142,7 +95,7 @@ export function proposalEmailHtml(shareUrl: string, projectName: string, orgName
   const safeProjectName = escapeHtml(projectName);
   const safeOrgName = escapeHtml(orgName);
   const safeSenderName = escapeHtml(senderName);
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 20px">Project Proposal Shared</h2>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
       <strong>${safeSenderName}</strong> from <strong>${safeOrgName}</strong> has shared a project proposal with you.
@@ -162,7 +115,7 @@ export function proposalEmailHtml(shareUrl: string, projectName: string, orgName
 }
 
 export function passwordResetEmailHtml(url: string) {
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 20px">Reset your password</h2>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 8px">
       We received a request to reset the password for your Estimate Nepal account.
@@ -183,14 +136,13 @@ export function trialReminderEmailHtml(
   upgradeUrl: string
 ): string {
   const safeName = escapeHtml(name);
-  // Format date as "15 July 2026" — readable, unambiguous for a Nepali audience
   const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
 
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial ends in 3 days</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -210,7 +162,7 @@ export function trialReminderEmailHtml(
     </p>
     ${ctaButton(upgradeUrl, "View Plans →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Plans start from NPR 999/month for a single user. Annual billing saves you 2 months free.
+      Plans start from ${PLAN_PRICE} for a single user. Annual billing saves you 2 months free.
       If you have any questions, reply to this email and we&apos;ll help you find the right plan.
     </p>
   `);
@@ -218,11 +170,11 @@ export function trialReminderEmailHtml(
 
 export function trialDay7EmailHtml(name: string, dashboardUrl: string): string {
   const safeName = escapeHtml(name);
-  return emailBase(`
-    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">How's your first week going?</h2>
+  return wrapEmailHtml(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">How&apos;s your first week going?</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      You're 7 days into your Estimate Nepal trial — great time to check in. Have you had a chance to explore everything yet?
+      You&apos;re 7 days into your Estimate Nepal trial — great time to check in. Have you had a chance to explore everything yet?
     </p>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
       <p style="color:#475569;font-size:14px;font-weight:600;margin:0 0 10px">Quick wins to try before your trial ends:</p>
@@ -246,7 +198,7 @@ export function trialDay7EmailHtml(name: string, dashboardUrl: string): string {
 export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsAt: Date): string {
   const safeName = escapeHtml(name);
   const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">2 days left on your trial</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -262,7 +214,7 @@ export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsA
       </ul>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
-      Plans from <strong>NPR 999/month</strong>. Upgrade now and keep working without interruption.
+      Plans from <strong>${PLAN_PRICE}</strong>. Upgrade now and keep working without interruption.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now — Keep Access →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -281,7 +233,7 @@ export function churnReasonEmailHtml(name: string, reasons: { label: string; url
     </td></tr>`
   ).join("");
 
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">One quick question</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
@@ -297,25 +249,28 @@ export function churnReasonEmailHtml(name: string, reasons: { label: string; url
   `);
 }
 
+// M1: NPS score label row uses table layout instead of display:flex (email client safe).
 export function npsEmailHtml(name: string, scores: { score: number; url: string }[]): string {
   const safeName = escapeHtml(name);
   const scoreButtons = scores.map(s =>
     `<td style="padding:2px"><a href="${safeUrl(s.url)}" style="display:inline-block;width:36px;height:36px;line-height:36px;text-align:center;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155;text-decoration:none;font-size:13px;font-weight:600">${s.score}</a></td>`
   ).join("");
 
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">How likely are you to recommend us?</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
       You&apos;ve been using Estimate Nepal for a week — how&apos;s it going? On a scale of 0–10, how likely are you to recommend us to a colleague?
     </p>
-    <div style="margin:0 0 8px">
-      <table cellpadding="0" cellspacing="0"><tr>${scoreButtons}</tr></table>
-    </div>
-    <div style="display:flex;justify-content:space-between;margin:4px 0 24px">
-      <span style="color:#94a3b8;font-size:11px">0 = Not at all</span>
-      <span style="color:#94a3b8;font-size:11px">10 = Definitely</span>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px">
+      <tr>${scoreButtons}</tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 24px">
+      <tr>
+        <td style="color:#94a3b8;font-size:11px;text-align:left">0 = Not at all</td>
+        <td style="color:#94a3b8;font-size:11px;text-align:right">10 = Definitely</td>
+      </tr>
+    </table>
     <p style="color:#94a3b8;font-size:13px;margin:0;padding-top:24px;border-top:1px solid #f1f5f9">
       This takes 1 click and helps us improve. Thank you for your time.
     </p>
@@ -338,7 +293,7 @@ export function proposalResponseAdminEmailHtml(
   const badgeBorder = isApproved ? "#bbf7d0" : "#fecaca";
   const label = isApproved ? "Approved" : "Rejected";
 
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Proposal ${label}</h2>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
       <strong>${safeClient}</strong> has responded to the proposal for <strong>${safeProject}</strong>.
@@ -367,7 +322,7 @@ export function proposalResponseClientEmailHtml(
   const safeNote = note ? escapeHtml(note) : null;
   const isApproved = action === "APPROVED";
 
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">
       Response received — ${isApproved ? "Approved" : "Rejected"}
     </h2>
@@ -391,14 +346,22 @@ export function proposalResponseClientEmailHtml(
   `);
 }
 
-export function welcomeEmailHtml(name: string, dashboardUrl: string): string {
+export function welcomeEmailHtml(name: string, dashboardUrl: string, trialEndsAt?: Date | null): string {
   const safeName = escapeHtml(name);
-  return emailBase(`
+  const trialLine = trialEndsAt
+    ? `Your free trial runs until <strong>${trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong> — no credit card required.`
+    : `You have <strong>14 days</strong> to explore everything for free. No credit card required.`;
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Welcome to Estimate Nepal!</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
-    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
       Your email is verified and your 14-day free trial has started. Here&apos;s how to get the most out of it:
     </p>
+    ${trialEndsAt ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 20px;margin:0 0 20px;text-align:center">
+      <p style="color:#1e40af;font-size:15px;font-weight:600;margin:0">
+        Trial expires: <strong>${trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong>
+      </p>
+    </div>` : ""}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px">
       <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px">
         <table width="100%" cellpadding="0" cellspacing="0">
@@ -428,14 +391,14 @@ export function welcomeEmailHtml(name: string, dashboardUrl: string): string {
     </p>
     ${ctaButton(dashboardUrl, "Go to Dashboard →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      You have <strong>14 days</strong> to explore everything for free. No credit card required.
+      ${trialLine}
     </p>
   `);
 }
 
 export function trialReengagement7EmailHtml(name: string, upgradeUrl: string): string {
   const safeName = escapeHtml(name);
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">We miss you at Estimate Nepal</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -448,7 +411,7 @@ export function trialReengagement7EmailHtml(name: string, upgradeUrl: string): s
       </p>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
-      Plans start from <strong>NPR 999/month</strong>. Upgrade now and pick up exactly where you left off.
+      Plans start from <strong>${PLAN_PRICE}</strong>. Upgrade now and pick up exactly where you left off.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -459,7 +422,7 @@ export function trialReengagement7EmailHtml(name: string, upgradeUrl: string): s
 
 export function trialReengagement14EmailHtml(name: string, upgradeUrl: string): string {
   const safeName = escapeHtml(name);
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your data is still waiting for you</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -467,13 +430,9 @@ export function trialReengagement14EmailHtml(name: string, upgradeUrl: string): 
     </p>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
       <p style="color:#15803d;font-size:14px;font-weight:600;margin:0 0 4px">Your work is safe</p>
-      <p style="color:#166534;font-size:14px;margin:0">
-        Upgrade at any time and continue working — nothing is lost.
-      </p>
+      <p style="color:#166534;font-size:14px;margin:0">Upgrade at any time and continue working — nothing is lost.</p>
     </div>
-    <p style="color:#334155;font-size:15px;margin:0 0 4px">
-      Plans from <strong>NPR 999/month</strong>. No long-term commitment.
-    </p>
+    <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>${PLAN_PRICE}</strong>. No long-term commitment.</p>
     ${ctaButton(upgradeUrl, "Come Back →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Need help or have concerns about pricing? Reply to this email — we&apos;re happy to talk.
@@ -483,7 +442,7 @@ export function trialReengagement14EmailHtml(name: string, upgradeUrl: string): 
 
 export function trialReengagement21EmailHtml(name: string, upgradeUrl: string): string {
   const safeName = escapeHtml(name);
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Last chance to keep your data</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -492,9 +451,7 @@ export function trialReengagement21EmailHtml(name: string, upgradeUrl: string): 
     </p>
     <div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:16px 20px;margin:0 0 20px">
       <p style="color:#92400e;font-size:14px;font-weight:600;margin:0 0 4px">Data removal in 9 days</p>
-      <p style="color:#78350f;font-size:14px;margin:0">
-        Upgrade before day 30 to preserve all your work permanently.
-      </p>
+      <p style="color:#78350f;font-size:14px;margin:0">Upgrade before day 30 to preserve all your work permanently.</p>
     </div>
     ${ctaButton(upgradeUrl, "Upgrade and Keep My Data →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -505,7 +462,7 @@ export function trialReengagement21EmailHtml(name: string, upgradeUrl: string): 
 
 export function trialDataWarningEmailHtml(name: string, upgradeUrl: string): string {
   const safeName = escapeHtml(name);
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">Your data will be deleted in 24 hours</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -520,9 +477,7 @@ export function trialDataWarningEmailHtml(name: string, upgradeUrl: string): str
         <li>All BOQs and rate analyses</li>
       </ul>
     </div>
-    <p style="color:#334155;font-size:15px;font-weight:600;margin:0 0 4px">
-      Upgrade now to save everything permanently.
-    </p>
+    <p style="color:#334155;font-size:15px;font-weight:600;margin:0 0 4px">Upgrade now to save everything permanently.</p>
     ${ctaButton(upgradeUrl, "Upgrade Now — Save My Data →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Your login account will remain active. Only project data will be removed.
@@ -531,9 +486,10 @@ export function trialDataWarningEmailHtml(name: string, upgradeUrl: string): str
   `);
 }
 
-export function trialDataWipedEmailHtml(name: string): string {
+export function trialDataWipedEmailHtml(name: string, baseUrl?: string): string {
   const safeName = escapeHtml(name);
-  return emailBase(`
+  const siteUrl = baseUrl ?? process.env.NEXTAUTH_URL ?? "https://estimatenepal.com";
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial data has been removed</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -550,7 +506,7 @@ export function trialDataWipedEmailHtml(name: string): string {
       please reply to this email — your feedback helps us improve.
     </p>
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      &copy; 2026 Estimate Nepal. You can still log in at estimatenepal.com.
+      You can still log in at <a href="${siteUrl}" style="color:#94a3b8">${siteUrl}</a>.
     </p>
   `);
 }
@@ -558,7 +514,7 @@ export function trialDataWipedEmailHtml(name: string): string {
 export function trialExpiredEmailHtml(name: string, upgradeUrl: string): string {
   const safeName = escapeHtml(name);
 
-  return emailBase(`
+  return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your trial has ended</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
@@ -571,7 +527,7 @@ export function trialExpiredEmailHtml(name: string, upgradeUrl: string): string 
       </p>
     </div>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Plans start from <strong>NPR 999/month</strong> — no long-term commitment required.
+      Plans start from <strong>${PLAN_PRICE}</strong> — no long-term commitment required.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
