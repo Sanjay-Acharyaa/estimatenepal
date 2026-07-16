@@ -394,7 +394,9 @@ export function AnalyticsDashboardClient({
                           )}
                           {owner?.email && (
                             <a
-                              href={`mailto:${owner.email}?subject=Your Estimate Nepal trial is ending&body=Hi ${owner.name},%0A%0AYour free trial expires in ${item.daysLeft} days. We'd love to help you get the most out of it before then.%0A%0ABest,%0AEstimate Nepal Team`}
+                              href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(owner.email)}&su=${encodeURIComponent(`Your Estimate Nepal trial is ending`)}&body=${encodeURIComponent(`Hi ${owner.name},\n\nYour free trial expires in ${item.daysLeft} days. We'd love to help you get the most out of it before then.\n\nBest,\nEstimate Nepal Team`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs bg-blue-500 hover:bg-blue-600 text-white px-2.5 py-1 rounded-lg font-medium transition"
                             >
                               Email
