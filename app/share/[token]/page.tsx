@@ -1,9 +1,31 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { ShareApprovalForm } from "@/components/ui/ShareApprovalForm";
 import { generateBOQ } from "@/lib/boq";
 import { fmtNPR } from "@/lib/format";
+
+export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
+  const link = await prisma.shareLink.findUnique({
+    where: { token: params.token },
+    select: { project: { select: { name: true, description: true, clientName: true } } },
+  });
+  if (!link) return { title: "Project Proposal — Estimate Nepal" };
+  const p = link.project;
+  const title = `${p.name} — Project Proposal`;
+  const description = p.description
+    ? `${p.description.slice(0, 120)}${p.description.length > 120 ? "…" : ""}`
+    : p.clientName
+      ? `Construction estimate proposal for ${p.clientName}.`
+      : "View this construction estimate proposal powered by Estimate Nepal.";
+  return {
+    title,
+    description,
+    openGraph: { title, description, images: [{ url: "https://estimatenepal.com/og-image.png", width: 1200, height: 630 }] },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 export default async function SharePage({ params }: { params: { token: string } }) {
   const link = await prisma.shareLink.findUnique({
@@ -41,6 +63,7 @@ export default async function SharePage({ params }: { params: { token: string } 
   prisma.shareLink.update({ where: { id: link.id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
 
   const p = link.project;
+  const isViewOnly = (link as any).purpose === "view";
   const alreadyResponded = !!link.approvalStatus;
 
   // Compute BOQ totals — best-effort; if it fails (no rates set), show no amounts
@@ -178,18 +201,20 @@ export default async function SharePage({ params }: { params: { token: string } 
           </div>
         </div>
 
-        {/* Approval */}
-        {alreadyResponded ? (
-          <div className={`rounded-xl border p-6 text-center ${link.approvalStatus === "APPROVED" ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-            <p className="text-2xl mb-2">{link.approvalStatus === "APPROVED" ? "✅" : "❌"}</p>
-            <p className={`font-semibold text-lg ${link.approvalStatus === "APPROVED" ? "text-green-700" : "text-red-700"}`}>
-              Proposal {link.approvalStatus === "APPROVED" ? "Approved" : "Rejected"} by {link.clientName}
-            </p>
-            {link.approvalNote && <p className="text-sm text-gray-600 mt-2">"{link.approvalNote}"</p>}
-            <p className="text-xs text-gray-600 mt-2">{link.approvedAt ? new Date(link.approvedAt).toLocaleString() : ""}</p>
-          </div>
-        ) : (
-          <ShareApprovalForm token={params.token} clientEmail={link.clientEmail} />
+        {/* Approval — only shown for proposal links, not view-only links */}
+        {!isViewOnly && (
+          alreadyResponded ? (
+            <div className={`rounded-xl border p-6 text-center ${link.approvalStatus === "APPROVED" ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+              <p className="text-2xl mb-2">{link.approvalStatus === "APPROVED" ? "✅" : "❌"}</p>
+              <p className={`font-semibold text-lg ${link.approvalStatus === "APPROVED" ? "text-green-700" : "text-red-700"}`}>
+                Proposal {link.approvalStatus === "APPROVED" ? "Approved" : "Rejected"} by {link.clientName}
+              </p>
+              {link.approvalNote && <p className="text-sm text-gray-600 mt-2">"{link.approvalNote}"</p>}
+              <p className="text-xs text-gray-600 mt-2">{link.approvedAt ? new Date(link.approvedAt).toLocaleString() : ""}</p>
+            </div>
+          ) : (
+            <ShareApprovalForm token={params.token} clientEmail={link.clientEmail} />
+          )
         )}
 
         <p className="text-xs text-gray-600 text-center">Shared via Estimate Nepal</p>

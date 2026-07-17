@@ -18,8 +18,8 @@ type Coupon = {
 const PLAN_OPTIONS = [
   { label: "Trial extension only (no plan change)", planType: null, planTier: null },
   { label: "Solo Pro — 1 user", planType: "PRO", planTier: "SOLO" },
-  { label: "Team of 3 — up to 3 users", planType: "PRO", planTier: "TEAM3" },
-  { label: "Team of 5 — up to 5 users", planType: "PRO", planTier: "TEAM5" },
+  { label: "Team of 3 — up to 3 users", planType: "PRO", planTier: "TEAM_3" },
+  { label: "Team of 5 — up to 5 users", planType: "PRO", planTier: "TEAM_5" },
   { label: "Enterprise", planType: "ENTERPRISE", planTier: "ENTERPRISE" },
 ];
 

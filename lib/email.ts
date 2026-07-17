@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template-constants";
 
 function planPrice(price?: string): string {
-  return `NPR ${price ?? "999"}/month`;
+  return `NPR ${price ?? "1499"}/month`;
 }
 
 function escapeHtml(str: string): string {

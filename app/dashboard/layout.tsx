@@ -48,6 +48,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <Link href="/dashboard/bid-board" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Bid Board</Link>
         <Link href="/dashboard/rates" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Rate Catalog</Link>
         <Link href="/dashboard/assemblies" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Assembly Library</Link>
+        {["OWNER", "ADMIN"].includes((session.user as any).role) && (
+          <Link href="/dashboard/team" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Team</Link>
+        )}
         {session.user.isSuperAdmin && (
           <Link href="/admin" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 font-medium">Super Admin</Link>
         )}

@@ -204,6 +204,7 @@ model ShareLink {
   approvalStatus String?   // PENDING | APPROVED | REJECTED
   approvalNote   String?   @db.Text
   approvedAt     DateTime?
+  purpose        String    @default("proposal") // proposal | view
   createdAt      DateTime  @default(now())
 
   @@index([projectId])

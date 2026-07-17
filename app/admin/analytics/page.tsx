@@ -41,7 +41,7 @@ type FeatureRow = { event: string; _count: { event: number } };
 
 // Estimated monthly price per plan tier (NPR)
 const PLAN_PRICE: Record<string, number> = {
-  SOLO: 1499, TEAM3: 3499, TEAM5: 5499, ENTERPRISE: 9999,
+  SOLO: 1499, TEAM_3: 3499, TEAM_5: 5499, ENTERPRISE: 9999,
 };
 
 async function loadData() {
@@ -76,6 +76,7 @@ async function loadData() {
     bouncedCount,
     pdfExportOrgsCount,
     cronLogs,
+    utmSources,
   ] = await Promise.all([
     // Orgs — exclude orgs whose only users are load-test accounts
     prisma.org.findMany({
@@ -221,6 +222,15 @@ async function loadData() {
       orderBy: { runAt: "desc" },
       take: 5,
     }).catch(() => []) as Promise<Array<{ id: string; runAt: Date; durationMs: number; totalSent: number; totalFailed: number; error: string | null }>>,
+
+    // UTM/traffic source breakdown — shows where signups are coming from
+    prisma.user.groupBy({
+      by: ["referralSource", "referralMedium"],
+      where: { isSuperAdmin: false, NOT: { email: { contains: LT } }, referralSource: { not: null } },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 20,
+    }),
   ]);
 
   return {
@@ -232,7 +242,7 @@ async function loadData() {
     npsResponses, npsSentCount,
     churnFeedbackOrgs, churnFeedbackCount,
     emailHealthRows, unsubscribedCount, bouncedCount,
-    pdfExportOrgsCount, cronLogs,
+    pdfExportOrgsCount, cronLogs, utmSources,
     now, d7, in7,
   };
 }
@@ -248,7 +258,7 @@ export default async function AnalyticsDashboard() {
     npsResponses, npsSentCount,
     churnFeedbackOrgs, churnFeedbackCount,
     emailHealthRows, unsubscribedCount, bouncedCount,
-    pdfExportOrgsCount, cronLogs,
+    pdfExportOrgsCount, cronLogs, utmSources,
     now, in7,
   } = data;
 
@@ -390,12 +400,26 @@ export default async function AnalyticsDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-indigo-700 text-white px-8 py-4 flex items-center gap-4">
+      <div className="bg-indigo-700 text-white px-8 py-4 flex items-center gap-4 flex-wrap">
         <Link href="/admin" className="text-indigo-300 hover:text-white text-sm">← Admin</Link>
         <span className="font-bold text-lg">Analytics Dashboard</span>
-        <span className="text-indigo-300 text-sm ml-auto">
-          {now.toLocaleDateString("en-NP", { day: "2-digit", month: "short", year: "numeric" })} · {now.toLocaleTimeString("en-NP")}
-        </span>
+        <div className="ml-auto flex items-center gap-3 flex-wrap">
+          <a
+            href="/api/admin/analytics/export?type=orgs"
+            className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium transition"
+          >
+            Export Orgs CSV
+          </a>
+          <a
+            href="/api/admin/analytics/export?type=emails"
+            className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium transition"
+          >
+            Export Emails CSV
+          </a>
+          <span className="text-indigo-300 text-sm">
+            {now.toLocaleDateString("en-NP", { day: "2-digit", month: "short", year: "numeric" })} · {now.toLocaleTimeString("en-NP")}
+          </span>
+        </div>
       </div>
 
       <div className="p-6 space-y-8 max-w-screen-xl mx-auto">
@@ -1033,6 +1057,44 @@ export default async function AnalyticsDashboard() {
                 )}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        {/* ── 13. Traffic Sources (UTM Attribution) ──────────────────── */}
+        <section>
+          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">Traffic Sources</h2>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            {utmSources.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-gray-400 text-center">No UTM attribution data yet. Share tracking links to start collecting source data.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Source</th>
+                    <th className="text-left px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Medium</th>
+                    <th className="text-right px-4 py-3 text-gray-600 font-semibold text-xs uppercase tracking-wide">Signups</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(() => {
+                    const maxCount = Math.max(...utmSources.map(r => r._count.id), 1);
+                    return utmSources.map((row, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-800 capitalize">{row.referralSource ?? "—"}</td>
+                        <td className="px-4 py-3 text-gray-500 capitalize">{row.referralMedium ?? "—"}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-800 tabular-nums">{row._count.id}</td>
+                        <td className="px-4 py-3 w-32">
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(row._count.id / maxCount) * 100}%` }} />
+                          </div>
+                        </td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 

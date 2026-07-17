@@ -19,14 +19,16 @@ export const CONFIG_DEFAULTS: Record<string, string> = {
   og_description: "Create accurate BOQs, manage tenders, bid on projects, and collaborate with your team.",
   // Pricing & Trial
   trial_days: "14",
-  price_solo_monthly: "999",
-  price_team3_monthly: "1999",
-  price_team5_monthly: "3000",
+  price_solo_monthly: "1499",
+  price_team3_monthly: "3499",
+  price_team5_monthly: "5499",
   price_per_seat_enterprise: "550",
   annual_free_months: "2",
-  // Storage
+  // Storage (per plan tier)
   storage_limit_solo_gb: "10",
-  storage_limit_team_gb: "20",
+  storage_limit_team3_gb: "20",
+  storage_limit_team5_gb: "30",
+  storage_limit_enterprise_gb: "100",
   // Contact
   contact_email: "hello@estimatenepal.com",
   contact_whatsapp: "+977XXXXXXXXX",
@@ -58,9 +60,11 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   price_team5_monthly: "Team of 5 plan monthly price (NPR)",
   price_per_seat_enterprise: "Enterprise per-seat anchor price (NPR)",
   annual_free_months: "Free months when paying annually (e.g. 2 = pay 10 get 12)",
-  // Storage
+  // Storage (per plan tier)
   storage_limit_solo_gb: "Solo plan storage limit in GB",
-  storage_limit_team_gb: "Team plan storage limit in GB",
+  storage_limit_team3_gb: "Team of 3 plan storage limit in GB",
+  storage_limit_team5_gb: "Team of 5 plan storage limit in GB",
+  storage_limit_enterprise_gb: "Enterprise plan storage limit in GB",
   // Contact
   contact_email: "Public support/sales email address",
   contact_whatsapp: "WhatsApp number with country code (e.g. +977XXXXXXXXX)",

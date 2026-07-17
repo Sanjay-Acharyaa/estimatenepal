@@ -133,8 +133,9 @@ export async function GET(req: NextRequest) {
 
     // C3: emailBouncedAt: null excludes users with hard bounces so we never retry dead addresses.
     // emailUnsubscribedAt: null excludes opted-out users at the DB level (no JS check needed).
+    // isTestAccount: false skips internal test orgs from all lifecycle emails.
     const ownerSelect = {
-      where: { role: "OWNER" as const, emailBouncedAt: null, emailUnsubscribedAt: null },
+      where: { role: "OWNER" as const, emailBouncedAt: null, emailUnsubscribedAt: null, isTestAccount: false },
       select: { id: true, name: true, email: true },
       take: 1,
     };
@@ -210,6 +211,7 @@ export async function GET(req: NextRequest) {
         where: {
           createdAt: { gte: npsFrom, lte: npsTo },
           isSuperAdmin: false,
+          isTestAccount: false,
           emailVerified: true,
           npsSentAt: null,
           orgId: { not: null },

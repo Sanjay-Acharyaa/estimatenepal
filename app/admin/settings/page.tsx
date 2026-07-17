@@ -29,8 +29,8 @@ const SECTIONS = [
   },
   {
     title: "Storage Limits",
-    description: "Per-org storage cap in gigabytes.",
-    keys: ["storage_limit_solo_gb", "storage_limit_team_gb"],
+    description: "Per-plan storage cap in gigabytes.",
+    keys: ["storage_limit_solo_gb", "storage_limit_team3_gb", "storage_limit_team5_gb", "storage_limit_enterprise_gb"],
   },
   {
     title: "Contact",

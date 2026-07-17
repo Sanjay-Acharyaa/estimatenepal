@@ -7,6 +7,16 @@ import { fmtNPR } from "@/lib/format";
 export const metadata: Metadata = {
   title: "Pricing — Estimate Nepal",
   description: "Simple, transparent pricing for construction estimating in Nepal. Start free, upgrade when ready.",
+  alternates: { canonical: "https://estimatenepal.com/pricing" },
+  openGraph: {
+    title: "Pricing — Estimate Nepal",
+    description: "Simple, transparent pricing for construction estimating in Nepal. Start free, upgrade when ready.",
+    url: "https://estimatenepal.com/pricing",
+  },
+  twitter: {
+    title: "Pricing — Estimate Nepal",
+    description: "Simple, transparent pricing for construction estimating in Nepal. Start free, upgrade when ready.",
+  },
 };
 
 const fmt = fmtNPR;
@@ -60,7 +70,7 @@ export default async function PricingPage() {
       price: priceTeam3,
       anchor: anchorTeam3,
       users: "Up to 3 users",
-      storage: `${cfg.storage_limit_team_gb || "20"} GB`,
+      storage: `${cfg.storage_limit_team3_gb || "20"} GB`,
       features: ["Everything in Solo Pro", "3 team members", "Role-based access", "Shared project library", "Live collaboration"],
       cta: "Pay Now",
       href: "/checkout?plan=team-3",
@@ -74,7 +84,7 @@ export default async function PricingPage() {
       price: priceTeam5,
       anchor: anchorTeam5,
       users: "Up to 5 users",
-      storage: `${cfg.storage_limit_team_gb || "20"} GB`,
+      storage: `${cfg.storage_limit_team5_gb || "30"} GB`,
       features: ["Everything in Team 3", "5 team members", "Priority support", "Custom assembly library", "Advanced analytics"],
       cta: "Pay Now",
       href: "/checkout?plan=team-5",

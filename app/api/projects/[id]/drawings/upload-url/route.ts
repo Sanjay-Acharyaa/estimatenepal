@@ -36,13 +36,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
     }
 
-    // Enforce per-org storage limit (admin-configurable, defaults to 10 GB)
-    const storageLimitGb = await getConfigNum("storage_limit_solo_gb");
-    const STORAGE_LIMIT = BigInt(storageLimitGb * 1024 * 1024 * 1024);
+    // Enforce per-plan storage limit — pick config key based on org's planTier
     const org = await prisma.org.findUnique({
       where: { id: project.orgId },
-      select: { storageUsedBytes: true },
+      select: { storageUsedBytes: true, planTier: true },
     });
+    const STORAGE_CONFIG_KEY: Record<string, string> = {
+      TRIAL: "storage_limit_solo_gb",
+      SOLO: "storage_limit_solo_gb",
+      TEAM_3: "storage_limit_team3_gb",
+      TEAM_5: "storage_limit_team5_gb",
+      ENTERPRISE: "storage_limit_enterprise_gb",
+      ACADEMIC: "storage_limit_team3_gb",
+    };
+    const configKey = STORAGE_CONFIG_KEY[org?.planTier ?? "SOLO"] ?? "storage_limit_solo_gb";
+    const storageLimitGb = await getConfigNum(configKey);
+    const STORAGE_LIMIT = BigInt(storageLimitGb * 1024 * 1024 * 1024);
     if (org && org.storageUsedBytes + BigInt(parsed.data.fileSize) > STORAGE_LIMIT) {
       return apiError(
         "STORAGE_LIMIT_EXCEEDED",

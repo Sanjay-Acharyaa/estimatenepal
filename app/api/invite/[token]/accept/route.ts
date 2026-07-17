@@ -31,12 +31,32 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     const invite = await prisma.orgInvite.findUnique({
       where: { token: params.token },
-      include: { org: { select: { id: true, name: true } } },
+      include: {
+        org: {
+          select: {
+            id: true, name: true, planTier: true,
+            _count: { select: { users: true } },
+          },
+        },
+      },
     });
 
     if (!invite) throw notFound("Invite");
     if (invite.acceptedAt) throw conflict("This invitation has already been accepted.");
     if (invite.expiresAt < new Date()) return apiError("VALIDATION_ERROR", "This invitation has expired.", 400);
+
+    // Enforce plan member limit at accept time (same limits as invite-send)
+    const PLAN_LIMITS: Record<string, number> = {
+      TRIAL: 3, SOLO: 1, TEAM_3: 3, TEAM_5: 5, ENTERPRISE: 999, ACADEMIC: 5,
+    };
+    const maxMembers = PLAN_LIMITS[invite.org.planTier] ?? 3;
+    if (invite.org._count.users >= maxMembers) {
+      return apiError(
+        "PLAN_LIMIT",
+        `This organisation has reached its plan limit of ${maxMembers} member${maxMembers === 1 ? "" : "s"}. The owner must upgrade before new members can join.`,
+        403
+      );
+    }
 
     const body = await req.json();
     const parsed = acceptSchema.safeParse(body);

@@ -22,7 +22,7 @@ const createSchema = z.object({
   durationDays: z.number().int().min(1).max(365),
   count: z.number().int().min(1).max(50).default(1),
   planType: z.enum(["PRO", "ENTERPRISE"]).optional(),
-  planTier: z.enum(["SOLO", "TEAM3", "TEAM5", "ENTERPRISE"]).optional(),
+  planTier: z.enum(["SOLO", "TEAM_3", "TEAM_5", "ENTERPRISE"]).optional(),
 });
 
 export async function GET(req: NextRequest) {

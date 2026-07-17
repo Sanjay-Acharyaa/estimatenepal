@@ -11,6 +11,7 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 const createSchema = z.object({
   expiresInDays: z.number().min(1).max(365).optional(),
   clientEmail: z.string().email().optional(),
+  purpose: z.enum(["proposal", "view"]).default("proposal"),
 });
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         expiresAt,
         createdBy: token.id as string,
         clientEmail: parsed.data.clientEmail ?? null,
+        purpose: parsed.data.purpose,
       },
     });
 

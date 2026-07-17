@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { OrgPlanSetter } from "@/components/ui/OrgPlanSetter";
+import { UserTestToggle } from "@/components/ui/UserTestToggle";
 import { fmtNPR } from "@/lib/format";
 
 const LT = "loadtest.estimatenepal.local";
-const PLAN_PRICE: Record<string, number> = { SOLO: 1499, TEAM3: 3499, TEAM5: 5499, ENTERPRISE: 9999 };
+const PLAN_PRICE: Record<string, number> = { SOLO: 1499, TEAM_3: 3499, TEAM_5: 5499, ENTERPRISE: 9999 };
 
 export default async function SuperAdminPage() {
   const now     = new Date();
@@ -223,9 +224,7 @@ export default async function SuperAdminPage() {
                       {user.isSuperAdmin && (
                         <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded">SUPER</span>
                       )}
-                      {(user.isTestAccount || user.email.includes(LT)) && (
-                        <span className="ml-2 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">TEST</span>
-                      )}
+                      <UserTestToggle userId={user.id} initial={user.isTestAccount || user.email.includes(LT)} />
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{user.email}</td>
                     <td className="px-4 py-3 text-gray-600">
