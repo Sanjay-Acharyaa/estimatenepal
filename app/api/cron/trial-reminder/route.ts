@@ -97,34 +97,39 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Rate limited — cron already running or recently ran." }, { status: 429 });
     }
   } catch (err) {
-    console.error("[trial-reminder] Redis lock failed (proceeding without lock):", (err as Error).message);
+    console.error("[trial-reminder] Redis lock failed (aborting):", (err as Error).message);
+    return NextResponse.json({ error: "Lock failed — Redis unavailable" }, { status: 503 });
   }
 
+  const cronStartMs = Date.now();
   const now = new Date();
   const sent = { day7: 0, day12: 0, reminder3d: 0, expired: 0, churn: 0, nps: 0, reengagement7: 0, reengagement14: 0, reengagement21: 0, dataWarning: 0, dataWiped: 0 };
   const fail = { day7: 0, day12: 0, reminder3d: 0, expired: 0, churn: 0, nps: 0, reengagement7: 0, reengagement14: 0, reengagement21: 0, dataWarning: 0, dataWiped: 0 };
+  let cronError: string | undefined;
 
   try {
     const since48h  = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-    const day7From  = new Date(now.getTime() - 8  * 24 * 60 * 60 * 1000);
+    // +1 extra day on each window catches emails missed if cron skipped a run
+    const day7From  = new Date(now.getTime() - 9  * 24 * 60 * 60 * 1000);
     const day7To    = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000);
     const d12From   = new Date(now.getTime() + 2  * 24 * 60 * 60 * 1000);
     const d12To     = new Date(now.getTime() + 3  * 24 * 60 * 60 * 1000);
     const rem3From  = new Date(now.getTime() + 3  * 24 * 60 * 60 * 1000);
     const rem3To    = new Date(now.getTime() + 4  * 24 * 60 * 60 * 1000);
-    const expFrom   = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const churnFrom = new Date(now.getTime() - 3  * 24 * 60 * 60 * 1000);
+    const expFrom   = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    const churnFrom = new Date(now.getTime() - 4  * 24 * 60 * 60 * 1000);
     const churnTo   = new Date(now.getTime() - 2  * 24 * 60 * 60 * 1000);
-    const re7From   = new Date(now.getTime() - 8  * 24 * 60 * 60 * 1000);
+    const re7From   = new Date(now.getTime() - 9  * 24 * 60 * 60 * 1000);
     const re7To     = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000);
-    const re14From  = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+    const re14From  = new Date(now.getTime() - 16 * 24 * 60 * 60 * 1000);
     const re14To    = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    const re21From  = new Date(now.getTime() - 22 * 24 * 60 * 60 * 1000);
+    const re21From  = new Date(now.getTime() - 23 * 24 * 60 * 60 * 1000);
     const re21To    = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
-    const dw30From  = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000);
+    const dw30From  = new Date(now.getTime() - 32 * 24 * 60 * 60 * 1000);
     const dw30To    = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const npsFrom   = new Date(now.getTime() - 8  * 24 * 60 * 60 * 1000);
-    const npsTo     = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000);
+    // NPS at day 10 (was day 7) — users need enough time to form an opinion
+    const npsFrom   = new Date(now.getTime() - 11 * 24 * 60 * 60 * 1000);
+    const npsTo     = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
 
     // C3: emailBouncedAt: null excludes users with hard bounces so we never retry dead addresses.
     // emailUnsubscribedAt: null excludes opted-out users at the DB level (no JS check needed).
@@ -146,12 +151,13 @@ export async function GET(req: NextRequest) {
       annualFreeMonths,
     ] = await Promise.all([
       getTemplates(),
+      // Only count successfully sent emails for dedup — failed emails should be retried
       prisma.emailLog.findMany({
-        where: { sentAt: { gte: since48h }, orgId: { not: null } },
+        where: { sentAt: { gte: since48h }, orgId: { not: null }, status: "sent" },
         select: { orgId: true, emailType: true },
       }),
       prisma.emailLog.findMany({
-        where: { sentAt: { gte: since48h }, emailType: "nps" },
+        where: { sentAt: { gte: since48h }, emailType: "nps", status: "sent" },
         select: { recipientEmail: true },
       }),
       prisma.org.findMany({
@@ -184,11 +190,11 @@ export async function GET(req: NextRequest) {
       }),
       prisma.org.findMany({
         where: { trialEndsAt: { gte: re21From, lte: re21To }, planTier: "TRIAL", plan: "FREE" },
-        select: { id: true, users: ownerSelect },
+        select: { id: true, trialEndsAt: true, users: ownerSelect },
       }),
       prisma.org.findMany({
         where: { trialEndsAt: { gte: dw30From, lte: dw30To }, planTier: "TRIAL", plan: "FREE", dataWipedAt: null },
-        select: { id: true, users: ownerSelect },
+        select: { id: true, trialEndsAt: true, users: ownerSelect },
       }),
       prisma.org.findMany({
         where: {
@@ -375,6 +381,8 @@ export async function GET(req: NextRequest) {
       const fallbackSubject =
         churnReason === "too_expensive"    ? "About the pricing concern you raised" :
         churnReason === "missing_features" ? "The feature you needed" :
+        churnReason === "just_exploring"   ? "No pressure — your projects are still here" :
+        churnReason === "competitor"       ? "We heard you went elsewhere" :
         "Your Estimate Nepal projects are still here";
       const { subject, html } = buildEmail("reengagement_7", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL, price },
@@ -393,9 +401,10 @@ export async function GET(req: NextRequest) {
       markSent(org.id, "reengagement_14");
       const u = unsubUrl(owner.id, BASE_URL);
       const churnReason = (org as any).churnReason as string | null | undefined;
-      const fallbackSubject = churnReason === "too_expensive"
-        ? "Still thinking about pricing?"
-        : "Two weeks. Your data is still safe.";
+      const fallbackSubject =
+        churnReason === "too_expensive"    ? "Still thinking about pricing?" :
+        churnReason === "missing_features" ? "An update on the feature you mentioned" :
+        "Two weeks. Your data is still safe.";
       const { subject, html } = buildEmail("reengagement_14", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL, price },
         { subject: fallbackSubject, html: (url?) => trialReengagement14EmailHtml(owner.name, UPGRADE_URL, url, price, churnReason ?? undefined) },
@@ -412,9 +421,17 @@ export async function GET(req: NextRequest) {
       if (alreadySent(org.id, "reengagement_21")) continue;
       markSent(org.id, "reengagement_21");
       const u = unsubUrl(owner.id, BASE_URL);
+      // Deletion happens at trialEndsAt + 30 days
+      const deletionDate = org.trialEndsAt
+        ? new Date(org.trialEndsAt.getTime() + 30 * 24 * 60 * 60 * 1000)
+            .toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+        : undefined;
       const { subject, html } = buildEmail("reengagement_21", tplMap,
-        { name: owner.name, upgradeUrl: UPGRADE_URL },
-        { subject: "Last chance: your Estimate Nepal data will be removed in 9 days", html: (url?) => trialReengagement21EmailHtml(owner.name, UPGRADE_URL, url) },
+        { name: owner.name, upgradeUrl: UPGRADE_URL, deletionDate: deletionDate ?? "" },
+        { subject: deletionDate
+            ? `Last chance: your Estimate Nepal data will be removed on ${deletionDate}`
+            : "Last chance: your Estimate Nepal data will be removed soon",
+          html: (url?) => trialReengagement21EmailHtml(owner.name, UPGRADE_URL, url, deletionDate) },
         u,
       );
       re21Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_21" }));
@@ -428,9 +445,17 @@ export async function GET(req: NextRequest) {
       if (alreadySent(org.id, "data_warning")) continue;
       markSent(org.id, "data_warning");
       const u = unsubUrl(owner.id, BASE_URL);
+      // Deletion happens at trialEndsAt + 31 days
+      const deletionDate = org.trialEndsAt
+        ? new Date(org.trialEndsAt.getTime() + 31 * 24 * 60 * 60 * 1000)
+            .toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+        : undefined;
       const { subject, html } = buildEmail("data_warning", tplMap,
-        { name: owner.name, upgradeUrl: UPGRADE_URL },
-        { subject: "Your Estimate Nepal data will be deleted in 24 hours", html: (url?) => trialDataWarningEmailHtml(owner.name, UPGRADE_URL, url) },
+        { name: owner.name, upgradeUrl: UPGRADE_URL, deletionDate: deletionDate ?? "" },
+        { subject: deletionDate
+            ? `Your Estimate Nepal data will be deleted on ${deletionDate}`
+            : "Your Estimate Nepal data will be deleted soon",
+          html: (url?) => trialDataWarningEmailHtml(owner.name, UPGRADE_URL, url, deletionDate) },
         u,
       );
       dw30Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "data_warning" }));
@@ -493,34 +518,62 @@ export async function GET(req: NextRequest) {
     const tdw  = tally(dw30Results);   sent.dataWarning   = tdw.sent;  fail.dataWarning   = tdw.failed;
     const tn   = tally(npsResults);    sent.nps           = tn.sent;   fail.nps           = tn.failed;
 
-    // ── Day 31+: wipe project data (must stay sequential — DB deletes per org) ────
+    // ── Day 31+: wipe project data — send notification first, then delete.
+    // If deletion fails, the user was already notified and data stays intact (safe failure mode).
+    // Parallel across orgs for throughput.
+    const wipeTasks: Promise<void>[] = [];
     for (const org of wipeOrgs) {
       const owner = org.users[0];
       if (!owner) continue;
-      try {
+      wipeTasks.push((async () => {
+        const u = unsubUrl(owner.id, BASE_URL);
+        const { subject, html } = buildEmail("data_wiped", tplMap,
+          { name: owner.name, baseUrl: BASE_URL },
+          { subject: "Your Estimate Nepal trial data has been removed", html: (url?) => trialDataWipedEmailHtml(owner.name, BASE_URL, url) },
+          u,
+        );
+        // 1. Notify first — if this fails, skip deletion so user is never un-notified
+        await sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "data_wiped" });
+        // 2. Delete data only after email is dispatched
         await prisma.project.deleteMany({ where: { orgId: org.id } });
-        await prisma.org.update({ where: { id: org.id }, data: { dataWipedAt: now } });
+        await (prisma.org.update as any)({ where: { id: org.id }, data: { dataWipedAt: now } });
+      })());
+    }
+    const wipeResults = await Promise.allSettled(wipeTasks);
+    for (const r of wipeResults) {
+      if (r.status === "fulfilled") {
         sent.dataWiped++;
-      } catch (err) {
+      } else {
         fail.dataWiped++;
-        console.error("[trial-reminder] dataWipe failed for", org.id, (err as Error).message);
-        continue;
+        console.error("[trial-reminder] dataWipe failed:", (r.reason as Error)?.message ?? r.reason);
       }
-      const u = owner ? unsubUrl(owner.id, BASE_URL) : undefined;
-      const { subject, html } = buildEmail("data_wiped", tplMap,
-        { name: owner.name, baseUrl: BASE_URL },
-        { subject: "Your Estimate Nepal trial data has been removed", html: (url?) => trialDataWipedEmailHtml(owner.name, BASE_URL, url) },
-        u,
-      );
-      await sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "data_wiped" });
     }
 
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("[trial-reminder] Failed:", message);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    cronError = err instanceof Error ? err.message : "Unknown error";
+    console.error("[trial-reminder] Failed:", cronError);
   }
 
-  console.log("[trial-reminder]", { sent, failed: fail, timestamp: new Date().toISOString() });
-  return NextResponse.json({ sent, failed: fail });
+  const durationMs = Date.now() - cronStartMs;
+  const totalSent = Object.values(sent).reduce((a, b) => a + b, 0);
+  const totalFailed = Object.values(fail).reduce((a, b) => a + b, 0);
+
+  // Persist cron run history — non-blocking, never fail the response
+  (prisma as any).cronLog.create({
+    data: {
+      durationMs,
+      totalSent,
+      totalFailed,
+      sent,
+      failed: fail,
+      error: cronError ?? null,
+    },
+  }).catch((e: Error) => console.error("[trial-reminder] CronLog write failed:", e.message));
+
+  console.log("[trial-reminder]", { sent, failed: fail, durationMs, timestamp: new Date().toISOString() });
+
+  if (cronError) {
+    return NextResponse.json({ error: "Internal server error", sent, failed: fail }, { status: 500 });
+  }
+  return NextResponse.json({ sent, failed: fail, durationMs });
 }

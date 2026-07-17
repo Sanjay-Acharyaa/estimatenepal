@@ -65,21 +65,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // H2: Hard failures — permanently mark as failed and suppress future sends.
-  if (eventType === "email.bounced" || eventType === "email.complained") {
+  // H2: Hard bounces — mark log failed and permanently suppress future sends to this address.
+  if (eventType === "email.bounced") {
     await Promise.all([
-      // Mark log as failed
       prisma.emailLog.updateMany({
         where: { resendEmailId: emailId },
-        data: { status: "failed", errorMessage: eventType },
-      }).catch((err: Error) => console.error("[webhooks/resend] EmailLog update failed:", err.message)),
-
-      // C3/M7: Set emailBouncedAt on the User so the cron never sends to this address again.
+        data: { status: "failed", errorMessage: "email.bounced" },
+      }).catch((err: Error) => console.error("[webhooks/resend] EmailLog bounce update failed:", err.message)),
       ...(toAddrs.length > 0 ? [
         prisma.user.updateMany({
           where: { email: { in: toAddrs }, emailBouncedAt: null },
           data: { emailBouncedAt: new Date() },
         }).catch((err: Error) => console.error("[webhooks/resend] User bounce update failed:", err.message)),
+      ] : []),
+    ]);
+  }
+
+  // Spam complaints — treat as an unsubscribe to respect user preference.
+  if (eventType === "email.complained") {
+    await Promise.all([
+      prisma.emailLog.updateMany({
+        where: { resendEmailId: emailId },
+        data: { status: "failed", errorMessage: "email.complained" },
+      }).catch((err: Error) => console.error("[webhooks/resend] EmailLog complaint update failed:", err.message)),
+      ...(toAddrs.length > 0 ? [
+        (prisma.user.updateMany as any)({
+          where: { email: { in: toAddrs }, emailUnsubscribedAt: null },
+          data: { emailUnsubscribedAt: new Date() },
+        }).catch((err: Error) => console.error("[webhooks/resend] User unsubscribe (complaint) update failed:", err.message)),
       ] : []),
     ]);
   }

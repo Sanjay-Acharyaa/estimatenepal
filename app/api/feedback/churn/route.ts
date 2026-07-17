@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, churnThanksEmailHtml } from "@/lib/email";
+import { logEmail } from "@/lib/email-log";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const VALID_REASONS = ["too_expensive", "missing_features", "just_exploring", "competitor", "too_complex", "not_relevant"];
 
 const NO_CACHE = { "Cache-Control": "no-store, max-age=0" };
-
-const UPGRADE_URL = `${process.env.NEXTAUTH_URL ?? "https://estimatenepal.com"}/pricing`;
 
 export async function GET(req: NextRequest) {
   const limited = await checkApiRateLimit(getClientIp(req));
@@ -51,19 +50,26 @@ export async function GET(req: NextRequest) {
 
   // Send churn_thanks email only on first click (when we actually recorded the reason)
   if (updatedCount > 0) {
+    const UPGRADE_URL = `${process.env.NEXTAUTH_URL ?? "https://estimatenepal.com"}/pricing`;
     prisma.org.findFirst({
       where: { id: orgId },
       select: {
         name: true,
         users: { where: { role: "OWNER" as const }, select: { name: true, email: true }, take: 1 },
       },
-    }).then(org => {
+    }).then(async org => {
       const owner = org?.users[0];
       if (!owner) return;
-      return sendEmail({
-        to: owner.email,
-        subject: "Thank you for telling us",
-        html: churnThanksEmailHtml(owner.name, UPGRADE_URL),
+      const subject = "Thank you for telling us";
+      const html = churnThanksEmailHtml(owner.name, UPGRADE_URL, reason);
+      const emailId = await sendEmail({ to: owner.email, subject, html });
+      await logEmail({
+        recipientEmail: owner.email,
+        recipientName: owner.name,
+        emailType: "churn_thanks",
+        subject,
+        status: "sent",
+        resendEmailId: emailId,
       });
     }).catch(err => console.error("[feedback/churn] churn_thanks send failed:", (err as Error).message));
   }

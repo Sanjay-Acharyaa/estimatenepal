@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const thanksUrl = new URL("/feedback/thanks?type=churn&reason=other", base);
 
-  if (!orgId || !key || !text?.trim()) {
+  if (!orgId || !key || !text?.trim() || text.trim().length < 10) {
     return NextResponse.redirect(thanksUrl, { headers: NO_CACHE });
   }
 
@@ -50,47 +50,59 @@ export async function POST(req: NextRequest) {
 
   // Save feedback; set churnReason to "other" only if not already captured via button click.
   const now = new Date();
-  await prisma.$transaction([
-    prisma.org.updateMany({
-      where: { id: orgId, churnReason: null },
-      data: { churnReason: "other" },
-    }),
-    prisma.org.update({
-      where: { id: orgId },
-      data: { churnFeedback: truncated, churnFeedbackAt: now },
-    }),
-  ]).catch((err: Error) =>
-    console.error("[feedback/churn-text] DB save failed:", err.message)
-  );
-
-  // Fire admin alert — don't await
-  prisma.org.findFirst({
-    where: { id: orgId },
-    select: {
-      name: true,
-      users: { where: { role: "OWNER" as const }, select: { email: true }, take: 1 },
-    },
-  }).then(org => {
-    if (!org) return;
-    const ownerEmail = org.users[0]?.email ?? "unknown";
-    const safeText = truncated
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br/>");
-    return sendEmail({
-      to: ADMIN_EMAIL,
-      subject: `New churn feedback: ${org.name}`,
-      html: `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;color:#334155">
-        <h2 style="color:#0f172a;margin:0 0 16px">New open-text churn feedback</h2>
-        <p><strong>Organisation:</strong> ${org.name}</p>
-        <p><strong>Owner email:</strong> ${ownerEmail}</p>
-        <p><strong>Submitted:</strong> ${now.toLocaleString("en-GB")}</p>
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0"/>
-        <p style="background:#f8fafc;border-left:3px solid #1d4ed8;padding:12px 16px;color:#475569">${safeText}</p>
-      </body></html>`,
+  let isFirstFeedback = false;
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await (tx.org.findUnique as any)({
+        where: { id: orgId },
+        select: { churnFeedback: true },
+      });
+      const firstSubmission = existing?.churnFeedback === null || existing?.churnFeedback === undefined;
+      await (tx.org.updateMany as any)({
+        where: { id: orgId, churnReason: null },
+        data: { churnReason: "other" },
+      });
+      await (tx.org.update as any)({
+        where: { id: orgId },
+        data: { churnFeedback: truncated, churnFeedbackAt: now },
+      });
+      return { firstSubmission };
     });
-  }).catch(err => console.error("[feedback/churn-text] admin alert failed:", (err as Error).message));
+    isFirstFeedback = result.firstSubmission;
+  } catch (err) {
+    console.error("[feedback/churn-text] DB save failed:", (err as Error).message);
+  }
+
+  // Fire admin alert only on first submission — don't await
+  if (isFirstFeedback) {
+    prisma.org.findFirst({
+      where: { id: orgId },
+      select: {
+        name: true,
+        users: { where: { role: "OWNER" as const }, select: { email: true }, take: 1 },
+      },
+    }).then(org => {
+      if (!org) return;
+      const ownerEmail = org.users[0]?.email ?? "unknown";
+      const safeText = truncated
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br/>");
+      return sendEmail({
+        to: ADMIN_EMAIL,
+        subject: `New churn feedback: ${org.name}`,
+        html: `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;color:#334155">
+          <h2 style="color:#0f172a;margin:0 0 16px">New open-text churn feedback</h2>
+          <p><strong>Organisation:</strong> ${org.name}</p>
+          <p><strong>Owner email:</strong> ${ownerEmail}</p>
+          <p><strong>Submitted:</strong> ${now.toLocaleString("en-GB")}</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0"/>
+          <p style="background:#f8fafc;border-left:3px solid #1d4ed8;padding:12px 16px;color:#475569">${safeText}</p>
+        </body></html>`,
+      });
+    }).catch(err => console.error("[feedback/churn-text] admin alert failed:", (err as Error).message));
+  }
 
   return NextResponse.redirect(thanksUrl, { headers: NO_CACHE });
 }

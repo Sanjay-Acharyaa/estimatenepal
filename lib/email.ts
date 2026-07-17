@@ -37,7 +37,13 @@ export async function sendEmail({
 }): Promise<string | null> {
   const from = process.env.EMAIL_FROM;
   if (!from) throw new Error("EMAIL_FROM env var is not set");
-  const result = await resend.emails.send({ from, to, subject, html });
+
+  // Timeout after 10 seconds — prevents a slow Resend API from stalling the cron
+  const sendPromise = resend.emails.send({ from, to, subject, html });
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Resend API timeout after 10s")), 10000)
+  );
+  const result = await Promise.race([sendPromise, timeoutPromise]);
   return (result as any)?.data?.id ?? (result as any)?.id ?? null;
 }
 
@@ -275,20 +281,52 @@ export function churnReasonEmailHtml(
   `, unsubscribeUrl);
 }
 
-export function churnThanksEmailHtml(name: string, upgradeUrl?: string): string {
+export function churnThanksEmailHtml(name: string, upgradeUrl?: string, reason?: string): string {
   const safeName = escapeHtml(firstName(name));
   const pricingUrl = upgradeUrl ?? "https://estimatenepal.com/pricing";
+
+  // Reason-specific follow-up paragraph — contextual, conversion-focused
+  let reasonNote = "";
+  if (reason === "too_expensive") {
+    reasonNote = `<p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      If cost was the main concern, the annual plan comes to significantly less per month.
+      Or just reply to this email — we have helped other small firms find an option that works for them.
+    </p>`;
+  } else if (reason === "missing_features") {
+    reasonNote = `<p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      We are actively building based on what users tell us. If something specific was missing,
+      reply and let us know — we may already have it or have it scheduled. We will be honest with you.
+    </p>`;
+  } else if (reason === "just_exploring") {
+    reasonNote = `<p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      When a real project comes up and you need accurate BOQs or takeoffs fast, we will be here.
+      Your trial data stays safe until then.
+    </p>`;
+  } else if (reason === "competitor") {
+    reasonNote = `<p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      We hope the new tool serves you well. If you ever want to compare or come back, we are here.
+      Estimate Nepal is built specifically for Nepal&apos;s rates, formats, and workflows — that difference tends to matter.
+    </p>`;
+  } else if (reason === "too_complex") {
+    reasonNote = `<p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      We hear that. If you are open to it, we offer a free onboarding session —
+      15 minutes on a video call and most users find the workflow clicks immediately.
+      Reply to this email and we will set it up.
+    </p>`;
+  }
+
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Thank you for telling us</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
       Thank you for taking the time to tell us why you stopped. We read every response. Yours has been noted.
     </p>
+    ${reasonNote}
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
       If you change your mind, your projects and data are still here.
       You can upgrade at any time and pick up exactly where you left off.
     </p>
-    ${ctaButton(pricingUrl, "See Plans →")}
+    ${ctaButton(pricingUrl, "See What Fits Your Budget →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       If there is more you want to share about what was missing or what could be better, reply to this email or write to
       ${supportLink}. We read these personally.
@@ -306,7 +344,7 @@ export function npsEmailHtml(name: string, scores: { score: number; url: string 
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">How likely are you to recommend us?</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
-      You&apos;ve been using Estimate Nepal for a week. How&apos;s it going? On a scale of 0 to 10, how likely are you to recommend us to a colleague in construction or engineering?
+      You&apos;ve been using Estimate Nepal for 10 days. How&apos;s it going? On a scale of 0 to 10, how likely are you to recommend us to a colleague in construction or engineering?
     </p>
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px">
       <tr>${scoreButtons}</tr>
@@ -321,6 +359,35 @@ export function npsEmailHtml(name: string, scores: { score: number; url: string 
       This takes 1 click and helps us improve. Thank you for your time.
     </p>
   `, unsubscribeUrl);
+}
+
+export function npsDetractorFollowupEmailHtml(name: string, score: number): string {
+  const safeName = escapeHtml(firstName(name));
+  const safeScore = Number(score);
+  return wrapEmailHtml(`
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">You gave us a ${safeScore} — thank you for being honest</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      You rated us <strong>${safeScore} out of 10</strong>. That tells us something is not right, and we want to fix it.
+    </p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      Could you spare two minutes to tell us what went wrong? Specifically:
+    </p>
+    <ul style="color:#334155;font-size:15px;line-height:1.8;margin:0 0 16px;padding-left:20px">
+      <li>What were you trying to do when things went wrong?</li>
+      <li>What did you expect to happen?</li>
+      <li>What happened instead?</li>
+    </ul>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      Just reply to this email. We read every message and we will get back to you personally.
+    </p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      Or write directly to ${supportLinkBlue}. Either way, a real person reads it.
+    </p>
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Your feedback directly shapes what we build next. Thank you for taking the time.
+    </p>
+  `);
 }
 
 export function proposalResponseAdminEmailHtml(
@@ -457,7 +524,7 @@ function re7Generic(safeName: string, upgradeUrl: string, price?: string): strin
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
       Plans start from <strong>${planPrice(price)}</strong>. No long-term commitment.
     </p>
-    ${ctaButton(upgradeUrl, "Come Back →")}
+    ${ctaButton(upgradeUrl, "Resume Your Project →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Not sure yet? Reply to this email or write to ${supportLink} and let us talk.
       We have helped other contractors find a plan that fits their budget.
@@ -504,9 +571,53 @@ function re7MissingFeatures(safeName: string, upgradeUrl: string): string {
       Reply to this email or write to ${supportLinkBlue} and tell us what was missing.
       We will tell you honestly whether it is coming and when.
     </p>
-    ${ctaButton(upgradeUrl, "Come Back →")}
+    ${ctaButton(upgradeUrl, "Resume Your Project →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Your data is still here whenever you are ready.
+    </p>`;
+}
+
+// Personalized reengagement 7 — just exploring
+function re7JustExploring(safeName: string, upgradeUrl: string): string {
+  return `
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">No pressure — your projects are still here</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      You mentioned you were exploring when you signed up. That is completely fine.
+    </p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      When you have a real project coming up and need professional BOQs, measurements, and estimates fast,
+      Estimate Nepal will be here. Everything you built during the trial is waiting.
+    </p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      No commitment required. Start a plan when the work calls for it.
+    </p>
+    ${ctaButton(upgradeUrl, "Resume Your Project →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Questions? Write to ${supportLink}. We are happy to walk you through it when the time is right.
+    </p>`;
+}
+
+// Personalized reengagement 7 — switched to competitor
+function re7Competitor(safeName: string, upgradeUrl: string): string {
+  return `
+    <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">We heard you went elsewhere</h2>
+    <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      Completely fair. We want you to use the best tool for your work.
+    </p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+      What sets us apart is that Estimate Nepal is built specifically for Nepal — Nepal standard rates,
+      Nepal drawing formats, government BOQ export, and a team that understands local construction workflows.
+      Most alternatives are adapted from India or the West and require workarounds.
+    </p>
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
+      If the other tool is not working out, or if you want to run a side-by-side comparison on a real project,
+      reply to this email or write to ${supportLinkBlue}. We will help.
+    </p>
+    ${ctaButton(upgradeUrl, "Resume Your Project →")}
+    <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
+      Your trial data is still here. No need to start over.
     </p>`;
 }
 
@@ -523,6 +634,10 @@ export function trialReengagement7EmailHtml(
     content = re7TooExpensive(safeName, upgradeUrl);
   } else if (churnReason === "missing_features") {
     content = re7MissingFeatures(safeName, upgradeUrl);
+  } else if (churnReason === "just_exploring") {
+    content = re7JustExploring(safeName, upgradeUrl);
+  } else if (churnReason === "competitor") {
+    content = re7Competitor(safeName, upgradeUrl);
   } else {
     content = re7Generic(safeName, upgradeUrl, price);
   }
@@ -538,15 +653,22 @@ export function trialReengagement14EmailHtml(
 ): string {
   const safeName = escapeHtml(firstName(name));
 
-  // Personalized subject/opening for known reasons
+  // Personalized heading and extra note for known churn reasons
   const heading = churnReason === "too_expensive"
     ? "Still thinking about pricing?"
+    : churnReason === "missing_features"
+    ? "An update on the feature you mentioned"
     : "Two weeks. Your data is still safe.";
 
-  const pricingNote = churnReason === "too_expensive"
+  const reasonNote = churnReason === "too_expensive"
     ? `<p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
         If pricing is still the sticking point, write to ${supportLinkBlue} before upgrading.
         There may be options we have not discussed yet.
+      </p>`
+    : churnReason === "missing_features"
+    ? `<p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
+        We are actively building based on what our users tell us. If you wrote to us about what was missing,
+        we likely have an update or a workaround. Reply to this email or write to ${supportLinkBlue}.
       </p>`
     : "";
 
@@ -564,9 +686,9 @@ export function trialReengagement14EmailHtml(
       <p style="color:#15803d;font-size:14px;font-weight:600;margin:0 0 4px">Your work is safe</p>
       <p style="color:#166534;font-size:14px;margin:0">Upgrade at any time and continue working. Nothing is lost.</p>
     </div>
-    ${pricingNote}
+    ${reasonNote}
     <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>${planPrice(price)}</strong>. No long-term commitment.</p>
-    ${ctaButton(upgradeUrl, "Come Back to Estimate Nepal →")}
+    ${ctaButton(upgradeUrl, "Continue Where You Left Off →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       If there is a reason you have not come back that you have not told us, reply to this email or write to
       ${supportLink}. We read every message.
@@ -574,18 +696,19 @@ export function trialReengagement14EmailHtml(
   `, unsubscribeUrl);
 }
 
-export function trialReengagement21EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+export function trialReengagement21EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string, deletionDate?: string): string {
   const safeName = escapeHtml(firstName(name));
+  const removalDate = escapeHtml(deletionDate ?? "9 days");
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Last chance to keep your data</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      Your trial ended 3 weeks ago. We will be removing inactive trial data in <strong>9 days</strong>.
+      Your trial ended 3 weeks ago. We will be removing inactive trial data on <strong>${removalDate}</strong>.
       Upgrade now to keep your projects, drawings, and measurements permanently.
     </p>
     <div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:16px 20px;margin:0 0 20px">
-      <p style="color:#92400e;font-size:14px;font-weight:600;margin:0 0 4px">Data removal in 9 days</p>
-      <p style="color:#78350f;font-size:14px;margin:0">Upgrade before day 30 to preserve all your work permanently.</p>
+      <p style="color:#92400e;font-size:14px;font-weight:600;margin:0 0 4px">Data removal on ${removalDate}</p>
+      <p style="color:#78350f;font-size:14px;margin:0">Upgrade before this date to preserve all your work permanently.</p>
     </div>
     ${ctaButton(upgradeUrl, "Upgrade and Keep My Data →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -594,17 +717,18 @@ export function trialReengagement21EmailHtml(name: string, upgradeUrl: string, u
   `, unsubscribeUrl);
 }
 
-export function trialDataWarningEmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+export function trialDataWarningEmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string, deletionDate?: string): string {
   const safeName = escapeHtml(firstName(name));
+  const deleteOn = escapeHtml(deletionDate ?? "tomorrow");
   return wrapEmailHtml(`
-    <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">Your data will be deleted in 24 hours</h2>
+    <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">Your data will be deleted on ${deleteOn}</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
       This is your final notice. Your Estimate Nepal trial data, including all projects, drawings, measurements, and BOQs,
-      will be permanently deleted in <strong>24 hours</strong>.
+      will be permanently deleted on <strong>${deleteOn}</strong>.
     </p>
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin:0 0 20px">
-      <p style="color:#991b1b;font-size:14px;font-weight:600;margin:0 0 8px">Will be deleted tomorrow:</p>
+      <p style="color:#991b1b;font-size:14px;font-weight:600;margin:0 0 8px">Will be deleted on ${deleteOn}:</p>
       <ul style="color:#7f1d1d;font-size:14px;margin:0;padding-left:20px;line-height:1.8">
         <li>All projects and drawings</li>
         <li>All takeoff measurements</li>

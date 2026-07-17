@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { npsDetractorFollowupEmailHtml } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
+import { logEmail } from "@/lib/email-log";
 
 const NO_CACHE = { "Cache-Control": "no-store, max-age=0" };
 
@@ -31,10 +34,31 @@ export async function GET(req: NextRequest) {
   }
 
   // CS2: First-click-wins — only update if npsScore has not been recorded yet.
-  await prisma.user.updateMany({
+  const updateResult = await prisma.user.updateMany({
     where: { id: userId, npsScore: null },
     data: { npsScore: score },
-  }).catch((err: Error) => console.error("[feedback/nps] DB update failed:", err.message));
+  }).catch((err: Error) => { console.error("[feedback/nps] DB update failed:", err.message); return { count: 0 }; });
+
+  // Fire NPS detractor follow-up email for scores 0–6, only on first click
+  if (score <= 6 && updateResult.count > 0) {
+    prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+      .then(user => {
+        if (!user?.email || !user?.name) return;
+        const subject = `You gave us a ${score} — can you tell us more?`;
+        const html = npsDetractorFollowupEmailHtml(user.name, score);
+        return sendEmail({ to: user.email, subject, html })
+          .then(emailId => logEmail({
+            recipientEmail: user.email!,
+            recipientName: user.name!,
+            emailType: "nps_followup",
+            subject,
+            status: "sent",
+            resendEmailId: emailId,
+          }))
+          .catch((err: Error) => console.error("[feedback/nps] Detractor follow-up failed:", err.message));
+      })
+      .catch((err: Error) => console.error("[feedback/nps] User lookup failed:", err.message));
+  }
 
   // H2/L2: Redirect to a proper Next.js page instead of returning inline HTML.
   const base = process.env.NEXTAUTH_URL ?? "https://estimatenepal.com";

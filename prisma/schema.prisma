@@ -873,6 +873,20 @@ model EmailTemplateVersion {
   @@index([emailType, savedAt(sort: Desc)])
 }
 
+// Cron run audit log — written after every trial-reminder cron execution
+model CronLog {
+  id          String   @id @default(cuid())
+  runAt       DateTime @default(now())
+  durationMs  Int
+  totalSent   Int
+  totalFailed Int
+  sent        Json
+  failed      Json
+  error       String?  @db.Text
+
+  @@index([runAt(sort: Desc)])
+}
+
 // Analytics event log — fire-and-forget, never blocks requests, powers admin analytics dashboard
 model AnalyticsEvent {
   id        String   @id @default(cuid())

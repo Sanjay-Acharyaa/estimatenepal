@@ -20,6 +20,7 @@ export function ChurnTextForm({ org, feedbackKey }: { org: string; feedbackKey: 
         name="text"
         placeholder="What was missing, what did not work, or what we could do better..."
         required
+        minLength={10}
         maxLength={MAX}
         rows={5}
         onChange={e => setChars(e.target.value.length)}

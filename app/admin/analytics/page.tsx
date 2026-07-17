@@ -74,6 +74,8 @@ async function loadData() {
     emailHealthRows,
     unsubscribedCount,
     bouncedCount,
+    pdfExportOrgsCount,
+    cronLogs,
   ] = await Promise.all([
     // Orgs — exclude orgs whose only users are load-test accounts
     prisma.org.findMany({
@@ -206,6 +208,19 @@ async function loadData() {
     (prisma.user.count as any)({
       where: { emailBouncedAt: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
     }) as Promise<number>,
+
+    // Orgs that exported a PDF (unique org count) — moved here to run in parallel
+    prisma.analyticsEvent.groupBy({
+      by: ["orgId"],
+      where: { event: "pdf_export", orgId: { not: null } },
+    }).then(rows => rows.length),
+
+    // Last 5 cron run logs for admin visibility
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma as any).cronLog.findMany({
+      orderBy: { runAt: "desc" },
+      take: 5,
+    }).catch(() => []) as Promise<Array<{ id: string; runAt: Date; durationMs: number; totalSent: number; totalFailed: number; error: string | null }>>,
   ]);
 
   return {
@@ -217,6 +232,7 @@ async function loadData() {
     npsResponses, npsSentCount,
     churnFeedbackOrgs, churnFeedbackCount,
     emailHealthRows, unsubscribedCount, bouncedCount,
+    pdfExportOrgsCount, cronLogs,
     now, d7, in7,
   };
 }
@@ -232,6 +248,7 @@ export default async function AnalyticsDashboard() {
     npsResponses, npsSentCount,
     churnFeedbackOrgs, churnFeedbackCount,
     emailHealthRows, unsubscribedCount, bouncedCount,
+    pdfExportOrgsCount, cronLogs,
     now, in7,
   } = data;
 
@@ -309,9 +326,7 @@ export default async function AnalyticsDashboard() {
   const orgsVerified       = orgs.filter(o => o.users.some(u => u.emailVerified)).length;
   const orgsWithProjects   = orgs.filter(o => o._count.projects > 0).length;
   const orgsWithDrawings   = orgs.filter(o => (orgDrawingMap.get(o.id) ?? 0) > 0).length;
-  const pdfExportOrgs      = eventCount("pdf_export") > 0
-    ? (await prisma.analyticsEvent.groupBy({ by: ["orgId"], where: { event: "pdf_export", orgId: { not: null } } })).length
-    : 0;
+  const pdfExportOrgs      = pdfExportOrgsCount;
 
   // ── Per-org analytics (engagement score now uses per-org drawing count) ───
   const orgAnalytics = orgs.map(org => {
@@ -738,7 +753,7 @@ export default async function AnalyticsDashboard() {
               <span className="ml-2 text-gray-400 font-normal normal-case">
                 {churnFeedbackCount > 50
                   ? `Showing latest 50 of ${churnFeedbackCount}`
-                  : `${churnFeedbackCount} response${churnFeedbackCount !== 1 ? "s" : ""}`}
+                  : `${churnFeedbackOrgs.length} response${churnFeedbackOrgs.length !== 1 ? "s" : ""}`}
               </span>
             )}
           </h2>
@@ -918,7 +933,53 @@ export default async function AnalyticsDashboard() {
           </div>
         </section>
 
-        {/* ── 11. Cohort Retention ───────────────────────────────────── */}
+        {/* ── 11. Cron History ──────────────────────────────────────── */}
+        <section>
+          <div className="flex items-center gap-3 mb-3">
+            <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest">Cron History — Last 5 Runs</h2>
+            <form action="/api/admin/emails/retry-failed" method="POST">
+              <button type="submit" className="px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300 rounded-lg hover:bg-amber-200 transition-colors">
+                Retry Failed Emails
+              </button>
+            </form>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+            {cronLogs.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-6">No cron runs logged yet. The cron history will appear here after the first run.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    {["Run At", "Duration", "Sent", "Failed", "Status"].map(h => (
+                      <th key={h} className="text-left px-4 py-2.5 text-gray-600 font-semibold text-xs">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {cronLogs.map(log => (
+                    <tr key={log.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 text-gray-700 text-xs whitespace-nowrap">
+                        {new Date(log.runAt).toLocaleString("en-NP", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                      <td className="px-4 py-2 text-gray-500 text-xs">{(log.durationMs / 1000).toFixed(1)}s</td>
+                      <td className="px-4 py-2 font-bold text-green-700">{log.totalSent}</td>
+                      <td className="px-4 py-2 font-bold">{log.totalFailed > 0 ? <span className="text-red-600">{log.totalFailed}</span> : <span className="text-gray-300">0</span>}</td>
+                      <td className="px-4 py-2">
+                        {log.error ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700" title={log.error}>Error</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">OK</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        {/* ── 12. Cohort Retention ───────────────────────────────────── */}
         <section>
           <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-1">Cohort Retention</h2>
           <p className="text-xs text-gray-400 mb-3">
