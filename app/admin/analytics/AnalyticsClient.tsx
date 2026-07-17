@@ -442,7 +442,7 @@ export function AnalyticsDashboardClient({
       {atRisk.length > 0 && activeFilter === "all" && (
         <section>
           <h2 className="text-sm font-bold text-red-600 uppercase tracking-widest mb-3">
-            Action Required — Contact These Users Today ({atRisk.length})
+            Action Required: Contact These Users Today ({atRisk.length})
           </h2>
           <div className="bg-white rounded-xl border border-red-200 overflow-x-auto shadow-sm">
             <table className="w-full text-sm">

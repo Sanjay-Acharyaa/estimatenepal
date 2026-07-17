@@ -66,6 +66,9 @@ async function loadData() {
     takeoffItemCount,
     orgDrawingRows,
     contactWa,
+    npsResponses,
+    npsSentCount,
+    churnFeedbackOrgs,
   ] = await Promise.all([
     // Orgs — exclude orgs whose only users are load-test accounts
     prisma.org.findMany({
@@ -151,6 +154,25 @@ async function loadData() {
     `,
 
     getConfig("contact_whatsapp"),
+
+    // NPS: all users who actually submitted a score
+    prisma.user.findMany({
+      where: { npsScore: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
+      select: { npsScore: true, npsSentAt: true },
+    }),
+
+    // NPS: total emails sent (regardless of response)
+    prisma.user.count({
+      where: { npsSentAt: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
+    }),
+
+    // Churn feedback: orgs with open-text feedback
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.org.findMany as any)({
+      where: { churnFeedback: { not: null }, users: { some: { isSuperAdmin: false, NOT: { email: { contains: LT } } } } },
+      select: { id: true, name: true, churnReason: true, churnFeedback: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }) as Promise<Array<{ id: string; name: string; churnReason: string | null; churnFeedback: string; createdAt: Date }>>,
   ]);
 
   return {
@@ -159,6 +181,7 @@ async function loadData() {
     featureEvents, weeklySignups, cohortData,
     ttvResult, drawingCount, takeoffItemCount,
     orgDrawingRows, contactWa,
+    npsResponses, npsSentCount, churnFeedbackOrgs,
     now, d7, in7,
   };
 }
@@ -171,8 +194,53 @@ export default async function AnalyticsDashboard() {
     featureEvents, weeklySignups, cohortData,
     ttvResult, drawingCount, takeoffItemCount,
     orgDrawingRows, contactWa,
+    npsResponses, npsSentCount, churnFeedbackOrgs,
     now, in7,
   } = data;
+
+  const CHURN_REASON_LABELS: Record<string, string> = {
+    too_expensive:    "Too expensive",
+    missing_features: "Missing features I need",
+    just_exploring:   "Just exploring / not ready yet",
+    competitor:       "Went with a competitor",
+    too_complex:      "Too complex / hard to use",
+    not_relevant:     "Not relevant to my work",
+    other:            "Something else",
+  };
+
+  // ── NPS derived stats ─────────────────────────────────────────────────────
+  const npsResponseCount = npsResponses.length;
+  const npsAvg = npsResponseCount > 0
+    ? (npsResponses.reduce((s, u) => s + (u.npsScore ?? 0), 0) / npsResponseCount)
+    : null;
+  const npsResponseRate = npsSentCount > 0
+    ? Math.round((npsResponseCount / npsSentCount) * 100)
+    : 0;
+
+  // NPS score distribution — score 0 is valid, must not use truthy check
+  const npsDistribution = Array.from({ length: 11 }, (_, score) => ({
+    score,
+    count: npsResponses.filter(u => u.npsScore === score).length,
+  }));
+  const npsMaxCount = Math.max(...npsDistribution.map(d => d.count), 1);
+
+  // Standard NPS: promoters 9-10, detractors 0-6, passives 7-8
+  const promoters  = npsResponses.filter(u => (u.npsScore ?? -1) >= 9).length;
+  const detractors = npsResponses.filter(u => (u.npsScore ?? -1) <= 6).length;
+  const npsScore   = npsResponseCount > 0
+    ? Math.round(((promoters - detractors) / npsResponseCount) * 100)
+    : null;
+
+  // ── Churn reason derived stats ────────────────────────────────────────────
+  const churnOrgsAll = orgs.filter(o => (o as any).churnReason);
+  const churnReasonCounts = churnOrgsAll.reduce<Record<string, number>>((acc, o) => {
+    const r = (o as any).churnReason as string;
+    acc[r] = (acc[r] ?? 0) + 1;
+    return acc;
+  }, {});
+  const churnReasonEntries = Object.entries(churnReasonCounts)
+    .sort((a, b) => b[1] - a[1]);
+  const maxChurnCount = Math.max(...Object.values(churnReasonCounts), 1);
 
   // ── Per-org drawing lookup ────────────────────────────────────────────────
   const orgDrawingMap = new Map(orgDrawingRows.map(r => [r.orgId, n(r.cnt)]));
@@ -525,7 +593,142 @@ export default async function AnalyticsDashboard() {
           </div>
         </section>
 
-        {/* ── 6. Cohort Retention ───────────────────────────────────── */}
+        {/* ── 6. NPS Results ───────────────────────────────────────── */}
+        <section>
+          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">NPS Results</h2>
+          {npsSentCount === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-400 text-sm">
+              No NPS emails sent yet. Results will appear here once the first survey goes out.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                {[
+                  { label: "Emails Sent",    value: npsSentCount,                        color: "text-gray-800" },
+                  { label: "Responses",      value: npsResponseCount,                    color: "text-indigo-700" },
+                  { label: "Response Rate",  value: `${npsResponseRate}%`,               color: npsResponseRate >= 30 ? "text-green-700" : "text-amber-600" },
+                  { label: "Avg Score",      value: npsAvg !== null ? npsAvg.toFixed(1) : "—", color: npsAvg !== null && npsAvg >= 8 ? "text-green-700" : npsAvg !== null && npsAvg >= 6 ? "text-amber-600" : "text-red-600" },
+                  { label: "NPS Score",      value: npsScore !== null ? (npsScore > 0 ? `+${npsScore}` : `${npsScore}`) : "—", color: npsScore !== null && npsScore >= 50 ? "text-green-700" : npsScore !== null && npsScore >= 0 ? "text-amber-600" : "text-red-600" },
+                ].map(c => (
+                  <div key={c.label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm text-center">
+                    <p className="text-xs text-gray-500 mb-1">{c.label}</p>
+                    <p className={`text-2xl font-extrabold ${c.color}`}>{c.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Score distribution */}
+              {npsResponseCount > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Score Distribution (0 = worst, 10 = best)</p>
+                  <div className="flex items-end gap-1.5">
+                    {npsDistribution.map(d => {
+                      const heightPct = npsMaxCount > 0 ? Math.round((d.count / npsMaxCount) * 100) : 0;
+                      const barColor  = d.score >= 9 ? "bg-green-500"
+                                      : d.score >= 7 ? "bg-amber-400"
+                                      : "bg-red-400";
+                      return (
+                        <div key={d.score} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs font-bold text-gray-700">{d.count > 0 ? d.count : ""}</span>
+                          <div
+                            className={`w-full rounded-t-md ${barColor} transition-all`}
+                            style={{ height: `${Math.max(heightPct, d.count > 0 ? 8 : 2)}px`, minHeight: "2px", opacity: d.count === 0 ? 0.15 : 1 }}
+                          />
+                          <span className="text-xs text-gray-500 font-mono">{d.score}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
+                    <span className="text-red-500 font-medium">Detractors (0–6): {detractors}</span>
+                    <span className="text-amber-500 font-medium">Passives (7–8): {npsResponseCount - promoters - detractors}</span>
+                    <span className="text-green-500 font-medium">Promoters (9–10): {promoters}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── 7. Churn Reasons ─────────────────────────────────────── */}
+        <section>
+          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">
+            Churn Reasons
+            {churnOrgsAll.length > 0 && <span className="ml-2 text-gray-400 font-normal normal-case">({churnOrgsAll.length} orgs responded)</span>}
+          </h2>
+          {churnOrgsAll.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-400 text-sm">
+              No churn survey responses yet. Results appear here after expired users click a reason button.
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-3">
+              {churnReasonEntries.map(([reason, count]) => {
+                const label    = CHURN_REASON_LABELS[reason] ?? reason;
+                const barWidth = Math.round((count / maxChurnCount) * 100);
+                const pctOfAll = Math.round((count / churnOrgsAll.length) * 100);
+                return (
+                  <div key={reason} className="flex items-center gap-3">
+                    <span className="text-sm text-gray-700 w-56 flex-shrink-0">{label}</span>
+                    <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                      <div
+                        className="bg-indigo-500 h-full rounded-full flex items-center pl-2 transition-all"
+                        style={{ width: `${Math.max(barWidth, 6)}%` }}
+                      >
+                        <span className="text-white text-xs font-bold">{count}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs text-gray-400 w-10 text-right flex-shrink-0">{pctOfAll}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* ── 8. Churn Open Feedback ───────────────────────────────── */}
+        <section>
+          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">
+            Churn Open Feedback
+            {churnFeedbackOrgs.length > 0 && <span className="ml-2 text-gray-400 font-normal normal-case">({churnFeedbackOrgs.length} responses)</span>}
+          </h2>
+          {churnFeedbackOrgs.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-400 text-sm">
+              No open feedback submitted yet. Appears here when users write text in the churn survey.
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {["Organisation", "Tagged Reason", "Their Feedback"].map(h => (
+                      <th key={h} className="text-left px-4 py-2.5 text-gray-600 font-semibold text-xs">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {churnFeedbackOrgs.map(org => (
+                    <tr key={org.id} className="hover:bg-gray-50 align-top">
+                      <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">{org.name}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {org.churnReason
+                          ? <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">
+                              {CHURN_REASON_LABELS[org.churnReason] ?? org.churnReason}
+                            </span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 text-sm max-w-xl">
+                        {org.churnFeedback}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* ── 9. Cohort Retention ───────────────────────────────────── */}
         <section>
           <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-1">Cohort Retention</h2>
           <p className="text-xs text-gray-400 mb-3">
