@@ -329,7 +329,7 @@ export async function GET(req: NextRequest) {
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("trial_expired", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL, price },
-        { subject: "Your Estimate Nepal trial has ended — upgrade to continue", html: (url?) => trialExpiredEmailHtml(owner.name, UPGRADE_URL, url, price) },
+        { subject: "Your Estimate Nepal trial has ended. Upgrade to continue.", html: (url?) => trialExpiredEmailHtml(owner.name, UPGRADE_URL, url, price) },
         u,
       );
       expiredSends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "trial_expired" }));
@@ -371,7 +371,7 @@ export async function GET(req: NextRequest) {
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("reengagement_7", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL, price },
-        { subject: "We miss you — your Estimate Nepal data is still safe", html: (url?) => trialReengagement7EmailHtml(owner.name, UPGRADE_URL, url, price) },
+        { subject: "We miss you. Your Estimate Nepal data is still safe", html: (url?) => trialReengagement7EmailHtml(owner.name, UPGRADE_URL, url, price) },
         u,
       );
       re7Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_7" }));
@@ -387,7 +387,7 @@ export async function GET(req: NextRequest) {
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("reengagement_14", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL, price },
-        { subject: "Your data is still waiting — come back to Estimate Nepal", html: (url?) => trialReengagement14EmailHtml(owner.name, UPGRADE_URL, url, price) },
+        { subject: "Your data is still waiting. Come back to Estimate Nepal", html: (url?) => trialReengagement14EmailHtml(owner.name, UPGRADE_URL, url, price) },
         u,
       );
       re14Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_14" }));
@@ -403,7 +403,7 @@ export async function GET(req: NextRequest) {
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("reengagement_21", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL },
-        { subject: "Last chance — your Estimate Nepal data will be removed in 9 days", html: (url?) => trialReengagement21EmailHtml(owner.name, UPGRADE_URL, url) },
+        { subject: "Last chance: your Estimate Nepal data will be removed in 9 days", html: (url?) => trialReengagement21EmailHtml(owner.name, UPGRADE_URL, url) },
         u,
       );
       re21Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_21" }));
@@ -440,7 +440,7 @@ export async function GET(req: NextRequest) {
       const u = unsubUrl(user.id, BASE_URL);
       const { subject, html } = buildEmail("nps", tplMap,
         { name: user.name, scoreButtons: buildScoreButtonsHtml(scores) },
-        { subject: "Quick question — how's Estimate Nepal working for you?", html: (url?) => npsEmailHtml(user.name, scores, url) },
+        { subject: "Quick question: how's Estimate Nepal working for you?", html: (url?) => npsEmailHtml(user.name, scores, url) },
         u,
       );
       npsSends.push(sendAndLog({ to: user.email, subject, html, recipientName: user.name, emailType: "nps" }));

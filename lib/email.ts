@@ -108,7 +108,7 @@ export function proposalEmailHtml(shareUrl: string, projectName: string, orgName
       <p style="color:#1d4ed8;font-size:17px;font-weight:700;margin:0">${safeProjectName}</p>
     </div>
     <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Review the proposal and let them know your response — you can approve or reject directly from the link below.
+      Review the proposal and let them know your response. You can approve or reject directly from the link below.
     </p>
     ${ctaButton(shareUrl, "Review Proposal →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -163,7 +163,7 @@ export function trialReminderEmailHtml(
       </ul>
     </div>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Your projects, drawings, and data will <strong>remain safe</strong> — you just need to upgrade to keep working.
+      Your projects, drawings, and data will <strong>remain safe.</strong> You just need to upgrade to keep working.
     </p>
     ${ctaButton(upgradeUrl, "View Plans →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -179,7 +179,7 @@ export function trialDay7EmailHtml(name: string, dashboardUrl: string, unsubscri
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">How&apos;s your first week going?</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      You&apos;re 7 days into your Estimate Nepal trial — great time to check in. Have you had a chance to explore everything yet?
+      You&apos;re 7 days into your Estimate Nepal trial. Have you had a chance to explore everything yet?
     </p>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
       <p style="color:#475569;font-size:14px;font-weight:600;margin:0 0 10px">Quick wins to try before your trial ends:</p>
@@ -191,7 +191,7 @@ export function trialDay7EmailHtml(name: string, dashboardUrl: string, unsubscri
       </ul>
     </div>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Reply to this email if you need help getting set up — we respond within a few hours.
+      Reply to this email if you need help getting set up. We usually respond within a few hours.
     </p>
     ${ctaButton(dashboardUrl, "Continue in Dashboard →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -221,9 +221,9 @@ export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsA
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
       Plans from <strong>${planPrice(price)}</strong>. Upgrade now and keep working without interruption.
     </p>
-    ${ctaButton(upgradeUrl, "Upgrade Now — Keep Access →")}
+    ${ctaButton(upgradeUrl, "Upgrade Now →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Questions about pricing? Reply to this email — we&apos;re happy to help find the right plan.
+      Questions about pricing? Reply to this email and we&apos;ll help you find the right plan.
     </p>
   `, unsubscribeUrl);
 }
@@ -246,7 +246,7 @@ export function churnReasonEmailHtml(
   const somethingElseRow = feedbackUrl
     ? `<tr><td style="padding:5px 0">
         <a href="${safeUrl(feedbackUrl)}" style="display:block;background:#ffffff;border:1px dashed #cbd5e1;border-radius:8px;padding:12px 20px;color:#64748b;text-decoration:none;font-size:14px;font-weight:500;text-align:center">
-          Something else — tell us in your own words…
+          Something else: tell us in your own words...
         </a>
       </td></tr>`
     : "";
@@ -255,7 +255,7 @@ export function churnReasonEmailHtml(
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">One quick question</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
-      Your Estimate Nepal trial has ended. We&apos;d love to know what stopped you — it takes one click and helps us build a better product for Nepal&apos;s construction industry.
+      Your Estimate Nepal trial has ended. We&apos;d love to know what stopped you. It takes one click and helps us build a better product for Nepal&apos;s construction industry.
     </p>
     <p style="color:#475569;font-size:14px;font-weight:600;margin:0 0 12px">Why didn&apos;t you continue?</p>
     <table width="100%" cellpadding="0" cellspacing="0">
@@ -263,7 +263,7 @@ export function churnReasonEmailHtml(
       ${somethingElseRow}
     </table>
     <p style="color:#94a3b8;font-size:13px;margin:28px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Changed your mind? Your data is still safe — reply to this email and we&apos;ll help you get back in.
+      Changed your mind? Your data is still safe. Reply to this email and we&apos;ll help you get back in.
     </p>
   `, unsubscribeUrl);
 }
@@ -278,7 +278,7 @@ export function npsEmailHtml(name: string, scores: { score: number; url: string 
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">How likely are you to recommend us?</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
-      You&apos;ve been using Estimate Nepal for a week — how&apos;s it going? On a scale of 0–10, how likely are you to recommend us to a colleague?
+      You&apos;ve been using Estimate Nepal for a week. How&apos;s it going? On a scale of 0–10, how likely are you to recommend us to a colleague?
     </p>
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px">
       <tr>${scoreButtons}</tr>
@@ -342,7 +342,7 @@ export function proposalResponseClientEmailHtml(
 
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">
-      Response received — ${isApproved ? "Approved" : "Rejected"}
+      Response received: ${isApproved ? "Approved" : "Rejected"}
     </h2>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
       Hi ${safeClient}, thank you for reviewing the proposal from <strong>${safeOrg}</strong>.
@@ -367,7 +367,7 @@ export function proposalResponseClientEmailHtml(
 export function welcomeEmailHtml(name: string, dashboardUrl: string, trialEndsAt?: Date | null, unsubscribeUrl?: string): string {
   const safeName = escapeHtml(firstName(name));
   const trialLine = trialEndsAt
-    ? `Your free trial runs until <strong>${trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong> — no credit card required.`
+    ? `Your free trial runs until <strong>${trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong>. No credit card required.`
     : `You have <strong>14 days</strong> to explore everything for free. No credit card required.`;
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Welcome to Estimate Nepal!</h2>
@@ -405,7 +405,7 @@ export function welcomeEmailHtml(name: string, dashboardUrl: string, trialEndsAt
       </td></tr>
     </table>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Need help getting started? Just reply to this email — we respond within a few hours.
+      Need help getting started? Just reply to this email. We usually respond within a few hours.
     </p>
     ${ctaButton(dashboardUrl, "Go to Dashboard →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -420,12 +420,12 @@ export function trialReengagement7EmailHtml(name: string, upgradeUrl: string, un
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">We miss you at Estimate Nepal</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      Your trial ended a week ago. Your projects and all your work are still safe — you just need to upgrade to get back in.
+      Your trial ended a week ago. Your projects and all your work are still safe. Just upgrade to get back in.
     </p>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
       <p style="color:#475569;font-size:14px;line-height:1.7;margin:0">
-        Estimate Nepal helps construction professionals generate accurate BOQs in a fraction of the time —
-        with PDF takeoff measurements, rate analysis, and one-click tender document export.
+        Estimate Nepal helps construction professionals generate accurate BOQs in a fraction of the time,
+        using PDF takeoff measurements, rate analysis, and one-click tender document export.
       </p>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
@@ -444,16 +444,16 @@ export function trialReengagement14EmailHtml(name: string, upgradeUrl: string, u
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your data is still waiting for you</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      It&apos;s been two weeks since your trial ended. Everything you built — your projects, drawings, measurements, and BOQs — is still intact and ready when you are.
+      It&apos;s been two weeks since your trial ended. Everything you built, including your projects, drawings, measurements, and BOQs, is still intact and ready when you are.
     </p>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:0 0 20px">
       <p style="color:#15803d;font-size:14px;font-weight:600;margin:0 0 4px">Your work is safe</p>
-      <p style="color:#166534;font-size:14px;margin:0">Upgrade at any time and continue working — nothing is lost.</p>
+      <p style="color:#166534;font-size:14px;margin:0">Upgrade at any time and continue working. Nothing is lost.</p>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>${planPrice(price)}</strong>. No long-term commitment.</p>
     ${ctaButton(upgradeUrl, "Come Back →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Need help or have concerns about pricing? Reply to this email — we&apos;re happy to talk.
+      Need help or have concerns about pricing? Reply to this email and we&apos;ll be happy to talk.
     </p>
   `, unsubscribeUrl);
 }
@@ -464,8 +464,8 @@ export function trialReengagement21EmailHtml(name: string, upgradeUrl: string, u
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Last chance to keep your data</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      Your trial ended 3 weeks ago. We&apos;ll be removing inactive trial data in <strong>9 days</strong> —
-      upgrade now to keep your projects, drawings, and measurements permanently.
+      Your trial ended 3 weeks ago. We&apos;ll be removing inactive trial data in <strong>9 days</strong>.
+      Upgrade now to keep your projects, drawings, and measurements permanently.
     </p>
     <div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:16px 20px;margin:0 0 20px">
       <p style="color:#92400e;font-size:14px;font-weight:600;margin:0 0 4px">Data removal in 9 days</p>
@@ -473,7 +473,7 @@ export function trialReengagement21EmailHtml(name: string, upgradeUrl: string, u
     </div>
     ${ctaButton(upgradeUrl, "Upgrade and Keep My Data →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Your account will remain active — only project data is removed. Reply to this email if you have questions.
+      Your account will remain active. Only project data is removed. Reply to this email if you have questions.
     </p>
   `, unsubscribeUrl);
 }
@@ -484,7 +484,7 @@ export function trialDataWarningEmailHtml(name: string, upgradeUrl: string, unsu
     <h2 style="color:#dc2626;font-size:22px;font-weight:700;margin:0 0 8px">Your data will be deleted in 24 hours</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 16px">
-      This is your final notice. Your Estimate Nepal trial data — including all projects, drawings, measurements, and BOQs —
+      This is your final notice. Your Estimate Nepal trial data, including all projects, drawings, measurements, and BOQs,
       will be permanently deleted in <strong>24 hours</strong>.
     </p>
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin:0 0 20px">
@@ -496,7 +496,7 @@ export function trialDataWarningEmailHtml(name: string, upgradeUrl: string, unsu
       </ul>
     </div>
     <p style="color:#334155;font-size:15px;font-weight:600;margin:0 0 4px">Upgrade now to save everything permanently.</p>
-    ${ctaButton(upgradeUrl, "Upgrade Now — Save My Data →")}
+    ${ctaButton(upgradeUrl, "Upgrade Now and Save My Data →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Your login account will remain active. Only project data will be removed.
       Reply to this email immediately if you need help.
@@ -521,7 +521,7 @@ export function trialDataWipedEmailHtml(name: string, baseUrl?: string, unsubscr
     </div>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
       We&apos;re sorry to see you go. If there&apos;s anything we could have done better,
-      please reply to this email — your feedback helps us improve.
+      please reply to this email. Your feedback helps us build a better product.
     </p>
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       You can still log in at <a href="${siteUrl}" style="color:#94a3b8">${siteUrl}</a>.
@@ -545,11 +545,11 @@ export function trialExpiredEmailHtml(name: string, upgradeUrl: string, unsubscr
       </p>
     </div>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Plans start from <strong>${planPrice(price)}</strong> — no long-term commitment required.
+      Plans start from <strong>${planPrice(price)}</strong>. No long-term commitment required.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Need help choosing a plan or have questions about pricing? Reply to this email or WhatsApp us — we&apos;re happy to help.
+      Need help choosing a plan or have questions about pricing? Reply to this email or WhatsApp us. We&apos;re happy to help.
     </p>
   `, unsubscribeUrl);
 }
