@@ -6,6 +6,7 @@ import { wrapEmailHtml } from "@/lib/email-template-constants";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { TEMPLATE_TYPES } from "@/lib/email-template-constants";
+import { getConfig } from "@/lib/config";
 
 // POST /api/admin/emails/test-send
 // Sends a test email using the current editor body to the calling admin's own address.
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const BASE_URL = process.env.NEXTAUTH_URL ?? "https://estimatenepal.com";
+    const price = await getConfig("price_solo_monthly");
 
     const sampleReasons = [
       "Too expensive", "Missing features I need", "Just exploring / not ready yet",
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
       "{{dashboardUrl}}": `${BASE_URL}/dashboard`,
       "{{upgradeUrl}}": `${BASE_URL}/pricing`,
       "{{baseUrl}}": BASE_URL,
-      "{{price}}": "999",
+      "{{price}}": price,
       "{{annualFreeMonths}}": "2",
       "{{feedbackUrl}}": "#",
       "{{trialEndsAt}}": new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
