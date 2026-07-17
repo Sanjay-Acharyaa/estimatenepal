@@ -5,7 +5,7 @@ export const metadata = {
 
 const CHURN_LABELS: Record<string, string> = {
   too_expensive:    "Too expensive",
-  missing_features: "Missing features",
+  missing_features: "Missing features I need",
   just_exploring:   "Just exploring / not ready yet",
   competitor:       "Went with a competitor",
   too_complex:      "Too complex / hard to use",

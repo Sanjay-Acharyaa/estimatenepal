@@ -176,11 +176,11 @@ export async function GET(req: NextRequest) {
       }),
       prisma.org.findMany({
         where: { trialEndsAt: { gte: re7From, lte: re7To }, planTier: "TRIAL", plan: "FREE" },
-        select: { id: true, users: ownerSelect },
+        select: { id: true, churnReason: true, users: ownerSelect },
       }),
       prisma.org.findMany({
         where: { trialEndsAt: { gte: re14From, lte: re14To }, planTier: "TRIAL", plan: "FREE" },
-        select: { id: true, users: ownerSelect },
+        select: { id: true, churnReason: true, users: ownerSelect },
       }),
       prisma.org.findMany({
         where: { trialEndsAt: { gte: re21From, lte: re21To }, planTier: "TRIAL", plan: "FREE" },
@@ -199,6 +199,7 @@ export async function GET(req: NextRequest) {
         },
         select: { id: true, users: ownerSelect, projects: { select: { id: true }, take: 1 } },
       }),
+      // NPS: only send to users whose org has at least one project — unengaged users skew scores
       prisma.user.findMany({
         where: {
           createdAt: { gte: npsFrom, lte: npsTo },
@@ -207,7 +208,8 @@ export async function GET(req: NextRequest) {
           npsSentAt: null,
           orgId: { not: null },
           emailUnsubscribedAt: null,
-          emailBouncedAt: null, // C3: skip bounced users
+          emailBouncedAt: null,
+          org: { projects: { some: {} } },
         },
         select: { id: true, name: true, email: true },
       }),
@@ -361,7 +363,7 @@ export async function GET(req: NextRequest) {
       churnSends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "churn_reason" }));
     }
 
-    // ── Day 7 post-expiry re-engagement ──────────────────────────────────────────
+    // ── Day 7 post-expiry re-engagement (personalized subject/body when churnReason known) ───
     const re7Sends: Promise<boolean>[] = [];
     for (const org of re7Orgs) {
       const owner = org.users[0];
@@ -369,15 +371,20 @@ export async function GET(req: NextRequest) {
       if (alreadySent(org.id, "reengagement_7")) continue;
       markSent(org.id, "reengagement_7");
       const u = unsubUrl(owner.id, BASE_URL);
+      const churnReason = (org as any).churnReason as string | null | undefined;
+      const fallbackSubject =
+        churnReason === "too_expensive"    ? "About the pricing concern you raised" :
+        churnReason === "missing_features" ? "The feature you needed" :
+        "Your Estimate Nepal projects are still here";
       const { subject, html } = buildEmail("reengagement_7", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL, price },
-        { subject: "We miss you. Your Estimate Nepal data is still safe", html: (url?) => trialReengagement7EmailHtml(owner.name, UPGRADE_URL, url, price) },
+        { subject: fallbackSubject, html: (url?) => trialReengagement7EmailHtml(owner.name, UPGRADE_URL, url, price, churnReason ?? undefined) },
         u,
       );
       re7Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_7" }));
     }
 
-    // ── Day 14 post-expiry ───────────────────────────────────────────────────────
+    // ── Day 14 post-expiry (personalized heading when churnReason = too_expensive) ──────────
     const re14Sends: Promise<boolean>[] = [];
     for (const org of re14Orgs) {
       const owner = org.users[0];
@@ -385,9 +392,13 @@ export async function GET(req: NextRequest) {
       if (alreadySent(org.id, "reengagement_14")) continue;
       markSent(org.id, "reengagement_14");
       const u = unsubUrl(owner.id, BASE_URL);
+      const churnReason = (org as any).churnReason as string | null | undefined;
+      const fallbackSubject = churnReason === "too_expensive"
+        ? "Still thinking about pricing?"
+        : "Two weeks. Your data is still safe.";
       const { subject, html } = buildEmail("reengagement_14", tplMap,
         { name: owner.name, upgradeUrl: UPGRADE_URL, price },
-        { subject: "Your data is still waiting. Come back to Estimate Nepal", html: (url?) => trialReengagement14EmailHtml(owner.name, UPGRADE_URL, url, price) },
+        { subject: fallbackSubject, html: (url?) => trialReengagement14EmailHtml(owner.name, UPGRADE_URL, url, price, churnReason ?? undefined) },
         u,
       );
       re14Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_14" }));

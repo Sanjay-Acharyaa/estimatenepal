@@ -47,6 +47,7 @@ const PLAN_PRICE: Record<string, number> = {
 async function loadData() {
   const now = new Date();
   const d7  = new Date(now.getTime() -  7 * 86400000);
+  const d30 = new Date(now.getTime() - 30 * 86400000);
   const d90 = new Date(now.getTime() - 90 * 86400000);
   const in7 = new Date(now.getTime() +  7 * 86400000);
 
@@ -69,6 +70,10 @@ async function loadData() {
     npsResponses,
     npsSentCount,
     churnFeedbackOrgs,
+    churnFeedbackCount,
+    emailHealthRows,
+    unsubscribedCount,
+    bouncedCount,
   ] = await Promise.all([
     // Orgs — exclude orgs whose only users are load-test accounts
     prisma.org.findMany({
@@ -166,13 +171,41 @@ async function loadData() {
       where: { npsSentAt: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
     }),
 
-    // Churn feedback: orgs with open-text feedback, ordered by when feedback was submitted
+    // Churn feedback: latest 50 orgs with open-text feedback
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma.org.findMany as any)({
       where: { churnFeedback: { not: null }, users: { some: { isSuperAdmin: false, NOT: { email: { contains: LT } } } } },
       select: { id: true, name: true, churnReason: true, churnFeedback: true, churnFeedbackAt: true },
       orderBy: { churnFeedbackAt: "desc" },
+      take: 50,
     }) as Promise<Array<{ id: string; name: string; churnReason: string | null; churnFeedback: string; churnFeedbackAt: Date | null }>>,
+
+    // Total count of churn feedback orgs (unpaginated)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.org.count as any)({
+      where: { churnFeedback: { not: null }, users: { some: { isSuperAdmin: false, NOT: { email: { contains: LT } } } } },
+    }) as Promise<number>,
+
+    // Email health: sent/failed counts by type for last 30 days
+    prisma.$queryRaw<Array<{ emailType: string; status: string; cnt: bigint }>>`
+      SELECT emailType, status, COUNT(*) AS cnt
+      FROM EmailLog
+      WHERE sentAt >= ${d30}
+      GROUP BY emailType, status
+      ORDER BY emailType, status
+    `,
+
+    // Unsubscribed users
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.user.count as any)({
+      where: { emailUnsubscribedAt: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
+    }) as Promise<number>,
+
+    // Bounced users
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.user.count as any)({
+      where: { emailBouncedAt: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
+    }) as Promise<number>,
   ]);
 
   return {
@@ -181,7 +214,9 @@ async function loadData() {
     featureEvents, weeklySignups, cohortData,
     ttvResult, drawingCount, takeoffItemCount,
     orgDrawingRows, contactWa,
-    npsResponses, npsSentCount, churnFeedbackOrgs,
+    npsResponses, npsSentCount,
+    churnFeedbackOrgs, churnFeedbackCount,
+    emailHealthRows, unsubscribedCount, bouncedCount,
     now, d7, in7,
   };
 }
@@ -194,7 +229,9 @@ export default async function AnalyticsDashboard() {
     featureEvents, weeklySignups, cohortData,
     ttvResult, drawingCount, takeoffItemCount,
     orgDrawingRows, contactWa,
-    npsResponses, npsSentCount, churnFeedbackOrgs,
+    npsResponses, npsSentCount,
+    churnFeedbackOrgs, churnFeedbackCount,
+    emailHealthRows, unsubscribedCount, bouncedCount,
     now, in7,
   } = data;
 
@@ -622,23 +659,30 @@ export default async function AnalyticsDashboard() {
               {npsResponseCount > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Score Distribution (0 = worst, 10 = best)</p>
-                  <div className="flex items-end gap-1.5">
+                  {/* Fixed 128px chart area — bars grow from bottom */}
+                  <div className="flex items-end gap-1.5" style={{ height: "128px" }}>
                     {npsDistribution.map(d => {
-                      const heightPct = npsMaxCount > 0 ? Math.round((d.count / npsMaxCount) * 100) : 0;
-                      const barColor  = d.score >= 9 ? "bg-green-500"
-                                      : d.score >= 7 ? "bg-amber-400"
-                                      : "bg-red-400";
+                      const barH = npsMaxCount > 0 ? Math.round((d.count / npsMaxCount) * 118) : 0;
+                      const finalH = d.count === 0 ? 3 : Math.max(barH, 8);
+                      const barColor = d.score >= 9 ? "bg-green-500" : d.score >= 7 ? "bg-amber-400" : "bg-red-400";
                       return (
-                        <div key={d.score} className="flex-1 flex flex-col items-center gap-1">
-                          <span className="text-xs font-bold text-gray-700">{d.count > 0 ? d.count : ""}</span>
+                        <div key={d.score} className="flex-1 flex flex-col items-center justify-end" style={{ height: "100%" }}>
+                          <span className="text-xs font-bold text-gray-700 mb-0.5" style={{ minHeight: "16px", lineHeight: "16px" }}>
+                            {d.count > 0 ? d.count : ""}
+                          </span>
                           <div
-                            className={`w-full rounded-t-md ${barColor} transition-all`}
-                            style={{ height: `${Math.max(heightPct, d.count > 0 ? 8 : 2)}px`, minHeight: "2px", opacity: d.count === 0 ? 0.15 : 1 }}
+                            className={`w-full rounded-t-sm ${barColor} transition-all`}
+                            style={{ height: `${finalH}px`, opacity: d.count === 0 ? 0.15 : 1 }}
                           />
-                          <span className="text-xs text-gray-500 font-mono">{d.score}</span>
                         </div>
                       );
                     })}
+                  </div>
+                  {/* Score labels below bars */}
+                  <div className="flex gap-1.5 mt-1.5">
+                    {npsDistribution.map(d => (
+                      <span key={d.score} className="flex-1 text-center text-xs text-gray-500 font-mono">{d.score}</span>
+                    ))}
                   </div>
                   <div className="flex justify-between text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
                     <span className="text-red-500 font-medium">Detractors (0–6): {detractors}</span>
@@ -690,7 +734,13 @@ export default async function AnalyticsDashboard() {
         <section>
           <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">
             Churn Open Feedback
-            {churnFeedbackOrgs.length > 0 && <span className="ml-2 text-gray-400 font-normal normal-case">({churnFeedbackOrgs.length} responses)</span>}
+            {churnFeedbackCount > 0 && (
+              <span className="ml-2 text-gray-400 font-normal normal-case">
+                {churnFeedbackCount > 50
+                  ? `Showing latest 50 of ${churnFeedbackCount}`
+                  : `${churnFeedbackCount} response${churnFeedbackCount !== 1 ? "s" : ""}`}
+              </span>
+            )}
           </h2>
           {churnFeedbackOrgs.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-400 text-sm">
@@ -723,7 +773,7 @@ export default async function AnalyticsDashboard() {
                           : <span className="text-gray-200">—</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-700 text-sm max-w-xl">
-                        {org.churnFeedback}
+                        <div className="max-w-sm line-clamp-4 overflow-hidden">{org.churnFeedback}</div>
                       </td>
                     </tr>
                   ))}
@@ -733,7 +783,142 @@ export default async function AnalyticsDashboard() {
           )}
         </section>
 
-        {/* ── 9. Cohort Retention ───────────────────────────────────── */}
+        {/* ── 9. Trial-to-Churn Funnel ─────────────────────────────── */}
+        <section>
+          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">Trial-to-Churn Funnel</h2>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            {expiredOrgs === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-2">No expired trials yet. Funnel appears once trials start expiring.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 sm:grid-cols-3 gap-4 mb-4">
+                  {[
+                    {
+                      label: "Expired Trials",
+                      value: expiredOrgs,
+                      sub: "trial ended, not converted",
+                      color: "text-red-600",
+                    },
+                    {
+                      label: "Clicked Churn Reason",
+                      value: churnOrgsAll.length,
+                      sub: `${expiredOrgs > 0 ? Math.round((churnOrgsAll.length / expiredOrgs) * 100) : 0}% of expired`,
+                      color: "text-amber-600",
+                    },
+                    {
+                      label: "Wrote Feedback",
+                      value: churnFeedbackCount,
+                      sub: `${churnOrgsAll.length > 0 ? Math.round((churnFeedbackCount / churnOrgsAll.length) * 100) : 0}% of reason responders`,
+                      color: "text-indigo-700",
+                    },
+                  ].map(c => (
+                    <div key={c.label} className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-center">
+                      <p className="text-xs text-gray-500 mb-1">{c.label}</p>
+                      <p className={`text-2xl font-extrabold ${c.color}`}>{c.value}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{c.sub}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  {[
+                    { label: "Expired", val: expiredOrgs, bg: "bg-red-400" },
+                    { label: "Gave Reason", val: churnOrgsAll.length, bg: "bg-amber-400" },
+                    { label: "Wrote Feedback", val: churnFeedbackCount, bg: "bg-indigo-500" },
+                  ].map((step, i) => {
+                    const widthPct = expiredOrgs > 0 ? Math.max(Math.round((step.val / expiredOrgs) * 100), step.val > 0 ? 6 : 2) : 2;
+                    return (
+                      <div key={step.label} className="flex-1 flex flex-col gap-1">
+                        {i > 0 && <div className="text-xs text-gray-400 text-center">{expiredOrgs > 0 ? `${Math.round((step.val / expiredOrgs) * 100)}%` : "—"}</div>}
+                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`${step.bg} h-full rounded-full`} style={{ width: `${widthPct}%` }} />
+                        </div>
+                        <div className="text-xs text-gray-500 text-center">{step.label}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* ── 10. Email Health (Last 30 Days) ───────────────────────── */}
+        <section>
+          <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-3">Email Health — Last 30 Days</h2>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            {/* Summary bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 border-b border-gray-100">
+              {(() => {
+                const totalSent   = emailHealthRows.reduce((s, r) => r.status === "sent"   ? s + n(r.cnt) : s, 0);
+                const totalFailed = emailHealthRows.reduce((s, r) => r.status === "failed" ? s + n(r.cnt) : s, 0);
+                const totalAll    = totalSent + totalFailed;
+                const deliverRate = totalAll > 0 ? Math.round((totalSent / totalAll) * 100) : 100;
+                return [
+                  { label: "Sent",          value: totalSent,                   color: "text-green-700" },
+                  { label: "Failed",        value: totalFailed,                 color: totalFailed > 0 ? "text-red-600" : "text-gray-400" },
+                  { label: "Delivery Rate", value: `${deliverRate}%`,           color: deliverRate >= 98 ? "text-green-700" : deliverRate >= 95 ? "text-amber-600" : "text-red-600" },
+                  { label: "Unsubscribed",  value: unsubscribedCount,           color: unsubscribedCount > 0 ? "text-amber-600" : "text-gray-400" },
+                ].map(c => (
+                  <div key={c.label} className="text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">{c.label}</p>
+                    <p className={`text-xl font-extrabold ${c.color}`}>{c.value}</p>
+                  </div>
+                ));
+              })()}
+            </div>
+            {emailHealthRows.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-6">No emails logged yet. EmailLog table will populate after first send.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      {["Email Type", "Sent", "Failed", "Delivery Rate"].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-gray-600 font-semibold text-xs">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(() => {
+                      const byType = new Map<string, { sent: number; failed: number }>();
+                      for (const row of emailHealthRows) {
+                        const t = byType.get(row.emailType) ?? { sent: 0, failed: 0 };
+                        if (row.status === "sent")   t.sent   += n(row.cnt);
+                        else if (row.status === "failed") t.failed += n(row.cnt);
+                        byType.set(row.emailType, t);
+                      }
+                      return Array.from(byType.entries())
+                        .sort((a, b) => (b[1].sent + b[1].failed) - (a[1].sent + a[1].failed))
+                        .map(([type, { sent, failed }]) => {
+                          const total = sent + failed;
+                          const rate  = total > 0 ? Math.round((sent / total) * 100) : 100;
+                          return (
+                            <tr key={type} className="hover:bg-gray-50">
+                              <td className="px-4 py-2 font-mono text-gray-700 text-xs">{type}</td>
+                              <td className="px-4 py-2 font-bold text-green-700">{sent}</td>
+                              <td className="px-4 py-2 font-bold text-red-600">{failed > 0 ? failed : <span className="text-gray-300">0</span>}</td>
+                              <td className="px-4 py-2">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rate >= 98 ? "bg-green-100 text-green-700" : rate >= 95 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>
+                                  {rate}%
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {bouncedCount > 0 && (
+              <div className="px-4 py-3 border-t border-gray-100 text-xs text-amber-700 bg-amber-50">
+                <span className="font-semibold">{bouncedCount} bounced email address{bouncedCount !== 1 ? "es" : ""}</span> on record — these users will not receive future emails.
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── 11. Cohort Retention ───────────────────────────────────── */}
         <section>
           <h2 className="text-sm font-bold text-indigo-700 uppercase tracking-widest mb-1">Cohort Retention</h2>
           <p className="text-xs text-gray-400 mb-3">

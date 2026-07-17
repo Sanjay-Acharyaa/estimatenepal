@@ -1,0 +1,1 @@
+ALTER TABLE `Org` ADD COLUMN `churnReasonAt` DATETIME(3) NULL;
