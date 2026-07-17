@@ -313,7 +313,7 @@ export async function GET(req: NextRequest) {
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("trial_reminder_3d", tplMap,
         { name: owner.name, trialEndsAt: expiryStr, upgradeUrl: UPGRADE_URL, price, annualFreeMonths },
-        { subject: "Your Estimate Nepal trial ends in 3 days", html: (url?) => trialReminderEmailHtml(owner.name, org.trialEndsAt!, UPGRADE_URL, url, price) },
+        { subject: "Your Estimate Nepal trial ends in 3 days", html: (url?) => trialReminderEmailHtml(owner.name, org.trialEndsAt!, UPGRADE_URL, url, price, annualFreeMonths) },
         u,
       );
       rem3Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "trial_reminder_3d" }));
@@ -355,7 +355,7 @@ export async function GET(req: NextRequest) {
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("churn_reason", tplMap,
         { name: owner.name, reasonButtons: buildReasonButtonsHtml(reasons), feedbackUrl: feedbackTextUrl },
-        { subject: "One quick question about your trial", html: (url?) => churnReasonEmailHtml(owner.name, reasons, url, feedbackTextUrl) },
+        { subject: "Why did you stop? (takes 1 click)", html: (url?) => churnReasonEmailHtml(owner.name, reasons, url, feedbackTextUrl) },
         u,
       );
       churnSends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "churn_reason" }));

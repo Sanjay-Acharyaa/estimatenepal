@@ -1,0 +1,1 @@
+ALTER TABLE `Org` ADD COLUMN `churnFeedbackAt` DATETIME(3) NULL;

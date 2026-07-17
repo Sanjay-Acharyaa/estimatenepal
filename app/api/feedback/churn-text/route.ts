@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
   const truncated = text.trim().slice(0, 2000);
 
   // Save feedback; also set churnReason to "other" only if not already captured via button click.
+  const now = new Date();
   await prisma.$transaction([
     prisma.org.updateMany({
       where: { id: orgId, churnReason: null },
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     }),
     prisma.org.update({
       where: { id: orgId },
-      data: { churnFeedback: truncated },
+      data: { churnFeedback: truncated, churnFeedbackAt: now },
     }),
   ]).catch((err: Error) =>
     console.error("[feedback/churn-text] DB save failed:", err.message)

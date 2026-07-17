@@ -158,7 +158,7 @@ async function loadData() {
     // NPS: all users who actually submitted a score
     prisma.user.findMany({
       where: { npsScore: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
-      select: { npsScore: true, npsSentAt: true },
+      select: { npsScore: true },
     }),
 
     // NPS: total emails sent (regardless of response)
@@ -166,13 +166,13 @@ async function loadData() {
       where: { npsSentAt: { not: null }, isSuperAdmin: false, NOT: { email: { contains: LT } } },
     }),
 
-    // Churn feedback: orgs with open-text feedback
+    // Churn feedback: orgs with open-text feedback, ordered by when feedback was submitted
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma.org.findMany as any)({
       where: { churnFeedback: { not: null }, users: { some: { isSuperAdmin: false, NOT: { email: { contains: LT } } } } },
-      select: { id: true, name: true, churnReason: true, churnFeedback: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }) as Promise<Array<{ id: string; name: string; churnReason: string | null; churnFeedback: string; createdAt: Date }>>,
+      select: { id: true, name: true, churnReason: true, churnFeedback: true, churnFeedbackAt: true },
+      orderBy: { churnFeedbackAt: "desc" },
+    }) as Promise<Array<{ id: string; name: string; churnReason: string | null; churnFeedback: string; churnFeedbackAt: Date | null }>>,
   ]);
 
   return {
@@ -232,9 +232,9 @@ export default async function AnalyticsDashboard() {
     : null;
 
   // ── Churn reason derived stats ────────────────────────────────────────────
-  const churnOrgsAll = orgs.filter(o => (o as any).churnReason);
+  const churnOrgsAll = orgs.filter(o => o.churnReason);
   const churnReasonCounts = churnOrgsAll.reduce<Record<string, number>>((acc, o) => {
-    const r = (o as any).churnReason as string;
+    const r = o.churnReason as string;
     acc[r] = (acc[r] ?? 0) + 1;
     return acc;
   }, {});
@@ -312,7 +312,7 @@ export default async function AnalyticsDashboard() {
       ...item.org,
       trialEndsAt: item.org.trialEndsAt?.toISOString() ?? null,
       adminNotes: (item.org as any).adminNotes ?? null,
-      churnReason: (item.org as any).churnReason ?? null,
+      churnReason: item.org.churnReason ?? null,
       users: item.org.users.map(u => ({
         ...u,
         lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
@@ -701,7 +701,7 @@ export default async function AnalyticsDashboard() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    {["Organisation", "Tagged Reason", "Their Feedback"].map(h => (
+                    {["Organisation", "Tagged Reason", "Submitted", "Their Feedback"].map(h => (
                       <th key={h} className="text-left px-4 py-2.5 text-gray-600 font-semibold text-xs">{h}</th>
                     ))}
                   </tr>
@@ -716,6 +716,11 @@ export default async function AnalyticsDashboard() {
                               {CHURN_REASON_LABELS[org.churnReason] ?? org.churnReason}
                             </span>
                           : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                        {org.churnFeedbackAt
+                          ? org.churnFeedbackAt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                          : <span className="text-gray-200">—</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-700 text-sm max-w-xl">
                         {org.churnFeedback}

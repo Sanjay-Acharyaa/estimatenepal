@@ -62,6 +62,7 @@ model Org {
   adminNotes       String?     @db.Text
   churnReason      String?
   churnFeedback    String?     @db.Text
+  churnFeedbackAt  DateTime?
   dataWipedAt      DateTime?
   users            User[]
   projects         Project[]

@@ -14,10 +14,10 @@ const CHURN_LABELS: Record<string, string> = {
 };
 
 function npsMessage(score: number): string {
-  if (score >= 9) return "Amazing — we're so glad you love Estimate Nepal!";
-  if (score >= 7) return "Thanks — we're glad it's working for you.";
-  if (score >= 5) return "Thanks for your honesty. We'll keep improving.";
-  return "We're sorry to hear that. Your feedback helps us get better.";
+  if (score >= 9) return "That means a lot to us. Thank you for recommending Estimate Nepal!";
+  if (score >= 7) return "Thanks for your feedback. We are glad it is working for you.";
+  if (score >= 5) return "Thanks for your honesty. We will keep improving.";
+  return "We are sorry to hear that. Your feedback helps us get better.";
 }
 
 export default function FeedbackThanksPage({
@@ -64,12 +64,21 @@ export default function FeedbackThanksPage({
           </p>
         )}
 
-        <a
-          href="/login"
-          className="inline-block bg-indigo-600 text-white text-sm font-medium px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          Go to Login
-        </a>
+        {isChurn ? (
+          <a
+            href="/pricing"
+            className="inline-block bg-indigo-600 text-white text-sm font-medium px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            See Our Plans
+          </a>
+        ) : (
+          <a
+            href="/login"
+            className="inline-block bg-indigo-600 text-white text-sm font-medium px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Go to Login
+          </a>
+        )}
 
         <p className="mt-6 text-xs text-slate-300">
           Estimate Nepal · Nepal&apos;s Smart Construction Platform

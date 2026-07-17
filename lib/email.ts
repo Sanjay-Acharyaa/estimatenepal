@@ -139,6 +139,7 @@ export function trialReminderEmailHtml(
   upgradeUrl: string,
   unsubscribeUrl?: string,
   price?: string,
+  annualFreeMonths?: string,
 ): string {
   const safeName = escapeHtml(firstName(name));
   const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", {
@@ -167,7 +168,7 @@ export function trialReminderEmailHtml(
     </p>
     ${ctaButton(upgradeUrl, "View Plans →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Plans start from ${planPrice(price)} for a single user. Annual billing saves you 2 months free.
+      Plans start from ${planPrice(price)} for a single user. Annual billing saves you ${annualFreeMonths ?? "2"} months free.
       If you have any questions, reply to this email and we&apos;ll help you find the right plan.
     </p>
   `, unsubscribeUrl);
@@ -254,8 +255,11 @@ export function churnReasonEmailHtml(
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">One quick question</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
-    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
-      Your Estimate Nepal trial has ended. We&apos;d love to know what stopped you. It takes one click and helps us build a better product for Nepal&apos;s construction industry.
+    <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 12px">
+      Your Estimate Nepal trial has ended. What stopped you? It takes one click and your response goes directly to our product team.
+    </p>
+    <p style="color:#64748b;font-size:13px;line-height:1.5;margin:0 0 20px">
+      Every response shapes what we build next for Nepal&apos;s construction industry.
     </p>
     <p style="color:#475569;font-size:14px;font-weight:600;margin:0 0 12px">Why didn&apos;t you continue?</p>
     <table width="100%" cellpadding="0" cellspacing="0">
@@ -432,6 +436,11 @@ export function trialReengagement7EmailHtml(name: string, upgradeUrl: string, un
       Plans start from <strong>${planPrice(price)}</strong>. Upgrade now and pick up exactly where you left off.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now →")}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;margin:0 0 4px">
+      <p style="color:#1e40af;font-size:13px;margin:0">
+        Not sure yet? Reply to this email and we&apos;ll give you a few extra days to explore at no charge.
+      </p>
+    </div>
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Questions? Reply to this email and we&apos;ll help you find the right plan.
     </p>
@@ -452,6 +461,11 @@ export function trialReengagement14EmailHtml(name: string, upgradeUrl: string, u
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>${planPrice(price)}</strong>. No long-term commitment.</p>
     ${ctaButton(upgradeUrl, "Come Back →")}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;margin:0 0 4px">
+      <p style="color:#1e40af;font-size:13px;margin:0">
+        Not ready to commit? Reply to this email and let&apos;s talk. We can work something out.
+      </p>
+    </div>
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Need help or have concerns about pricing? Reply to this email and we&apos;ll be happy to talk.
     </p>
