@@ -45,7 +45,7 @@ export const TEMPLATE_VARS: Record<TemplateType, string[]> = {
   reengagement_21:   ["{{name}}", "{{upgradeUrl}}"],
   data_warning:      ["{{name}}", "{{upgradeUrl}}"],
   data_wiped:        ["{{name}}", "{{baseUrl}}"],
-  churn_reason:      ["{{name}}", "{{reasonButtons}}"],
+  churn_reason:      ["{{name}}", "{{reasonButtons}}", "{{feedbackUrl}}"],
   nps:               ["{{name}}", "{{scoreButtons}}"],
 };
 
@@ -150,7 +150,7 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
       </ul>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
-      Plans from <strong>NPR 999/month</strong>. Upgrade now and keep working without interruption.
+      Plans from <strong>NPR {{price}}/month</strong>. Upgrade now and keep working without interruption.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin:28px 0">
       <tr><td style="background:#1d4ed8;border-radius:8px">
@@ -185,7 +185,7 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
       </td></tr>
     </table>
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Plans start from NPR 999/month for a single user. Annual billing saves you 2 months free.
+      Plans start from NPR {{price}}/month for a single user. Annual billing saves you {{annualFreeMonths}} months free.
     </p>`,
 
   trial_expired: `
@@ -201,7 +201,7 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
       </p>
     </div>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Plans start from <strong>NPR 999/month</strong> — no long-term commitment required.
+      Plans start from <strong>NPR {{price}}/month</strong> — no long-term commitment required.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin:28px 0">
       <tr><td style="background:#1d4ed8;border-radius:8px">
@@ -225,7 +225,7 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
       </p>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
-      Plans start from <strong>NPR 999/month</strong>. Upgrade now and pick up exactly where you left off.
+      Plans start from <strong>NPR {{price}}/month</strong>. Upgrade now and pick up exactly where you left off.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin:28px 0">
       <tr><td style="background:#1d4ed8;border-radius:8px">
@@ -246,7 +246,7 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
       <p style="color:#15803d;font-size:14px;font-weight:600;margin:0 0 4px">Your work is safe</p>
       <p style="color:#166534;font-size:14px;margin:0">Upgrade at any time and continue working — nothing is lost.</p>
     </div>
-    <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>NPR 999/month</strong>. No long-term commitment.</p>
+    <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>NPR {{price}}/month</strong>. No long-term commitment.</p>
     <table cellpadding="0" cellspacing="0" style="margin:28px 0">
       <tr><td style="background:#1d4ed8;border-radius:8px">
         <a href="{{upgradeUrl}}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px">Come Back &rarr;</a>
@@ -333,6 +333,13 @@ export const DEFAULT_BODIES: Record<TemplateType, string> = {
     </p>
     <p style="color:#475569;font-size:14px;font-weight:600;margin:0 0 12px">Why didn&apos;t you continue?</p>
     {{reasonButtons}}
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px">
+      <tr><td style="padding:5px 0">
+        <a href="{{feedbackUrl}}" style="display:block;background:#ffffff;border:1px dashed #cbd5e1;border-radius:8px;padding:12px 20px;color:#64748b;text-decoration:none;font-size:14px;font-weight:500;text-align:center">
+          Something else — tell us in your own words&hellip;
+        </a>
+      </td></tr>
+    </table>
     <p style="color:#94a3b8;font-size:13px;margin:28px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Changed your mind? Your data is still safe — reply to this email and we&apos;ll help you get back in.
     </p>`,

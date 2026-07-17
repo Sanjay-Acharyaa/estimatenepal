@@ -1,8 +1,9 @@
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template-constants"; // H2: single wrapper source
 
-// M4: Single source of truth for plan pricing string used across all lifecycle emails.
-const PLAN_PRICE = "NPR 999/month";
+function planPrice(price?: string): string {
+  return `NPR ${price ?? "999"}/month`;
+}
 
 function escapeHtml(str: string): string {
   return str
@@ -137,6 +138,7 @@ export function trialReminderEmailHtml(
   trialEndsAt: Date,
   upgradeUrl: string,
   unsubscribeUrl?: string,
+  price?: string,
 ): string {
   const safeName = escapeHtml(firstName(name));
   const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", {
@@ -165,7 +167,7 @@ export function trialReminderEmailHtml(
     </p>
     ${ctaButton(upgradeUrl, "View Plans →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
-      Plans start from ${PLAN_PRICE} for a single user. Annual billing saves you 2 months free.
+      Plans start from ${planPrice(price)} for a single user. Annual billing saves you 2 months free.
       If you have any questions, reply to this email and we&apos;ll help you find the right plan.
     </p>
   `, unsubscribeUrl);
@@ -198,7 +200,7 @@ export function trialDay7EmailHtml(name: string, dashboardUrl: string, unsubscri
   `, unsubscribeUrl);
 }
 
-export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsAt: Date, unsubscribeUrl?: string): string {
+export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsAt: Date, unsubscribeUrl?: string, price?: string): string {
   const safeName = escapeHtml(firstName(name));
   const expiryDateStr = trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   return wrapEmailHtml(`
@@ -217,7 +219,7 @@ export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsA
       </ul>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
-      Plans from <strong>${PLAN_PRICE}</strong>. Upgrade now and keep working without interruption.
+      Plans from <strong>${planPrice(price)}</strong>. Upgrade now and keep working without interruption.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now — Keep Access →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -226,25 +228,39 @@ export function trialDay12EmailHtml(name: string, upgradeUrl: string, trialEndsA
   `, unsubscribeUrl);
 }
 
-export function churnReasonEmailHtml(name: string, reasons: { label: string; url: string }[], unsubscribeUrl?: string): string {
+export function churnReasonEmailHtml(
+  name: string,
+  reasons: { label: string; url: string }[],
+  unsubscribeUrl?: string,
+  feedbackUrl?: string,
+): string {
   const safeName = escapeHtml(firstName(name));
   const reasonButtons = reasons.map(r =>
-    `<tr><td style="padding:6px 0">
+    `<tr><td style="padding:5px 0">
       <a href="${safeUrl(r.url)}" style="display:block;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 20px;color:#334155;text-decoration:none;font-size:14px;font-weight:500;text-align:center">
         ${escapeHtml(r.label)}
       </a>
     </td></tr>`
   ).join("");
 
+  const somethingElseRow = feedbackUrl
+    ? `<tr><td style="padding:5px 0">
+        <a href="${safeUrl(feedbackUrl)}" style="display:block;background:#ffffff;border:1px dashed #cbd5e1;border-radius:8px;padding:12px 20px;color:#64748b;text-decoration:none;font-size:14px;font-weight:500;text-align:center">
+          Something else — tell us in your own words…
+        </a>
+      </td></tr>`
+    : "";
+
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">One quick question</h2>
     <p style="color:#64748b;font-size:15px;margin:0 0 20px">Hi ${safeName},</p>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 20px">
-      Your Estimate Nepal trial has ended. We&apos;d love to know what stopped you — it takes one click and helps us improve the product.
+      Your Estimate Nepal trial has ended. We&apos;d love to know what stopped you — it takes one click and helps us build a better product for Nepal&apos;s construction industry.
     </p>
     <p style="color:#475569;font-size:14px;font-weight:600;margin:0 0 12px">Why didn&apos;t you continue?</p>
     <table width="100%" cellpadding="0" cellspacing="0">
       ${reasonButtons}
+      ${somethingElseRow}
     </table>
     <p style="color:#94a3b8;font-size:13px;margin:28px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Changed your mind? Your data is still safe — reply to this email and we&apos;ll help you get back in.
@@ -398,7 +414,7 @@ export function welcomeEmailHtml(name: string, dashboardUrl: string, trialEndsAt
   `, unsubscribeUrl);
 }
 
-export function trialReengagement7EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+export function trialReengagement7EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string, price?: string): string {
   const safeName = escapeHtml(firstName(name));
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">We miss you at Estimate Nepal</h2>
@@ -413,7 +429,7 @@ export function trialReengagement7EmailHtml(name: string, upgradeUrl: string, un
       </p>
     </div>
     <p style="color:#334155;font-size:15px;margin:0 0 4px">
-      Plans start from <strong>${PLAN_PRICE}</strong>. Upgrade now and pick up exactly where you left off.
+      Plans start from <strong>${planPrice(price)}</strong>. Upgrade now and pick up exactly where you left off.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
@@ -422,7 +438,7 @@ export function trialReengagement7EmailHtml(name: string, upgradeUrl: string, un
   `, unsubscribeUrl);
 }
 
-export function trialReengagement14EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+export function trialReengagement14EmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string, price?: string): string {
   const safeName = escapeHtml(firstName(name));
   return wrapEmailHtml(`
     <h2 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 8px">Your data is still waiting for you</h2>
@@ -434,7 +450,7 @@ export function trialReengagement14EmailHtml(name: string, upgradeUrl: string, u
       <p style="color:#15803d;font-size:14px;font-weight:600;margin:0 0 4px">Your work is safe</p>
       <p style="color:#166534;font-size:14px;margin:0">Upgrade at any time and continue working — nothing is lost.</p>
     </div>
-    <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>${PLAN_PRICE}</strong>. No long-term commitment.</p>
+    <p style="color:#334155;font-size:15px;margin:0 0 4px">Plans from <strong>${planPrice(price)}</strong>. No long-term commitment.</p>
     ${ctaButton(upgradeUrl, "Come Back →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">
       Need help or have concerns about pricing? Reply to this email — we&apos;re happy to talk.
@@ -513,7 +529,7 @@ export function trialDataWipedEmailHtml(name: string, baseUrl?: string, unsubscr
   `, unsubscribeUrl);
 }
 
-export function trialExpiredEmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string): string {
+export function trialExpiredEmailHtml(name: string, upgradeUrl: string, unsubscribeUrl?: string, price?: string): string {
   const safeName = escapeHtml(firstName(name));
 
   return wrapEmailHtml(`
@@ -529,7 +545,7 @@ export function trialExpiredEmailHtml(name: string, upgradeUrl: string, unsubscr
       </p>
     </div>
     <p style="color:#334155;font-size:15px;line-height:1.6;margin:0 0 4px">
-      Plans start from <strong>${PLAN_PRICE}</strong> — no long-term commitment required.
+      Plans start from <strong>${planPrice(price)}</strong> — no long-term commitment required.
     </p>
     ${ctaButton(upgradeUrl, "Upgrade Now →")}
     <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;padding-top:24px;border-top:1px solid #f1f5f9">

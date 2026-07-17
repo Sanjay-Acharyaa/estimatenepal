@@ -18,6 +18,7 @@ import {
 } from "@/lib/email";
 import { logEmail } from "@/lib/email-log";
 import { getTemplates, renderTemplate, TemplateFull } from "@/lib/email-templates";
+import { getConfig } from "@/lib/config";
 
 function makeHmacKey(input: string): string {
   const secret = process.env.NEXTAUTH_SECRET;
@@ -141,6 +142,8 @@ export async function GET(req: NextRequest) {
       day7Orgs, day12Orgs, rem3Orgs, expiredOrgs,
       churnOrgs, re7Orgs, re14Orgs, re21Orgs,
       dw30Orgs, wipeOrgs, npsUsers,
+      price,
+      annualFreeMonths,
     ] = await Promise.all([
       getTemplates(),
       prisma.emailLog.findMany({
@@ -208,6 +211,8 @@ export async function GET(req: NextRequest) {
         },
         select: { id: true, name: true, email: true },
       }),
+      getConfig("price_solo_monthly"),
+      getConfig("annual_free_months"),
     ]);
 
     const tplMap = new Map(allTemplates.map((t) => [t.emailType, t]));
@@ -290,8 +295,8 @@ export async function GET(req: NextRequest) {
       const expiryStr = org.trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("trial_day12", tplMap,
-        { name: owner.name, upgradeUrl: UPGRADE_URL, trialEndsAt: expiryStr },
-        { subject: "2 days left on your Estimate Nepal trial", html: (url?) => trialDay12EmailHtml(owner.name, UPGRADE_URL, org.trialEndsAt!, url) },
+        { name: owner.name, upgradeUrl: UPGRADE_URL, trialEndsAt: expiryStr, price },
+        { subject: "2 days left on your Estimate Nepal trial", html: (url?) => trialDay12EmailHtml(owner.name, UPGRADE_URL, org.trialEndsAt!, url, price) },
         u,
       );
       day12Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "trial_day12" }));
@@ -307,8 +312,8 @@ export async function GET(req: NextRequest) {
       const expiryStr = org.trialEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("trial_reminder_3d", tplMap,
-        { name: owner.name, trialEndsAt: expiryStr, upgradeUrl: UPGRADE_URL },
-        { subject: "Your Estimate Nepal trial ends in 3 days", html: (url?) => trialReminderEmailHtml(owner.name, org.trialEndsAt!, UPGRADE_URL, url) },
+        { name: owner.name, trialEndsAt: expiryStr, upgradeUrl: UPGRADE_URL, price, annualFreeMonths },
+        { subject: "Your Estimate Nepal trial ends in 3 days", html: (url?) => trialReminderEmailHtml(owner.name, org.trialEndsAt!, UPGRADE_URL, url, price) },
         u,
       );
       rem3Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "trial_reminder_3d" }));
@@ -323,8 +328,8 @@ export async function GET(req: NextRequest) {
       markSent(org.id, "trial_expired");
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("trial_expired", tplMap,
-        { name: owner.name, upgradeUrl: UPGRADE_URL },
-        { subject: "Your Estimate Nepal trial has ended — upgrade to continue", html: (url?) => trialExpiredEmailHtml(owner.name, UPGRADE_URL, url) },
+        { name: owner.name, upgradeUrl: UPGRADE_URL, price },
+        { subject: "Your Estimate Nepal trial has ended — upgrade to continue", html: (url?) => trialExpiredEmailHtml(owner.name, UPGRADE_URL, url, price) },
         u,
       );
       expiredSends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "trial_expired" }));
@@ -343,11 +348,14 @@ export async function GET(req: NextRequest) {
         { label: "Missing features I need",        url: `${BASE_URL}/api/feedback/churn?reason=missing_features&org=${org.id}&key=${churnKey}` },
         { label: "Just exploring / not ready yet", url: `${BASE_URL}/api/feedback/churn?reason=just_exploring&org=${org.id}&key=${churnKey}` },
         { label: "Went with a competitor",         url: `${BASE_URL}/api/feedback/churn?reason=competitor&org=${org.id}&key=${churnKey}` },
+        { label: "Too complex / hard to use",      url: `${BASE_URL}/api/feedback/churn?reason=too_complex&org=${org.id}&key=${churnKey}` },
+        { label: "Not relevant to my work",        url: `${BASE_URL}/api/feedback/churn?reason=not_relevant&org=${org.id}&key=${churnKey}` },
       ];
+      const feedbackTextUrl = `${BASE_URL}/feedback/churn-text?org=${org.id}&key=${churnKey}`;
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("churn_reason", tplMap,
-        { name: owner.name, reasonButtons: buildReasonButtonsHtml(reasons) },
-        { subject: "One quick question about your trial", html: (url?) => churnReasonEmailHtml(owner.name, reasons, url) },
+        { name: owner.name, reasonButtons: buildReasonButtonsHtml(reasons), feedbackUrl: feedbackTextUrl },
+        { subject: "One quick question about your trial", html: (url?) => churnReasonEmailHtml(owner.name, reasons, url, feedbackTextUrl) },
         u,
       );
       churnSends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "churn_reason" }));
@@ -362,8 +370,8 @@ export async function GET(req: NextRequest) {
       markSent(org.id, "reengagement_7");
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("reengagement_7", tplMap,
-        { name: owner.name, upgradeUrl: UPGRADE_URL },
-        { subject: "We miss you — your Estimate Nepal data is still safe", html: (url?) => trialReengagement7EmailHtml(owner.name, UPGRADE_URL, url) },
+        { name: owner.name, upgradeUrl: UPGRADE_URL, price },
+        { subject: "We miss you — your Estimate Nepal data is still safe", html: (url?) => trialReengagement7EmailHtml(owner.name, UPGRADE_URL, url, price) },
         u,
       );
       re7Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_7" }));
@@ -378,8 +386,8 @@ export async function GET(req: NextRequest) {
       markSent(org.id, "reengagement_14");
       const u = unsubUrl(owner.id, BASE_URL);
       const { subject, html } = buildEmail("reengagement_14", tplMap,
-        { name: owner.name, upgradeUrl: UPGRADE_URL },
-        { subject: "Your data is still waiting — come back to Estimate Nepal", html: (url?) => trialReengagement14EmailHtml(owner.name, UPGRADE_URL, url) },
+        { name: owner.name, upgradeUrl: UPGRADE_URL, price },
+        { subject: "Your data is still waiting — come back to Estimate Nepal", html: (url?) => trialReengagement14EmailHtml(owner.name, UPGRADE_URL, url, price) },
         u,
       );
       re14Sends.push(sendAndLog({ to: owner.email, subject, html, orgId: org.id, recipientName: owner.name, emailType: "reengagement_14" }));

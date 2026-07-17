@@ -8,6 +8,9 @@ const CHURN_LABELS: Record<string, string> = {
   missing_features: "Missing features",
   just_exploring:   "Just exploring / not ready yet",
   competitor:       "Went with a competitor",
+  too_complex:      "Too complex / hard to use",
+  not_relevant:     "Not relevant to my work",
+  other:            "Something else",
 };
 
 function npsMessage(score: number): string {

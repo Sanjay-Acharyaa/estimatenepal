@@ -39,16 +39,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not determine admin email from session." }, { status: 400 });
     }
 
+    const BASE_URL = process.env.NEXTAUTH_URL ?? "https://estimatenepal.com";
+
+    const sampleReasons = [
+      "Too expensive", "Missing features I need", "Just exploring / not ready yet",
+      "Went with a competitor", "Too complex / hard to use", "Not relevant to my work",
+    ];
+
     // Substitute obvious placeholders with sample values so the preview looks real
     const sample: Record<string, string> = {
       "{{name}}": "Test Admin",
-      "{{dashboardUrl}}": `${process.env.NEXTAUTH_URL ?? "https://estimatenepal.com"}/dashboard`,
-      "{{upgradeUrl}}": `${process.env.NEXTAUTH_URL ?? "https://estimatenepal.com"}/pricing`,
-      "{{baseUrl}}": process.env.NEXTAUTH_URL ?? "https://estimatenepal.com",
+      "{{dashboardUrl}}": `${BASE_URL}/dashboard`,
+      "{{upgradeUrl}}": `${BASE_URL}/pricing`,
+      "{{baseUrl}}": BASE_URL,
+      "{{price}}": "999",
+      "{{annualFreeMonths}}": "2",
+      "{{feedbackUrl}}": "#",
       "{{trialEndsAt}}": new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
         .toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
       "{{reasonButtons}}": `<table width="100%" cellpadding="0" cellspacing="0">
-        <tr><td style="padding:6px 0"><a href="#" style="display:block;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 20px;color:#334155;text-decoration:none;font-size:14px;font-weight:500;text-align:center">[Sample reason button]</a></td></tr>
+        ${sampleReasons.map(r => `<tr><td style="padding:5px 0"><a href="#" style="display:block;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 20px;color:#334155;text-decoration:none;font-size:14px;font-weight:500;text-align:center">${r}</a></td></tr>`).join("")}
+        <tr><td style="padding:5px 0"><a href="#" style="display:block;background:#ffffff;border:1px dashed #cbd5e1;border-radius:8px;padding:12px 20px;color:#64748b;text-decoration:none;font-size:14px;font-weight:500;text-align:center">Something else — tell us in your own words…</a></td></tr>
       </table>`,
       "{{scoreButtons}}": `<table cellpadding="0" cellspacing="0" style="margin:0 0 4px"><tr>
         ${Array.from({ length: 11 }, (_, i) => `<td style="padding:2px"><a href="#" style="display:inline-block;width:36px;height:36px;line-height:36px;text-align:center;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155;text-decoration:none;font-size:13px;font-weight:600">${i}</a></td>`).join("")}

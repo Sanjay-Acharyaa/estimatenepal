@@ -61,6 +61,7 @@ model Org {
   storageUsedBytes BigInt      @default(0)
   adminNotes       String?     @db.Text
   churnReason      String?
+  churnFeedback    String?     @db.Text
   dataWipedAt      DateTime?
   users            User[]
   projects         Project[]

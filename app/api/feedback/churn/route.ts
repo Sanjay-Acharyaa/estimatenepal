@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
-const VALID_REASONS = ["too_expensive", "missing_features", "just_exploring", "competitor"];
+const VALID_REASONS = ["too_expensive", "missing_features", "just_exploring", "competitor", "too_complex", "not_relevant"];
 
 const NO_CACHE = { "Cache-Control": "no-store, max-age=0" };
 
