@@ -13,6 +13,8 @@ const updateSchema = z.object({
   notes: z.string().max(1000).trim().nullable().optional(),
 });
 
+const GROUP_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 type RouteContext = { params: { id: string; groupId: string } };
 
 export async function PUT(req: NextRequest, { params }: RouteContext) {
@@ -20,6 +22,10 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
+
+    if (!GROUP_ID_RE.test(params.groupId) || params.groupId.length > 128) {
+      return apiError("VALIDATION_ERROR", "Invalid group ID.", 400);
+    }
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
@@ -76,6 +82,10 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
+
+    if (!GROUP_ID_RE.test(params.groupId) || params.groupId.length > 128) {
+      return apiError("VALIDATION_ERROR", "Invalid group ID.", 400);
+    }
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();

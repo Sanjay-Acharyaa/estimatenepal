@@ -82,6 +82,21 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   const [editSaving, setEditSaving] = useState(false);
   const [deletingLine, setDeletingLine] = useState<string | null>(null);
 
+  const loadLines = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/rate-analysis-lines?rateItemId=${rate.id}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error?.message ?? "Failed to reload lines.");
+        return;
+      }
+      const data = await res.json();
+      setLines(data.lines ?? []);
+    } catch {
+      toast.error("Network error reloading lines.");
+    }
+  }, [rate.id]);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -186,7 +201,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
       toast.success("Line added.");
       setShowAddLine(false);
       setAddForm({ resourceId: "", lineType: "MATERIAL", qtyPerUnit: "", wastagePercent: "", notes: "" });
-      loadAll();
+      loadLines();
     } catch (e: any) {
       setAddError(e.message ?? "Failed.");
     } finally {
@@ -224,7 +239,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
         return;
       }
       setEditLineId(null);
-      loadAll();
+      loadLines();
     } catch {
       toast.error("Network error. Change not saved.");
     } finally {
@@ -248,7 +263,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
         toast.error(d?.error?.message ?? "Failed to remove line.");
         return;
       }
-      loadAll();
+      loadLines();
     } finally {
       setDeletingLine(null);
     }
@@ -365,7 +380,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                           <td className="px-3 py-2.5">
                             <p className="text-gray-800 font-medium">{line.resource.name}</p>
                             <span className={`mt-0.5 inline-flex text-xs px-1.5 py-0.5 rounded-full font-medium ${CAT_COLORS[line.resource.category] ?? "bg-gray-100 text-gray-600"}`}>
-                              {line.resource.category.replace("_", " ")}
+                              {line.resource.category.replace(/_/g, " ")}
                             </span>
                             {line.notes && <p className="text-gray-400 mt-0.5">{line.notes}</p>}
                           </td>

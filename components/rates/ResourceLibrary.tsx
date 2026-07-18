@@ -213,8 +213,9 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
     return acc;
   }, {});
 
-  const grouped = RESOURCE_CATEGORIES.reduce<Record<string, OrgResource[]>>((acc, cat) => {
-    acc[cat.value] = filteredResources.filter(r => r.category === cat.value);
+  const grouped = filteredResources.reduce<Record<string, OrgResource[]>>((acc, r) => {
+    if (!acc[r.category]) acc[r.category] = [];
+    acc[r.category].push(r);
     return acc;
   }, {});
 

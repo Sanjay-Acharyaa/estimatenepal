@@ -36,8 +36,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const vatRate = boq.project.vatEnabled ? boq.project.vatRate : 0;
 
     const enrichedDisciplines = boq.disciplines.map((disc) => {
-      let discTotalSale = 0;
-
       const groups = disc.groups.map((g) => {
         const ov = overrideMap.get(g.id);
         const wastePct = ov?.wastePct ?? 0;
@@ -45,7 +43,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         const notes = ov?.notes ?? null;
 
         const computed = computeEstimateLine(g.totalQuantity, g.rate, wastePct, markupPct, vatRate);
-        discTotalSale += computed.totalSale;
 
         return {
           id: g.id,
@@ -68,17 +65,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         id: disc.id,
         name: disc.name,
         groups,
-        subtotalSale: discTotalSale,
       };
     });
-
-    const grandTotalSale = enrichedDisciplines.reduce((s, d) => s + d.subtotalSale, 0);
 
     return NextResponse.json({
       project: boq.project,
       vatRate,
       disciplines: enrichedDisciplines,
-      grandTotalSale,
     });
   } catch (err) {
     return handleApiError(err);

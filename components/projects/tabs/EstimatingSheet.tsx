@@ -33,7 +33,6 @@ interface EstimateDiscipline {
   id: string;
   name: string;
   groups: EstimateGroup[];
-  subtotalSale: number;
 }
 
 interface EstimateDocument {
@@ -47,7 +46,6 @@ interface EstimateDocument {
   };
   vatRate: number;
   disciplines: EstimateDiscipline[];
-  grandTotalSale: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,17 +53,17 @@ interface EstimateDocument {
 // ---------------------------------------------------------------------------
 
 const ALL_COLS = [
-  { key: "unit", label: "Unit" },
-  { key: "qty", label: "Qty" },
-  { key: "rate", label: "Base Rate" },
-  { key: "wastePct", label: "Waste %" },
-  { key: "itemCost", label: "Item Cost" },
-  { key: "markupPct", label: "Markup %" },
-  { key: "saleRate", label: "Sale Rate" },
-  { key: "totalSale", label: "Total Sale" },
-  { key: "vatAmount", label: "VAT" },
-  { key: "totalWithVat", label: "Total + VAT" },
-  { key: "notes", label: "Notes" },
+  { key: "unit",        label: "Unit",        tooltip: "Unit of measurement for this work item" },
+  { key: "qty",         label: "Qty",         tooltip: "Total quantity derived from takeoff" },
+  { key: "rate",        label: "Base Rate",   tooltip: "BOQ base rate per unit (NRS), pre-wastage" },
+  { key: "wastePct",    label: "Waste %",     tooltip: "Wastage allowance added on top of the base rate" },
+  { key: "itemCost",    label: "Item Cost",   tooltip: "Item cost = Qty x Base Rate x (1 + Waste%)" },
+  { key: "markupPct",   label: "Markup %",    tooltip: "Contractor markup applied to the item cost" },
+  { key: "saleRate",    label: "Sale Rate",   tooltip: "Sale rate = Base Rate x (1 + Waste%) x (1 + Markup%)" },
+  { key: "totalSale",   label: "Total Sale",  tooltip: "Total sale = Qty x Sale Rate" },
+  { key: "vatAmount",   label: "VAT",         tooltip: "VAT amount = Total Sale x VAT%" },
+  { key: "totalWithVat",label: "Total + VAT", tooltip: "Total sale including VAT" },
+  { key: "notes",       label: "Notes",       tooltip: "Free-form notes for this work item line" },
 ] as const;
 
 type ColKey = (typeof ALL_COLS)[number]["key"];
@@ -238,7 +236,7 @@ function ColTogglePanel({ visible, onChange, onClose }: ColToggleProps) {
       </div>
       <div className="space-y-1">
         {ALL_COLS.map((col) => (
-          <label key={col.key} className="flex items-center gap-2 cursor-pointer py-0.5">
+          <label key={col.key} className="flex items-center gap-2 cursor-pointer py-0.5" title={col.tooltip}>
             <input
               type="checkbox"
               checked={visible.has(col.key)}
@@ -310,8 +308,11 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
     setLoading(true);
     setError(null);
     fetch(`/api/projects/${projectId}/estimate`, { signal: controller.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`Error ${r.status}`);
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body?.error?.message ?? `Request failed (${r.status})`);
+        }
         return r.json();
       })
       .then((data: EstimateDocument) => {
@@ -413,38 +414,54 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
   const vatRate = doc?.vatRate ?? 0;
   const showVat = doc?.project.vatEnabled ?? false;
 
-  const { liveTotalSale, liveTotalWithVat, summaryFigures } = useMemo(() => {
-    if (!doc) {
-      return {
-        liveTotalSale: 0,
-        liveTotalWithVat: 0,
-        summaryFigures: { contingencyPct: 0, contingencyAmount: 0, provisionalSum: 0, subtotalBeforeVat: 0, vatAmount: 0, grandPayable: 0 },
-      };
-    }
-    let totalSale = 0;
+  // PERF-1: compute all groups once; both the totals memo and the render loop read from this map.
+  const computedLines = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof computeEstimateLine>>();
+    if (!doc) return map;
     for (const disc of doc.disciplines) {
       for (const g of disc.groups) {
         const ov = overrides.get(g.id) ?? { wastePct: 0, markupPct: 0, notes: null };
-        const c = computeEstimateLine(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
-        totalSale += c.totalSale;
+        map.set(g.id, computeEstimateLine(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate));
       }
     }
+    return map;
+  }, [doc, overrides, vatRate]);
+
+  const { liveTotalSale, filteredTotalSale, filteredTotalWithVat, summaryFigures } = useMemo(() => {
+    const zeros = { contingencyPct: 0, contingencyAmount: 0, provisionalSum: 0, subtotalBeforeVat: 0, vatAmount: 0, grandPayable: 0 };
+    if (!doc) return { liveTotalSale: 0, filteredTotalSale: 0, filteredTotalWithVat: 0, summaryFigures: zeros };
+
+    // Grand total over ALL groups — drives the summary footer regardless of active search.
+    let totalSale = 0;
+    for (const disc of doc.disciplines) {
+      for (const g of disc.groups) {
+        totalSale += computedLines.get(g.id)?.totalSale ?? 0;
+      }
+    }
+
+    // Filtered totals for the table tfoot — reflect only the rows visible after search (CALC-1).
+    let fSale = 0;
+    let fWithVat = 0;
+    for (const disc of filteredDisciplines) {
+      for (const g of disc.groups) {
+        const c = computedLines.get(g.id);
+        if (c) { fSale += c.totalSale; fWithVat += c.totalWithVat; }
+      }
+    }
+
     const contingencyPct = doc.project.contingencyPct ?? 0;
     const provisionalSum = doc.project.provisionalSum ?? 0;
     const contingencyAmount = totalSale * (contingencyPct / 100);
     const subtotalBeforeVat = totalSale + contingencyAmount + provisionalSum;
     const vatAmount = subtotalBeforeVat * (vatRate / 100);
     const grandPayable = subtotalBeforeVat + vatAmount;
-    // liveTotalWithVat matches the per-line discipline subtotals (VAT on base cost only,
-    // no contingency/provisional) so the table columns reconcile.
-    // grandPayable in the summary footer is the authoritative tender total.
-    const liveTotalWithVat = vatRate > 0 ? totalSale * (1 + vatRate / 100) : totalSale;
     return {
       liveTotalSale: totalSale,
-      liveTotalWithVat,
+      filteredTotalSale: fSale,
+      filteredTotalWithVat: fWithVat,
       summaryFigures: { contingencyPct, contingencyAmount, provisionalSum, subtotalBeforeVat, vatAmount, grandPayable },
     };
-  }, [doc, overrides, vatRate]);
+  }, [doc, computedLines, filteredDisciplines, vatRate]);
 
   if (loading) {
     return (
@@ -525,7 +542,8 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
               {ALL_COLS.filter((c) => visibleCols.has(c.key)).map((col) => (
                 <th
                   key={col.key}
-                  className="text-right px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap"
+                  title={col.tooltip}
+                  className="text-right px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap cursor-help"
                 >
                   {col.label}
                 </th>
@@ -550,7 +568,7 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
               let discWithVat = 0;
               const groupRows = disc.groups.map((g) => {
                 const ov = overrides.get(g.id) ?? { wastePct: 0, markupPct: 0, notes: null };
-                const c = computeEstimateLine(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
+                const c = computedLines.get(g.id) ?? computeEstimateLine(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
                 discSale += c.totalSale;
                 discWithVat += c.totalWithVat;
                 return { g, ov, c };
@@ -689,27 +707,33 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
             })}
           </tbody>
 
-          {/* Work items subtotal footer — does not include contingency or provisional sum.
-               Those are added in the summary bar below (Grand Total Payable). */}
+          {/* Work items subtotal footer — shows filtered totals when search is active (CALC-1).
+               Contingency and provisional sum are in the summary bar below. */}
           <tfoot>
             <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 font-semibold">
               <td className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800 px-3 py-3 border-r border-gray-200 dark:border-gray-700">
                 <div className="text-gray-900 dark:text-gray-100">Work Items Total</div>
-                <div className="text-[10px] font-normal text-gray-400 dark:text-gray-500 mt-0.5">
-                  Contingency and provisional sum are added in the summary below
-                </div>
+                {searchLower ? (
+                  <div className="text-[10px] font-normal text-amber-600 dark:text-amber-400 mt-0.5">
+                    Filtered results only
+                  </div>
+                ) : (
+                  <div className="text-[10px] font-normal text-gray-400 dark:text-gray-500 mt-0.5">
+                    Contingency and provisional sum are added in the summary below
+                  </div>
+                )}
               </td>
               {ALL_COLS.filter((c) => visibleCols.has(c.key)).map((col) => {
                 if (col.key === "totalSale")
                   return (
                     <td key={col.key} className="px-3 py-3 text-right tabular-nums text-gray-900 dark:text-gray-100">
-                      {NRS(liveTotalSale)}
+                      {NRS(filteredTotalSale)}
                     </td>
                   );
                 if (col.key === "totalWithVat")
                   return (
                     <td key={col.key} className="px-3 py-3 text-right tabular-nums text-gray-900 dark:text-gray-100">
-                      {NRS(liveTotalWithVat)}
+                      {NRS(filteredTotalWithVat)}
                     </td>
                   );
                 return <td key={col.key} className="px-3 py-3" />;

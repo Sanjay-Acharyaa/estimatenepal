@@ -119,7 +119,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     if (!existing) throw notFound("Resource");
 
     const lineCount = await prisma.rateAnalysisLine.count({
-      where: { resourceId: params.id },
+      where: { resourceId: params.id, orgId },
     });
     if (lineCount > 0) {
       throw conflict(
