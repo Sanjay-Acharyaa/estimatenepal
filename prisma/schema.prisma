@@ -919,6 +919,8 @@ model RateAnalysisLine {
   wastagePercent Float       @default(0)
   notes          String?
   sortOrder      Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   @@index([orgId, rateItemId])
   @@index([orgId])

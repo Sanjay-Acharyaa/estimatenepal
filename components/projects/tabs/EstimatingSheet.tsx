@@ -34,7 +34,6 @@ interface EstimateDiscipline {
   name: string;
   groups: EstimateGroup[];
   subtotalSale: number;
-  subtotalWithVat: number;
 }
 
 interface EstimateDocument {
@@ -49,7 +48,6 @@ interface EstimateDocument {
   vatRate: number;
   disciplines: EstimateDiscipline[];
   grandTotalSale: number;
-  grandTotalWithVat: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -427,9 +425,13 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
     const subtotalBeforeVat = totalSale + contingencyAmount + provisionalSum;
     const vatAmount = subtotalBeforeVat * (vatRate / 100);
     const grandPayable = subtotalBeforeVat + vatAmount;
+    // liveTotalWithVat matches the per-line discipline subtotals (VAT on base cost only,
+    // no contingency/provisional) so the table columns reconcile.
+    // grandPayable in the summary footer is the authoritative tender total.
+    const liveTotalWithVat = vatRate > 0 ? totalSale * (1 + vatRate / 100) : totalSale;
     return {
       liveTotalSale: totalSale,
-      liveTotalWithVat: grandPayable,
+      liveTotalWithVat,
       summaryFigures: { contingencyPct, contingencyAmount, provisionalSum, subtotalBeforeVat, vatAmount, grandPayable },
     };
   }, [doc, overrides, vatRate]);

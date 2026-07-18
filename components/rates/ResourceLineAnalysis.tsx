@@ -255,10 +255,13 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   };
 
   const updateBaseRate = async () => {
-    if (totalRate <= 0) return;
+    // Apply the pre-VAT rate only. VAT is applied separately at the project/BOQ level.
+    // Writing totalRate (which includes VAT) would cause VAT to be counted twice in
+    // any project that has vatEnabled = true.
+    if (preVat <= 0) return;
     const ok = await confirm({
       title: "Update Base Rate",
-      message: `Set the base rate of "${rate.code}" to NRS ${NRS(totalRate)}? This will overwrite the current rate of NRS ${NRS(rate.baseRate)}.`,
+      message: `Set the base rate of "${rate.code}" to NRS ${NRS(preVat)} (pre-VAT)? VAT is applied separately at the BOQ level. Current rate is NRS ${NRS(rate.baseRate)}.`,
       variant: "default",
       confirmLabel: "Update Rate",
     });
@@ -268,11 +271,11 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
       const res = await fetch(`/api/rates/${rate.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseRate: totalRate }),
+        body: JSON.stringify({ baseRate: preVat }),
       });
       if (res.ok) {
-        toast.success(`Base rate updated to NRS ${NRS(totalRate)}.`);
-        onRateUpdated?.(totalRate);
+        toast.success(`Base rate updated to NRS ${NRS(preVat)} (pre-VAT).`);
+        onRateUpdated?.(preVat);
       } else {
         const d = await res.json().catch(() => ({}));
         toast.error(d.error?.message ?? "Failed to update rate.");
@@ -610,16 +613,25 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                         <span className="tabular-nums text-gray-600">NRS {NRS(leadLift)}</span>
                       </div>
                     )}
+                    <div className="flex justify-between px-4 py-2.5 bg-green-50 border-t border-green-200">
+                      <span className="text-xs font-bold text-green-900">Rate for BOQ (pre-VAT)</span>
+                      <span className="text-xs font-bold text-green-900 tabular-nums">NRS {NRS(preVat)}</span>
+                    </div>
                     {vat > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-500">+ VAT ({settings.vatPct}%)</span>
+                        <span className="text-gray-500">+ VAT ({settings.vatPct}%) — applied at BOQ level</span>
                         <span className="tabular-nums text-gray-600">NRS {NRS(vat)}</span>
                       </div>
                     )}
                     <div className="flex justify-between px-4 py-3 bg-blue-50">
-                      <span className="text-sm font-bold text-blue-900">Total Rate per {rate.unit}</span>
+                      <span className="text-sm font-bold text-blue-900">Total Rate (incl. VAT) per {rate.unit}</span>
                       <span className="text-sm font-bold text-blue-900 tabular-nums">NRS {NRS(totalRate)}</span>
                     </div>
+                    {contingency > 0 && (
+                      <div className="px-4 py-2 text-xs text-amber-700 bg-amber-50 border-t border-amber-200">
+                        This rate includes {settings.contingencyPct}% contingency. If your project also applies a contingency percentage at the BOQ level, contingency will be counted twice. Set the project contingency to 0% if it is already included here.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -631,13 +643,13 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 flex-shrink-0">
           <div className="text-xs text-gray-500">
             {lines.length > 0 && settings ? (
-              <>Computed: <span className="font-semibold text-gray-800">NRS {NRS(totalRate)}</span> per {rate.unit}</>
+              <>Pre-VAT rate: <span className="font-semibold text-gray-800">NRS {NRS(preVat)}</span> per {rate.unit}</>
             ) : (
               "Add resource lines to compute the rate"
             )}
           </div>
           <div className="flex gap-3">
-            {isAdmin && lines.length > 0 && settings && totalRate > 0 && (
+            {isAdmin && lines.length > 0 && settings && preVat > 0 && (
               <button
                 onClick={updateBaseRate}
                 disabled={updatingRate}

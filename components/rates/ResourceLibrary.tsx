@@ -22,6 +22,32 @@ const BLANK_FORM = {
   name: "", category: "CEMENT", unit: "bag", unitRate: "", wastagePercent: "0", notes: "",
 };
 
+const CATEGORY_DEFAULT_UNIT: Record<string, string> = {
+  CEMENT: "bag",
+  FINE_AGGREGATE: "cft",
+  COARSE_AGGREGATE: "cft",
+  MASONRY: "nos",
+  STEEL: "kg",
+  TIMBER: "cft",
+  LABOUR_SKILLED: "day",
+  LABOUR_UNSKILLED: "day",
+  EQUIPMENT: "hour",
+  OTHER: "unit",
+};
+
+const CATEGORY_DEFAULT_WASTAGE: Record<string, string> = {
+  CEMENT: "3",
+  FINE_AGGREGATE: "5",
+  COARSE_AGGREGATE: "5",
+  MASONRY: "5",
+  STEEL: "3",
+  TIMBER: "10",
+  LABOUR_SKILLED: "0",
+  LABOUR_UNSKILLED: "0",
+  EQUIPMENT: "0",
+  OTHER: "0",
+};
+
 export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
   const { confirm, dialog: confirmDialog } = useConfirm();
 
@@ -38,6 +64,16 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+
+  // When category changes on a NEW resource form (not edit), auto-update unit and wastage defaults.
+  useEffect(() => {
+    if (editTarget) return;
+    setForm(f => ({
+      ...f,
+      unit: CATEGORY_DEFAULT_UNIT[f.category] ?? "unit",
+      wastagePercent: CATEGORY_DEFAULT_WASTAGE[f.category] ?? "0",
+    }));
+  }, [form.category, editTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Always fetch all resources once; category filtering happens client-side.
   // This eliminates a new API round-trip on every filter pill click.
@@ -171,9 +207,9 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
     return matchesCat && matchesSearch;
   });
 
-  // Counts per category from full unfiltered list (for pill badges)
-  const catCounts = RESOURCE_CATEGORIES.reduce<Record<string, number>>((acc, cat) => {
-    acc[cat.value] = resources.filter(r => r.category === cat.value).length;
+  // Counts per category from full unfiltered list (for pill badges) - single pass O(n)
+  const catCounts = resources.reduce<Record<string, number>>((acc, r) => {
+    acc[r.category] = (acc[r.category] ?? 0) + 1;
     return acc;
   }, {});
 
