@@ -70,6 +70,20 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
     invalidateCache(orgId, existing.category, data.category);
 
+    // When unit rate changes, analysis-lines caches that embed this resource's price must be
+    // cleared so Rate Analysis immediately shows the new price and "Apply to Base Rate" pushes
+    // the correct pre-VAT rate.
+    if (priceChanged) {
+      const affectedLines = await prisma.rateAnalysisLine.findMany({
+        where: { resourceId: params.id, orgId },
+        select: { rateItemId: true },
+      });
+      const affectedIds = Array.from(new Set(affectedLines.map((l) => l.rateItemId)));
+      for (const rateItemId of affectedIds) {
+        redis.del(`analysis-lines:${orgId}:${rateItemId}`).catch(() => {});
+      }
+    }
+
     await appendAuditLog({
       orgId,
       userId: token.id as string,

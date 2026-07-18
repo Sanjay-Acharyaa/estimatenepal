@@ -333,9 +333,9 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
     return () => controller.abort();
   }, [projectId]);
 
-  // Save a single field change
+  // Save a single field change; reverts local state if the server rejects.
   const saveOverride = useCallback(
-    async (groupId: string, patch: Partial<LineState>) => {
+    async (groupId: string, patch: Partial<LineState>, previous: LineState) => {
       setSaving((prev) => new Set(prev).add(groupId));
       try {
         const res = await fetch(`/api/projects/${projectId}/estimate/lines/${groupId}`, {
@@ -345,11 +345,21 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: { message: "Save failed" } }));
-          toast.error(err?.error?.message ?? "Failed to save change. Please retry.");
+          toast.error(err?.error?.message ?? "Failed to save change. Reverting.");
+          setOverrides((prev) => {
+            const next = new Map(prev);
+            next.set(groupId, previous);
+            return next;
+          });
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Network error. Change not saved.";
         toast.error(msg);
+        setOverrides((prev) => {
+          const next = new Map(prev);
+          next.set(groupId, previous);
+          return next;
+        });
       } finally {
         setSaving((prev) => {
           const next = new Set(prev);
@@ -362,13 +372,13 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
   );
 
   function updateOverride(groupId: string, patch: Partial<LineState>) {
+    const previous = overrides.get(groupId) ?? { wastePct: 0, markupPct: 0, notes: null };
     setOverrides((prev) => {
       const next = new Map(prev);
-      const existing = next.get(groupId) ?? { wastePct: 0, markupPct: 0, notes: null };
-      next.set(groupId, { ...existing, ...patch });
+      next.set(groupId, { ...previous, ...patch });
       return next;
     });
-    saveOverride(groupId, patch);
+    saveOverride(groupId, patch, previous);
   }
 
   function toggleDisc(id: string) {
@@ -679,11 +689,15 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
             })}
           </tbody>
 
-          {/* Grand total footer */}
+          {/* Work items subtotal footer — does not include contingency or provisional sum.
+               Those are added in the summary bar below (Grand Total Payable). */}
           <tfoot>
             <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 font-semibold">
-              <td className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800 px-3 py-3 text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-gray-700">
-                Grand Total
+              <td className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800 px-3 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div className="text-gray-900 dark:text-gray-100">Work Items Total</div>
+                <div className="text-[10px] font-normal text-gray-400 dark:text-gray-500 mt-0.5">
+                  Contingency and provisional sum are added in the summary below
+                </div>
               </td>
               {ALL_COLS.filter((c) => visibleCols.has(c.key)).map((col) => {
                 if (col.key === "totalSale")
