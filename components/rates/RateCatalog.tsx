@@ -5,7 +5,12 @@ import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { RateForm } from "./RateForm";
 import { RateAnalysisBuilder } from "./RateAnalysisBuilder";
+import { ResourceLibrary } from "./ResourceLibrary";
+import { ResourceLineAnalysis } from "./ResourceLineAnalysis";
+import { RateSettingsPanel } from "./RateSettingsPanel";
 import { fmtNum } from "@/lib/format";
+
+type CatalogTab = "rates" | "resources" | "settings";
 
 interface RateBatch {
   id: string;
@@ -53,6 +58,7 @@ const SOURCE_BADGE: Record<string, string> = {
 
 export function RateCatalog({ isAdmin, projectId }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const [activeTab, setActiveTab] = useState<CatalogTab>("rates");
   const [batches, setBatches] = useState<RateBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string | "all">("all");
   const [rates, setRates] = useState<RateItem[]>([]);
@@ -63,6 +69,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<RateItem | null>(null);
   const [analysisTarget, setAnalysisTarget] = useState<RateItem | null>(null);
+  const [resourceAnalysisTarget, setResourceAnalysisTarget] = useState<RateItem | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingBatch, setDeletingBatch] = useState<string | null>(null);
   const [unbatchedCount, setUnbatchedCount] = useState(0);
@@ -318,6 +325,35 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     : batches.reduce((s, b) => s + b.itemCount, 0);
 
   return (
+    <div className="space-y-4">
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-200">
+        {([
+          { key: "rates" as CatalogTab, label: "Rate Books" },
+          { key: "resources" as CatalogTab, label: "Resource Library" },
+          { key: "settings" as CatalogTab, label: "Rate Settings" },
+        ] as const).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition ${
+              activeTab === tab.key
+                ? "border-blue-600 text-blue-700"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "resources" && (
+        <ResourceLibrary isAdmin={isAdmin} />
+      )}
+      {activeTab === "settings" && (
+        <RateSettingsPanel isAdmin={isAdmin} />
+      )}
+      {activeTab === "rates" && (
     <div className="flex flex-col sm:flex-row gap-5 min-h-96">
       {confirmDialog}
 
@@ -646,10 +682,14 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500">{rate.fiscalYear}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => setResourceAnalysisTarget(rate)}
+                          className="px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200" title="Resource analysis">
+                          Resource Analysis
+                        </button>
                         {projectId && (
                           <button onClick={() => setAnalysisTarget(rate)}
                             className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200" title="Rate analysis">
-                            ∑ Analysis
+                            Analysis
                           </button>
                         )}
                         {isAdmin && rate.source === "CUSTOM" && (
@@ -777,6 +817,16 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       {analysisTarget && projectId && (
         <RateAnalysisBuilder rate={analysisTarget} projectId={projectId} onClose={() => setAnalysisTarget(null)} />
       )}
+      {resourceAnalysisTarget && (
+        <ResourceLineAnalysis
+          rate={resourceAnalysisTarget}
+          isAdmin={isAdmin}
+          onClose={() => setResourceAnalysisTarget(null)}
+          onRateUpdated={() => loadRates()}
+        />
+      )}
+    </div>
+    )}
     </div>
   );
 }

@@ -70,6 +70,8 @@ model Org {
   invites          OrgInvite[]
   rateBatches      RateBatch[]
   assemblies       Assembly[]
+  resources        OrgResource[]
+  rateSettings     OrgRateSettings?
   createdAt        DateTime    @default(now())
 }
 
@@ -451,6 +453,7 @@ model RateItem {
   batch         RateBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
   districtRates  DistrictRate[]
   analyses       RateAnalysis[]
+  analysisLines  RateAnalysisLine[]
   overrides      BOQOverride[]
   takeoffGroups  TakeoffGroup[] @relation("GroupRateItem")
 
@@ -857,9 +860,79 @@ model EmailTemplate {
   subject     String
   bodyHtml    String   @db.LongText
   updatedAt   DateTime @updatedAt
-  updatedBy   String?  // superadmin email who last saved
+  updatedBy   String?
 
   @@index([emailType])
+}
+
+// Resource Library — org-level catalog of materials, labour and equipment with unit prices.
+// Every RateAnalysisLine references a resource from this library.
+model OrgResource {
+  id             String           @id @default(cuid())
+  orgId          String
+  org            Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name           String
+  category       ResourceCategory
+  unit           String
+  unitRate       Float            @default(0)
+  wastagePercent Float            @default(0)
+  notes          String?
+  isDefault      Boolean          @default(false)
+  priceUpdatedAt DateTime?
+  analysisLines  RateAnalysisLine[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, category])
+}
+
+// One line in a resource-based rate analysis template (org + rate item level).
+// Multiple lines build up the full cost breakdown for a unit of work.
+model RateAnalysisLine {
+  id             String      @id @default(cuid())
+  orgId          String
+  rateItemId     String
+  rateItem       RateItem    @relation(fields: [rateItemId], references: [id], onDelete: Cascade)
+  resourceId     String
+  resource       OrgResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  lineType       String      @default("MATERIAL")
+  qtyPerUnit     Float       @default(0)
+  wastagePercent Float       @default(0)
+  notes          String?
+  sortOrder      Int         @default(0)
+
+  @@index([orgId, rateItemId])
+  @@index([orgId])
+  @@index([resourceId])
+}
+
+// Per-org rate calculation settings: overhead, profit, contingency, VAT, and DUDBC dry volume factors.
+model OrgRateSettings {
+  id                String   @id @default(cuid())
+  orgId             String   @unique
+  org               Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  overheadPct       Float    @default(12)
+  profitPct         Float    @default(10)
+  contingencyPct    Float    @default(5)
+  vatPct            Float    @default(13)
+  leadLiftPct       Float    @default(0)
+  dryVolumeMortar   Float    @default(1.30)
+  dryVolumeConcrete Float    @default(1.54)
+  updatedAt         DateTime @updatedAt
+}
+
+enum ResourceCategory {
+  CEMENT
+  FINE_AGGREGATE
+  COARSE_AGGREGATE
+  MASONRY
+  STEEL
+  TIMBER
+  LABOUR_SKILLED
+  LABOUR_UNSKILLED
+  EQUIPMENT
+  OTHER
 }
 
 // Snapshot of each template before it is overwritten (version history)
