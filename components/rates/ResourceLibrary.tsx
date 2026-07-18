@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { fmtNum } from "@/lib/format";
-import { RESOURCE_CATEGORIES, CAT_COLORS, catLabel } from "@/lib/resource-constants";
+import { RESOURCE_CATEGORIES, CAT_COLORS } from "@/lib/resource-constants";
 
 interface OrgResource {
   id: string;
@@ -39,12 +39,12 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
 
   const [search, setSearch] = useState("");
 
+  // Always fetch all resources once; category filtering happens client-side.
+  // This eliminates a new API round-trip on every filter pill click.
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const sp = new URLSearchParams();
-      if (filterCat) sp.set("category", filterCat);
-      const res = await fetch(`/api/resources?${sp}`);
+      const res = await fetch("/api/resources");
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         toast.error(d?.error?.message ?? `Failed to load resources (${res.status}).`);
@@ -57,7 +57,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
       toast.error("Network error loading resources.");
       setResources([]);
     } finally { setLoading(false); }
-  }, [filterCat]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -161,12 +161,21 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const searchLower = search.toLowerCase().trim();
-  const filteredResources = searchLower
-    ? resources.filter(r =>
-        r.name.toLowerCase().includes(searchLower) ||
-        (r.notes ?? "").toLowerCase().includes(searchLower)
-      )
-    : resources;
+
+  // Apply both category filter and text search client-side from the full list
+  const filteredResources = resources.filter(r => {
+    const matchesCat = filterCat ? r.category === filterCat : true;
+    const matchesSearch = searchLower
+      ? r.name.toLowerCase().includes(searchLower) || (r.notes ?? "").toLowerCase().includes(searchLower)
+      : true;
+    return matchesCat && matchesSearch;
+  });
+
+  // Counts per category from full unfiltered list (for pill badges)
+  const catCounts = RESOURCE_CATEGORIES.reduce<Record<string, number>>((acc, cat) => {
+    acc[cat.value] = resources.filter(r => r.category === cat.value).length;
+    return acc;
+  }, {});
 
   const grouped = RESOURCE_CATEGORIES.reduce<Record<string, OrgResource[]>>((acc, cat) => {
     acc[cat.value] = filteredResources.filter(r => r.category === cat.value);
@@ -253,8 +262,8 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
           All ({resources.length})
         </button>
         {RESOURCE_CATEGORIES.map(cat => {
-          const count = grouped[cat.value]?.length ?? 0;
-          if (count === 0 && filterCat !== cat.value) return null;
+          const count = catCounts[cat.value] ?? 0;
+          if (count === 0) return null;
           return (
             <button
               key={cat.value}

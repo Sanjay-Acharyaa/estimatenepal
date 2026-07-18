@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { fmtNum } from "@/lib/format";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +42,8 @@ interface EstimateDocument {
     name: string;
     vatEnabled: boolean;
     vatRate: number;
+    contingencyPct: number;
+    provisionalSum: number;
   };
   vatRate: number;
   disciplines: EstimateDiscipline[];
@@ -74,7 +77,7 @@ const DEFAULT_HIDDEN: ColKey[] = ["itemCost", "vatAmount"];
 // ---------------------------------------------------------------------------
 
 function NRS(value: number) {
-  return value.toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return fmtNum(value, 2);
 }
 
 function pct(value: number) {
@@ -433,8 +436,8 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
   const vatRate = doc.vatRate;
   const showVat = doc.project.vatEnabled;
 
-  // Memoize grand totals - recomputed only when overrides or doc changes, not on every render
-  const { liveTotalSale, liveTotalWithVat } = useMemo(() => {
+  // Memoize grand totals and summary figures - recomputed only when overrides or doc changes
+  const { liveTotalSale, liveTotalWithVat, summaryFigures } = useMemo(() => {
     let totalSale = 0;
     let totalWithVat = 0;
     for (const disc of doc.disciplines) {
@@ -445,7 +448,17 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
         totalWithVat += c.totalWithVat;
       }
     }
-    return { liveTotalSale: totalSale, liveTotalWithVat: totalWithVat };
+    const contingencyPct = doc.project.contingencyPct ?? 0;
+    const provisionalSum = doc.project.provisionalSum ?? 0;
+    const contingencyAmount = totalSale * (contingencyPct / 100);
+    const subtotalBeforeVat = totalSale + contingencyAmount + provisionalSum;
+    const vatAmount = subtotalBeforeVat * (vatRate / 100);
+    const grandPayable = subtotalBeforeVat + vatAmount;
+    return {
+      liveTotalSale: totalSale,
+      liveTotalWithVat: totalWithVat,
+      summaryFigures: { contingencyPct, contingencyAmount, provisionalSum, subtotalBeforeVat, vatAmount, grandPayable },
+    };
   }, [doc, overrides, vatRate]);
 
   return (
@@ -617,7 +630,7 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
                         )}
                         {visibleCols.has("qty") && (
                           <td className="px-3 py-2 text-right tabular-nums text-gray-800 dark:text-gray-200">
-                            {g.totalQuantity.toLocaleString("en-NP", { maximumFractionDigits: 3 })}
+                            {fmtNum(g.totalQuantity, 3)}
                           </td>
                         )}
                         {visibleCols.has("rate") && (
@@ -698,6 +711,34 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
           </tfoot>
         </table>
       </div>
+
+      {/* Estimate summary footer */}
+      <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <SummaryCell label="Base Cost" value={liveTotalSale} />
+          {summaryFigures.contingencyPct > 0 && (
+            <SummaryCell label={`Contingency (${summaryFigures.contingencyPct}%)`} value={summaryFigures.contingencyAmount} />
+          )}
+          {summaryFigures.provisionalSum > 0 && (
+            <SummaryCell label="Provisional Sum" value={summaryFigures.provisionalSum} />
+          )}
+          {showVat && (
+            <SummaryCell label={`VAT (${vatRate}%)`} value={summaryFigures.vatAmount} />
+          )}
+          <SummaryCell label="Grand Total Payable" value={summaryFigures.grandPayable} highlight />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCell({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+  return (
+    <div className={`flex flex-col min-w-[140px] ${highlight ? "border-l-2 border-blue-500 pl-3" : ""}`}>
+      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
+      <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-blue-700 dark:text-blue-400 text-base" : "text-gray-900 dark:text-gray-100"}`}>
+        NRS {fmtNum(value, 2)}
+      </span>
     </div>
   );
 }

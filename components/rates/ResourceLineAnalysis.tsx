@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { fmtNum } from "@/lib/format";
 import { useConfirm } from "@/hooks/useConfirm";
-import { CAT_COLORS } from "@/lib/resource-constants";
+import { CAT_COLORS, RESOURCE_CATEGORIES } from "@/lib/resource-constants";
 
 interface Resource {
   id: string;
@@ -288,7 +288,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
               Resource-based analysis per {rate.unit} &middot; Current base rate: NRS {NRS(rate.baseRate)}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-xl flex-shrink-0 ml-3">x</button>
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-800 text-sm font-medium flex-shrink-0 ml-3 px-2 py-1 rounded hover:bg-gray-100">Close</button>
         </div>
 
         {/* Org settings summary bar */}
@@ -421,7 +421,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                                     disabled={deletingLine === line.id}
                                     className="px-2 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 disabled:opacity-40"
                                   >
-                                    {deletingLine === line.id ? "…" : "Del"}
+                                    {deletingLine === line.id ? "…" : "Delete"}
                                   </button>
                                 </div>
                               )}
@@ -451,11 +451,11 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select resource…</option>
-                        {["CEMENT","FINE_AGGREGATE","COARSE_AGGREGATE","MASONRY","STEEL","TIMBER","LABOUR_SKILLED","LABOUR_UNSKILLED","EQUIPMENT","OTHER"].map(cat => {
-                          const catResources = allResources.filter(r => r.category === cat);
+                        {RESOURCE_CATEGORIES.map(({ value, label }) => {
+                          const catResources = allResources.filter(r => r.category === value);
                           if (catResources.length === 0) return null;
                           return (
-                            <optgroup key={cat} label={cat.replace("_", " ")}>
+                            <optgroup key={value} label={label}>
                               {catResources.map(r => (
                                 <option key={r.id} value={r.id}>
                                   {r.name} ({r.unit}) - NRS {NRS(r.unitRate)}
