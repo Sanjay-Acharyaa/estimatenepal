@@ -14,9 +14,8 @@ function computeLineValues(
   vatRate: number
 ) {
   const itemCost = totalQuantity * rate * (1 + wastePct / 100);
-  // Guard against markup >= 100%
-  const safeMkp = Math.min(markupPct, 99.99);
-  const saleRate = safeMkp >= 100 ? rate : (rate * (1 + wastePct / 100)) / (1 - safeMkp / 100);
+  // Markup-on-cost: consistent with DUDBC add-on method (overhead%, profit%, contingency% are all additive)
+  const saleRate = rate * (1 + wastePct / 100) * (1 + markupPct / 100);
   const totalSale = totalQuantity * saleRate;
   const vatAmount = totalSale * (vatRate / 100);
   const totalWithVat = totalSale + vatAmount;

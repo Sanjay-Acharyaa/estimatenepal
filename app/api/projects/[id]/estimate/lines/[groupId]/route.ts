@@ -9,7 +9,7 @@ import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/l
 
 const updateSchema = z.object({
   wastePct: z.number().min(0).max(100).optional(),
-  markupPct: z.number().min(0).max(99.99).optional(),
+  markupPct: z.number().min(0).max(100).optional(),
   notes: z.string().max(1000).trim().nullable().optional(),
 });
 
@@ -93,7 +93,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     if (project.orgId !== orgId) throw forbidden();
 
     await prisma.estimateLineOverride.deleteMany({
-      where: { projectId: params.id, groupId: params.groupId },
+      where: { projectId: params.id, groupId: params.groupId, orgId },
     });
 
     await appendAuditLog({

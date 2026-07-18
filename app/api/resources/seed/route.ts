@@ -51,7 +51,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Invalidate all cache keys - "all" and each seeded category
     redis.del(`resources:${orgId}:all`).catch(() => {});
+    const seededCategories = Array.from(new Set(toCreate.map((r) => r.category)));
+    for (const cat of seededCategories) {
+      redis.del(`resources:${orgId}:${cat}`).catch(() => {});
+    }
 
     await appendAuditLog({
       orgId,

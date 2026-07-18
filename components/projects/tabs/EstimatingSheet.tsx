@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -88,25 +89,12 @@ function computeFromOverrides(
   vatRate: number
 ) {
   const itemCost = totalQuantity * rate * (1 + wastePct / 100);
-  const safeMkp = Math.min(markupPct, 99.99);
-  const saleRate = safeMkp >= 100 ? rate : (rate * (1 + wastePct / 100)) / (1 - safeMkp / 100);
+  // Markup-on-cost: consistent with DUDBC add-on method used throughout the system
+  const saleRate = rate * (1 + wastePct / 100) * (1 + markupPct / 100);
   const totalSale = totalQuantity * saleRate;
   const vatAmount = totalSale * (vatRate / 100);
   const totalWithVat = totalSale + vatAmount;
   return { itemCost, saleRate, totalSale, vatAmount, totalWithVat };
-}
-
-// ---------------------------------------------------------------------------
-// Debounce hook
-// ---------------------------------------------------------------------------
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
 }
 
 // ---------------------------------------------------------------------------
@@ -318,18 +306,18 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
     });
   }
 
-  // Load data
+  // Load data - abort on unmount or projectId change to prevent stale overwrites
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetch(`/api/projects/${projectId}/estimate`)
+    fetch(`/api/projects/${projectId}/estimate`, { signal: controller.signal })
       .then((r) => {
         if (!r.ok) throw new Error(`Error ${r.status}`);
         return r.json();
       })
       .then((data: EstimateDocument) => {
         setDoc(data);
-        // Seed override map from server data
         const map = new Map<string, LineState>();
         for (const disc of data.disciplines) {
           for (const g of disc.groups) {
@@ -338,8 +326,13 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
         }
         setOverrides(map);
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (e.name !== "AbortError") setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [projectId]);
 
   // Save a single field change
@@ -354,10 +347,11 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: { message: "Save failed" } }));
-          console.error("Save override error:", err);
+          toast.error(err?.error?.message ?? "Failed to save change. Please retry.");
         }
-      } catch (e) {
-        console.error("Save override error:", e);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Network error. Change not saved.";
+        toast.error(msg);
       } finally {
         setSaving((prev) => {
           const next = new Set(prev);
@@ -610,7 +604,7 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
                             <EditCell
                               value={ov.markupPct}
                               min={0}
-                              max={99.99}
+                              max={100}
                               onSave={(v) => updateOverride(g.id, { markupPct: v })}
                             />
                           </td>

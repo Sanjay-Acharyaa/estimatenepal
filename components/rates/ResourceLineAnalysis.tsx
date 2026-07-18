@@ -213,7 +213,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
     if (isNaN(qty) || qty < 0 || isNaN(wastage)) return;
     setEditSaving(true);
     try {
-      await fetch(`/api/rate-analysis-lines/${lineId}`, {
+      const res = await fetch(`/api/rate-analysis-lines/${lineId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -222,8 +222,15 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
           notes: editForm.notes.trim() || null,
         }),
       });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error?.message ?? "Failed to save line.");
+        return;
+      }
       setEditLineId(null);
       loadAll();
+    } catch {
+      toast.error("Network error. Change not saved.");
     } finally {
       setEditSaving(false);
     }
