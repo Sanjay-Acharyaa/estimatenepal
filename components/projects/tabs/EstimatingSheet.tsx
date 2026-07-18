@@ -43,6 +43,8 @@ interface EstimateDocument {
     vatRate: number;
     contingencyPct: number;
     provisionalSum: number;
+    tdsEnabled: boolean;
+    tdsRate: number;
   };
   vatRate: number;
   disciplines: EstimateDiscipline[];
@@ -57,11 +59,11 @@ const ALL_COLS = [
   { key: "qty",         label: "Qty",         tooltip: "Total quantity derived from takeoff" },
   { key: "rate",        label: "Base Rate",   tooltip: "BOQ base rate per unit (NRS), pre-wastage" },
   { key: "wastePct",    label: "Waste %",     tooltip: "Wastage allowance added on top of the base rate" },
-  { key: "itemCost",    label: "Item Cost",   tooltip: "Item cost = Qty x Base Rate x (1 + Waste%)" },
+  { key: "itemCost",    label: "Item Cost",   tooltip: "Item cost = Qty x Base Rate x (1 + Waste%). Note: if the base rate already embeds wastage from resource analysis, this adds further wastage on top." },
   { key: "markupPct",   label: "Markup %",    tooltip: "Contractor markup applied to the item cost" },
   { key: "saleRate",    label: "Sale Rate",   tooltip: "Sale rate = Base Rate x (1 + Waste%) x (1 + Markup%)" },
   { key: "totalSale",   label: "Total Sale",  tooltip: "Total sale = Qty x Sale Rate" },
-  { key: "vatAmount",   label: "VAT",         tooltip: "VAT amount = Total Sale x VAT%" },
+  { key: "vatAmount",   label: "VAT",         tooltip: "VAT amount = Total Sale x VAT% (per line). The summary footer VAT includes contingency and provisional sum, so the two totals may differ." },
   { key: "totalWithVat",label: "Total + VAT", tooltip: "Total sale including VAT" },
   { key: "notes",       label: "Notes",       tooltip: "Free-form notes for this work item line" },
 ] as const;
@@ -428,7 +430,7 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
   }, [doc, overrides, vatRate]);
 
   const { liveTotalSale, filteredTotalSale, filteredTotalWithVat, summaryFigures } = useMemo(() => {
-    const zeros = { contingencyPct: 0, contingencyAmount: 0, provisionalSum: 0, subtotalBeforeVat: 0, vatAmount: 0, grandPayable: 0 };
+    const zeros = { contingencyPct: 0, contingencyAmount: 0, provisionalSum: 0, subtotalBeforeVat: 0, vatAmount: 0, tdsEnabled: false, tdsRate: 0, tdsAmount: 0, netPayable: 0 };
     if (!doc) return { liveTotalSale: 0, filteredTotalSale: 0, filteredTotalWithVat: 0, summaryFigures: zeros };
 
     // Grand total over ALL groups — drives the summary footer regardless of active search.
@@ -439,7 +441,7 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
       }
     }
 
-    // Filtered totals for the table tfoot — reflect only the rows visible after search (CALC-1).
+    // Filtered totals for the table tfoot — reflect only the rows visible after search.
     let fSale = 0;
     let fWithVat = 0;
     for (const disc of filteredDisciplines) {
@@ -454,12 +456,15 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
     const contingencyAmount = totalSale * (contingencyPct / 100);
     const subtotalBeforeVat = totalSale + contingencyAmount + provisionalSum;
     const vatAmount = subtotalBeforeVat * (vatRate / 100);
-    const grandPayable = subtotalBeforeVat + vatAmount;
+    const tdsEnabled = doc.project.tdsEnabled ?? false;
+    const tdsRate = doc.project.tdsRate ?? 0;
+    const tdsAmount = tdsEnabled ? subtotalBeforeVat * (tdsRate / 100) : 0;
+    const netPayable = subtotalBeforeVat + vatAmount - tdsAmount;
     return {
       liveTotalSale: totalSale,
       filteredTotalSale: fSale,
       filteredTotalWithVat: fWithVat,
-      summaryFigures: { contingencyPct, contingencyAmount, provisionalSum, subtotalBeforeVat, vatAmount, grandPayable },
+      summaryFigures: { contingencyPct, contingencyAmount, provisionalSum, subtotalBeforeVat, vatAmount, tdsEnabled, tdsRate, tdsAmount, netPayable },
     };
   }, [doc, computedLines, filteredDisciplines, vatRate]);
 
@@ -633,6 +638,11 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
                                 No rate
                               </span>
                             )}
+                            {g.totalQuantity < 0 && (
+                              <span className="inline-flex items-center px-1.5 py-0 rounded text-[9px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                                Deduction
+                              </span>
+                            )}
                           </div>
                           {g.rateCode && (
                             <div className="text-gray-400 dark:text-gray-500 mt-0.5 text-[10px]">
@@ -744,31 +754,38 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
       </div>
 
       {/* Estimate summary footer */}
-      <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3">
+      <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 space-y-2">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <SummaryCell label="Base Cost" value={liveTotalSale} />
           {summaryFigures.contingencyPct > 0 && (
-            <SummaryCell label={`Contingency (${summaryFigures.contingencyPct}%)`} value={summaryFigures.contingencyAmount} />
+            <SummaryCell
+              label={`Contingency (${summaryFigures.contingencyPct}%)`}
+              value={summaryFigures.contingencyAmount}
+              tooltip="If your base rates already include contingency from resource analysis, this adds contingency again. Set to 0% if rates already include it."
+            />
           )}
           {summaryFigures.provisionalSum > 0 && (
             <SummaryCell label="Provisional Sum" value={summaryFigures.provisionalSum} />
           )}
           {showVat && (
-            <SummaryCell label={`VAT (${vatRate}%)`} value={summaryFigures.vatAmount} />
+            <SummaryCell label={`VAT (${vatRate}%)`} value={summaryFigures.vatAmount} tooltip="VAT is applied on Base Cost + Contingency + Provisional Sum." />
           )}
-          <SummaryCell label="Grand Total Payable" value={summaryFigures.grandPayable} highlight />
+          {summaryFigures.tdsEnabled && summaryFigures.tdsAmount > 0 && (
+            <SummaryCell label={`TDS withheld (${summaryFigures.tdsRate}%)`} value={-summaryFigures.tdsAmount} negative />
+          )}
+          <SummaryCell label="Net Payable" value={summaryFigures.netPayable} highlight />
         </div>
       </div>
     </div>
   );
 }
 
-function SummaryCell({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+function SummaryCell({ label, value, highlight, negative, tooltip }: { label: string; value: number; highlight?: boolean; negative?: boolean; tooltip?: string }) {
   return (
-    <div className={`flex flex-col min-w-[140px] ${highlight ? "border-l-2 border-blue-500 pl-3" : ""}`}>
-      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
-      <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-blue-700 dark:text-blue-400 text-base" : "text-gray-900 dark:text-gray-100"}`}>
-        NRS {fmtNum(value, 2)}
+    <div className={`flex flex-col min-w-[140px] ${highlight ? "border-l-2 border-blue-500 pl-3" : ""}`} title={tooltip}>
+      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}{tooltip ? " *" : ""}</span>
+      <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-blue-700 dark:text-blue-400 text-base" : negative ? "text-amber-600 dark:text-amber-400" : "text-gray-900 dark:text-gray-100"}`}>
+        {negative ? "-" : ""}NRS {fmtNum(Math.abs(value), 2)}
       </span>
     </div>
   );

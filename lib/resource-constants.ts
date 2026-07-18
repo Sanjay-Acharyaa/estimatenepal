@@ -29,3 +29,31 @@ export const CAT_COLORS: Record<string, string> = {
 
 export const catLabel = (cat: string): string =>
   RESOURCE_CATEGORIES.find((c) => c.value === cat)?.label ?? cat;
+
+// Default units per category — used by ResourceLibrary form when creating a new resource.
+export const CATEGORY_DEFAULT_UNIT: Record<string, string> = {
+  CEMENT:           "bag",
+  FINE_AGGREGATE:   "cft",
+  COARSE_AGGREGATE: "cft",
+  MASONRY:          "nos",
+  STEEL:            "kg",
+  TIMBER:           "cft",
+  LABOUR_SKILLED:   "day",
+  LABOUR_UNSKILLED: "day",
+  EQUIPMENT:        "hour",
+  OTHER:            "unit",
+};
+
+// Default wastage % per category — used by ResourceLibrary form when creating a new resource.
+export const CATEGORY_DEFAULT_WASTAGE: Record<string, string> = {
+  CEMENT:           "3",
+  FINE_AGGREGATE:   "5",
+  COARSE_AGGREGATE: "5",
+  MASONRY:          "5",
+  STEEL:            "3",
+  TIMBER:           "10",
+  LABOUR_SKILLED:   "0",
+  LABOUR_UNSKILLED: "0",
+  EQUIPMENT:        "0",
+  OTHER:            "0",
+};

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { fmtNum } from "@/lib/format";
-import { RESOURCE_CATEGORIES, CAT_COLORS } from "@/lib/resource-constants";
+import { RESOURCE_CATEGORIES, CAT_COLORS, CATEGORY_DEFAULT_UNIT, CATEGORY_DEFAULT_WASTAGE } from "@/lib/resource-constants";
 
 interface OrgResource {
   id: string;
@@ -20,32 +20,6 @@ interface OrgResource {
 
 const BLANK_FORM = {
   name: "", category: "CEMENT", unit: "bag", unitRate: "", wastagePercent: "0", notes: "",
-};
-
-const CATEGORY_DEFAULT_UNIT: Record<string, string> = {
-  CEMENT: "bag",
-  FINE_AGGREGATE: "cft",
-  COARSE_AGGREGATE: "cft",
-  MASONRY: "nos",
-  STEEL: "kg",
-  TIMBER: "cft",
-  LABOUR_SKILLED: "day",
-  LABOUR_UNSKILLED: "day",
-  EQUIPMENT: "hour",
-  OTHER: "unit",
-};
-
-const CATEGORY_DEFAULT_WASTAGE: Record<string, string> = {
-  CEMENT: "3",
-  FINE_AGGREGATE: "5",
-  COARSE_AGGREGATE: "5",
-  MASONRY: "5",
-  STEEL: "3",
-  TIMBER: "10",
-  LABOUR_SKILLED: "0",
-  LABOUR_UNSKILLED: "0",
-  EQUIPMENT: "0",
-  OTHER: "0",
 };
 
 export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
@@ -244,8 +218,8 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-sm font-semibold text-gray-800">Resource Library</p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Resource Library</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             Manage your organisation's standard materials, labour, and equipment rates used in rate analysis.
           </p>
         </div>
@@ -254,7 +228,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
             <button
               onClick={seedDefaults}
               disabled={seeding}
-              className="px-3 py-1.5 text-xs font-medium bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition disabled:opacity-50"
+              className="px-3 py-1.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition disabled:opacity-50"
             >
               {seeding ? "Loading defaults…" : "Load Nepal defaults"}
             </button>
@@ -263,7 +237,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
             <button
               onClick={seedDefaults}
               disabled={seeding}
-              className="px-3 py-1.5 text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
+              className="px-3 py-1.5 text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition disabled:opacity-50"
             >
               {seeding ? "Checking…" : "+ Seed missing defaults"}
             </button>
@@ -286,7 +260,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by name or notes..."
-          className="w-full max-w-sm text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-sm text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       )}
 
@@ -294,7 +268,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
       <div className="flex flex-wrap gap-1.5">
         <button
           onClick={() => setFilterCat("")}
-          className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${filterCat === "" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${filterCat === "" ? "bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
         >
           All ({resources.length})
         </button>
@@ -305,7 +279,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
             <button
               key={cat.value}
               onClick={() => setFilterCat(filterCat === cat.value ? "" : cat.value)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${filterCat === cat.value ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${filterCat === cat.value ? "bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
             >
               {cat.label} ({count})
             </button>
@@ -316,12 +290,12 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-12">
           <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-gray-600 text-sm">Loading…</span>
+          <span className="text-gray-600 dark:text-gray-400 text-sm">Loading…</span>
         </div>
       ) : resources.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl">
-          <p className="text-gray-700 font-medium text-sm">No resources yet</p>
-          <p className="text-gray-500 text-xs mt-1">Load Nepal defaults or add resources manually.</p>
+        <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
+          <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">No resources yet</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">Load Nepal defaults or add resources manually.</p>
           {isAdmin && (
             <button
               onClick={seedDefaults}
@@ -333,7 +307,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
           )}
         </div>
       ) : filteredResources.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">
+        <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
           No resources match your search.
         </div>
       ) : (
@@ -343,40 +317,40 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
               <p className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2 ${CAT_COLORS[cat.value]}`}>
                 {cat.label}
               </p>
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     <tr>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">Name</th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Unit</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-28">Rate (NRS)</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-20">Wastage %</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-24" title="When the unit rate was last updated">Rate Updated</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 w-36">Notes</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Name</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 w-16">Unit</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 w-28">Rate (NRS)</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 w-20">Wastage %</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 w-24" title="When the unit rate was last updated">Rate Updated</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 w-36">Notes</th>
                       {isAdmin && <th className="px-3 py-2.5 w-24" />}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                     {grouped[cat.value].map(r => (
-                      <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2.5 text-gray-800 text-xs">
+                      <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-3 py-2.5 text-gray-800 dark:text-gray-200 text-xs">
                           {r.name}
                           {r.isDefault && (
-                            <span className="ml-1.5 text-gray-400 text-[10px]">(default)</span>
+                            <span className="ml-1.5 text-gray-400 dark:text-gray-500 text-[10px]">(default)</span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-center text-gray-600 text-xs">{r.unit}</td>
-                        <td className="px-3 py-2.5 text-right font-medium text-gray-800 tabular-nums">
+                        <td className="px-3 py-2.5 text-center text-gray-600 dark:text-gray-400 text-xs">{r.unit}</td>
+                        <td className="px-3 py-2.5 text-right font-medium text-gray-800 dark:text-gray-200 tabular-nums">
                           {fmtNum(r.unitRate, 2)}
                         </td>
-                        <td className="px-3 py-2.5 text-right text-gray-600 text-xs tabular-nums">
+                        <td className="px-3 py-2.5 text-right text-gray-600 dark:text-gray-400 text-xs tabular-nums">
                           {r.wastagePercent}%
                         </td>
                         <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${priceAgeClass(r.priceUpdatedAt)}`}
                             title={r.priceUpdatedAt ? `Rate set on ${new Date(r.priceUpdatedAt).toLocaleDateString()}` : "Never updated"}>
                           {fmtDate(r.priceUpdatedAt)}
                         </td>
-                        <td className="px-3 py-2.5 text-gray-500 text-xs truncate max-w-xs">
+                        <td className="px-3 py-2.5 text-gray-500 dark:text-gray-400 text-xs truncate max-w-xs">
                           {r.notes}
                         </td>
                         {isAdmin && (
@@ -384,14 +358,14 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                             <div className="flex items-center gap-1 justify-end">
                               <button
                                 onClick={() => openEdit(r)}
-                                className="px-2 py-1 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
+                                className="px-2 py-1 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                               >
                                 Edit
                               </button>
                               <button
                                 onClick={() => deleteResource(r)}
                                 disabled={deleting === r.id}
-                                className="px-2 py-1 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded disabled:opacity-40"
+                                className="px-2 py-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded disabled:opacity-40"
                               >
                                 {deleting === r.id ? "..." : "Delete"}
                               </button>
@@ -411,39 +385,39 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
       {/* Add/Edit form modal */}
       {showForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={e => { if (e.key === "Escape") setShowForm(false); }}
         >
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                 {editTarget ? "Edit Resource" : "Add Resource"}
               </h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-500 hover:text-gray-800 text-sm font-medium px-2 py-1 rounded hover:bg-gray-100">Close</button>
+              <button onClick={() => setShowForm(false)} className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm font-medium px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Close</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. PPC Cement (Bag 50kg)"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Category <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {RESOURCE_CATEGORIES.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
@@ -451,34 +425,35 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Unit <span className="text-red-500">*</span>
                   </label>
                   <input
                     value={form.unit}
                     onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
                     placeholder="e.g. bag, kg, day, cft"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Unit Rate (NRS) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
                     min="0"
+                    max="9999999"
                     step="0.01"
                     value={form.unitRate}
                     onChange={e => setForm(f => ({ ...f, unitRate: e.target.value }))}
                     placeholder="0.00"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Wastage %</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Wastage %</label>
                   <input
                     type="number"
                     min="0"
@@ -487,25 +462,25 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                     value={form.wastagePercent}
                     onChange={e => setForm(f => ({ ...f, wastagePercent: e.target.value }))}
                     placeholder="0"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Notes (optional)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
                 <input
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="e.g. Grade, brand, supplier note…"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              {formError && <p className="text-red-500 text-sm">{formError}</p>}
+              {formError && <p className="text-red-500 dark:text-red-400 text-sm">{formError}</p>}
             </div>
-            <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-200">
+            <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancel
               </button>

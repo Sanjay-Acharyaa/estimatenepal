@@ -513,6 +513,7 @@ model EstimateLineOverride {
   markupPct Float    @default(0)
   wastePct  Float    @default(0)
   notes     String?  @db.Text
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([projectId, groupId])
@@ -889,7 +890,7 @@ model OrgResource {
   id             String           @id @default(cuid())
   orgId          String
   org            Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  name           String
+  name           String           @db.VarChar(200)
   category       ResourceCategory
   unit           String
   unitRate       Float            @default(0)
@@ -901,6 +902,7 @@ model OrgResource {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
+  @@unique([orgId, name, category])
   @@index([orgId])
   @@index([orgId, category])
 }
@@ -914,7 +916,7 @@ model RateAnalysisLine {
   rateItem       RateItem    @relation(fields: [rateItemId], references: [id], onDelete: Cascade)
   resourceId     String
   resource       OrgResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  lineType       String      @default("MATERIAL")
+  lineType       LineType    @default(MATERIAL)
   qtyPerUnit     Float       @default(0)
   wastagePercent Float       @default(0)
   notes          String?
@@ -940,6 +942,13 @@ model OrgRateSettings {
   dryVolumeMortar   Float    @default(1.30)
   dryVolumeConcrete Float    @default(1.54)
   updatedAt         DateTime @updatedAt
+}
+
+enum LineType {
+  MATERIAL
+  LABOUR
+  EQUIPMENT
+  OTHER
 }
 
 enum ResourceCategory {

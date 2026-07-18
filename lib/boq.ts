@@ -138,33 +138,28 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
     )
   );
 
-  const rateItems =
+  // Parallelise the three independent lookups after rateItemIds are known.
+  // The old RateAnalysis.useComputedRate path is intentionally removed: the resource-based
+  // analysis system writes directly to rateItem.baseRate via "Apply to Base Rate", so
+  // baseOrDistrictRate always reflects the most recent computed rate.
+  const [rateItems, districtRates, allOverrides] = await Promise.all([
     rateItemIds.length > 0
-      ? await prisma.rateItem.findMany({ where: { id: { in: rateItemIds } } })
-      : [];
+      ? prisma.rateItem.findMany({ where: { id: { in: rateItemIds } } })
+      : Promise.resolve([]),
+    project.district
+      ? prisma.districtRate.findMany({
+          where: { district: project.district },
+          select: { rateItemId: true, rate: true },
+        })
+      : Promise.resolve([]),
+    prisma.bOQOverride.findMany({
+      where: { projectId },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
   const rateMap = new Map(rateItems.map((r) => [r.id, r]));
-
-  // Load rate analyses so we can use computedRate when useComputedRate=true
-  const rateAnalyses = rateItemIds.length > 0
-    ? await prisma.rateAnalysis.findMany({
-        where: { projectId, rateItemId: { in: rateItemIds } },
-      })
-    : [];
-  const analysisMap = new Map(rateAnalyses.map((a) => [a.rateItemId, a]));
-
-  // Fetch district-specific rates for the project's district (BUG 8)
-  const districtRates = project.district
-    ? await prisma.districtRate.findMany({
-        where: { district: project.district },
-        select: { rateItemId: true, rate: true },
-      })
-    : [];
   const districtRateMap = new Map(districtRates.map((r) => [r.rateItemId, r.rate]));
-
-  const allOverrides = await prisma.bOQOverride.findMany({
-    where: { projectId },
-    orderBy: { createdAt: "desc" },
-  });
 
   // Most-recent approved and pending override per rateItemId
   const approvedMap = new Map<string, (typeof allOverrides)[0]>();
@@ -259,12 +254,11 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       // Final guard — malformed additionalParams or multiplier can still produce NaN/Infinity
       if (!Number.isFinite(totalQuantity)) totalQuantity = 0;
 
-      // Start with base rate; prefer district rate over base rate (BUG 8); upgrade to computed rate if analysis says so
-      const analysis = rateItemId ? analysisMap.get(rateItemId) : undefined;
+      // Prefer district rate over base rate; resource analysis writes to baseRate via "Apply to Base Rate".
       const baseOrDistrictRate = rateItemId
         ? (districtRateMap.get(rateItemId) ?? rateItem?.baseRate ?? 0)
         : 0;
-      let rate = (analysis?.useComputedRate ? analysis.computedRate : baseOrDistrictRate) ?? 0;
+      let rate = baseOrDistrictRate ?? 0;
       let isOverridden = false;
       let originalRate: number | null = null;
 

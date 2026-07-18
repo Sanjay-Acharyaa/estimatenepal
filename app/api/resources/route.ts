@@ -8,15 +8,14 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { ResourceCategory } from "@prisma/client";
-
-const CACHE_TTL = 300;
+import { CACHE_TTL } from "@/lib/cache-constants";
 const VALID_CATEGORIES = Object.values(ResourceCategory);
 
 const createSchema = z.object({
   name: z.string().min(1).max(200).trim(),
   category: z.enum(VALID_CATEGORIES as [ResourceCategory, ...ResourceCategory[]]),
   unit: z.string().min(1).max(50).trim(),
-  unitRate: z.number().min(0),
+  unitRate: z.number().min(0).max(9_999_999),
   wastagePercent: z.number().min(0).max(100).default(0),
   notes: z.string().max(500).trim().optional().nullable(),
 });

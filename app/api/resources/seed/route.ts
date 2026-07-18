@@ -63,13 +63,13 @@ export async function POST(req: NextRequest) {
       userId: token.id as string,
       event: "resource.seed",
       resourceId: orgId,
-      meta: { seeded: toCreate.length, skipped: existing.length } as any,
+      meta: { seeded: toCreate.length, skipped: DEFAULT_RESOURCES.length - toCreate.length } as any,
       ipAddress: ip,
     });
 
     return NextResponse.json({
       seeded: toCreate.length,
-      skipped: existing.length,
+      skipped: DEFAULT_RESOURCES.length - toCreate.length,
     });
   } catch (err) {
     return handleApiError(err);

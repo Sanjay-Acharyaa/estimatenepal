@@ -9,6 +9,8 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { LINE_TYPES } from "@/lib/line-types";
 
+const LINE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 const updateSchema = z.object({
   lineType: z.enum(LINE_TYPES).optional(),
   qtyPerUnit: z.number().min(0).optional(),
@@ -28,6 +30,8 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     if (!token.orgId) throw forbidden();
+
+    if (!LINE_ID_RE.test(params.id) || params.id.length > 128) return apiError("VALIDATION_ERROR", "Invalid line ID.", 400);
 
     const orgId = token.orgId as string;
     const user = await withTenantGuard(token.id as string, orgId);
@@ -81,6 +85,8 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     if (!token.orgId) throw forbidden();
+
+    if (!LINE_ID_RE.test(params.id) || params.id.length > 128) return apiError("VALIDATION_ERROR", "Invalid line ID.", 400);
 
     const orgId = token.orgId as string;
     const user = await withTenantGuard(token.id as string, orgId);

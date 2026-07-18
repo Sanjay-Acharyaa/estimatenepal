@@ -8,8 +8,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { RATE_DEFAULTS } from "@/lib/rate-defaults";
-
-const CACHE_TTL = 300;
+import { CACHE_TTL } from "@/lib/cache-constants";
 
 const updateSchema = z.object({
   overheadPct: z.number().min(0).max(100).optional(),

@@ -6,6 +6,7 @@ import { fmtNum } from "@/lib/format";
 import { useConfirm } from "@/hooks/useConfirm";
 import { CAT_COLORS, RESOURCE_CATEGORIES } from "@/lib/resource-constants";
 import { LINE_TYPES } from "@/lib/line-types";
+import { getWastageDefault } from "@/lib/wastageDefaults";
 
 interface Resource {
   id: string;
@@ -126,14 +127,20 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Pre-fill wastage when resource is selected
+  // Pre-fill wastage when resource is selected.
+  // Prefer the resource library's own wastagePercent. If it is 0, fall back to the
+  // keyword-based suggestion from getWastageDefault so the form is never left at 0
+  // for materials that clearly have standard wastage allowances.
   useEffect(() => {
     if (!addForm.resourceId) return;
     const res = allResources.find(r => r.id === addForm.resourceId);
     if (res) {
+      const suggested = res.wastagePercent > 0
+        ? res.wastagePercent
+        : (getWastageDefault(res.name)?.pct ?? 0);
       setAddForm(f => ({
         ...f,
-        wastagePercent: String(res.wastagePercent),
+        wastagePercent: String(suggested),
         lineType: res.category.startsWith("LABOUR")
           ? "LABOUR"
           : res.category === "EQUIPMENT"
@@ -301,45 +308,45 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       {confirmDialog}
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-700"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs text-gray-500">{rate.code}</span>
-              <h2 className="font-semibold text-gray-900 text-sm">{rate.description.slice(0, 80)}</h2>
+              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{rate.code}</span>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{rate.description.slice(0, 80)}</h2>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Resource-based analysis per {rate.unit} &middot; Current base rate: NRS {NRS(rate.baseRate)}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-600 hover:text-gray-800 text-sm font-medium flex-shrink-0 ml-3 px-2 py-1 rounded hover:bg-gray-100">Close</button>
+          <button onClick={onClose} className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm font-medium flex-shrink-0 ml-3 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Close</button>
         </div>
 
         {/* Org settings summary bar */}
         {settings && (
-          <div className="px-6 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-x-4 gap-y-1">
-            <span className="text-xs text-gray-500">
-              Overhead <span className="font-medium text-gray-700">{settings.overheadPct}%</span>
+          <div className="px-6 py-2 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-700 flex flex-wrap gap-x-4 gap-y-1">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Overhead <span className="font-medium text-gray-700 dark:text-gray-300">{settings.overheadPct}%</span>
             </span>
-            <span className="text-xs text-gray-500">
-              Profit <span className="font-medium text-gray-700">{settings.profitPct}%</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Profit <span className="font-medium text-gray-700 dark:text-gray-300">{settings.profitPct}%</span>
             </span>
-            <span className="text-xs text-gray-500">
-              Contingency <span className="font-medium text-gray-700">{settings.contingencyPct}%</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Contingency <span className="font-medium text-gray-700 dark:text-gray-300">{settings.contingencyPct}%</span>
             </span>
             {settings.leadLiftPct > 0 && (
-              <span className="text-xs text-gray-500">
-                Lead & Lift <span className="font-medium text-gray-700">{settings.leadLiftPct}%</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Lead & Lift <span className="font-medium text-gray-700 dark:text-gray-300">{settings.leadLiftPct}%</span>
               </span>
             )}
-            <span className="text-xs text-gray-500">
-              VAT <span className="font-medium text-gray-700">{settings.vatPct}%</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              VAT <span className="font-medium text-gray-700 dark:text-gray-300">{settings.vatPct}%</span>
             </span>
           </div>
         )}
@@ -349,43 +356,43 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-10">
               <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              <span className="text-gray-600 text-sm">Loading…</span>
+              <span className="text-gray-600 dark:text-gray-400 text-sm">Loading…</span>
             </div>
           ) : (
             <>
               {allResources.length === 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-xs text-amber-800">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
                   Your Resource Library is empty. Go to the Resource Library tab and add resources before building a rate analysis.
                 </div>
               )}
 
               {/* Lines table */}
               {lines.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                       <tr>
-                        <th className="px-3 py-2.5 text-left font-semibold text-gray-500">Resource</th>
-                        <th className="px-3 py-2.5 text-center font-semibold text-gray-500 w-20">Type</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 w-24">Qty/Unit</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 w-24">Rate</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 w-20">Wastage</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 w-28">Amount</th>
+                        <th className="px-3 py-2.5 text-left font-semibold text-gray-500 dark:text-gray-400">Resource</th>
+                        <th className="px-3 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 w-20">Type</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Qty/Unit</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Rate</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-20">Wastage</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Amount</th>
                         {isAdmin && <th className="px-3 py-2.5 w-20" />}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {lines.map(line => (
-                        <tr key={line.id} className="hover:bg-gray-50">
+                        <tr key={line.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                           <td className="px-3 py-2.5">
-                            <p className="text-gray-800 font-medium">{line.resource.name}</p>
+                            <p className="text-gray-800 dark:text-gray-200 font-medium">{line.resource.name}</p>
                             <span className={`mt-0.5 inline-flex text-xs px-1.5 py-0.5 rounded-full font-medium ${CAT_COLORS[line.resource.category] ?? "bg-gray-100 text-gray-600"}`}>
                               {line.resource.category.replace(/_/g, " ")}
                             </span>
-                            {line.notes && <p className="text-gray-400 mt-0.5">{line.notes}</p>}
+                            {line.notes && <p className="text-gray-400 dark:text-gray-500 mt-0.5">{line.notes}</p>}
                           </td>
-                          <td className="px-3 py-2.5 text-center text-gray-600">{line.lineType}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">
+                          <td className="px-3 py-2.5 text-center text-gray-600 dark:text-gray-400">{line.lineType}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-gray-800 dark:text-gray-200">
                             {editLineId === line.id ? (
                               <input
                                 type="number"
@@ -393,16 +400,16 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                                 step="0.001"
                                 value={editForm.qtyPerUnit}
                                 onChange={e => setEditForm(f => ({ ...f, qtyPerUnit: e.target.value }))}
-                                className="w-20 border border-gray-300 rounded px-1.5 py-0.5 text-right text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-20 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 text-right text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                             ) : (
                               <span>{fmtNum(line.qtyPerUnit, 4)} {line.resource.unit}</span>
                             )}
                           </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
+                          <td className="px-3 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-400">
                             {NRS(line.resource.unitRate)}
                           </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">
+                          <td className="px-3 py-2.5 text-right tabular-nums text-gray-800 dark:text-gray-200">
                             {editLineId === line.id ? (
                               <input
                                 type="number"
@@ -411,13 +418,13 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                                 step="0.5"
                                 value={editForm.wastagePercent}
                                 onChange={e => setEditForm(f => ({ ...f, wastagePercent: e.target.value }))}
-                                className="w-16 border border-gray-300 rounded px-1.5 py-0.5 text-right text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-16 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 text-right text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                             ) : (
                               <span>{line.wastagePercent}%</span>
                             )}
                           </td>
-                          <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-800">
+                          <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-800 dark:text-gray-100">
                             {NRS(lineCost(line))}
                           </td>
                           {isAdmin && (
@@ -433,7 +440,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                                   </button>
                                   <button
                                     onClick={() => setEditLineId(null)}
-                                    className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                                    className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                                   >
                                     Cancel
                                   </button>
@@ -442,14 +449,14 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                                 <div className="flex gap-1 justify-end">
                                   <button
                                     onClick={() => startEdit(line)}
-                                    className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                                    className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                                   >
                                     Edit
                                   </button>
                                   <button
                                     onClick={() => deleteLine(line)}
                                     disabled={deletingLine === line.id}
-                                    className="px-2 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 disabled:opacity-40"
+                                    className="px-2 py-0.5 text-xs bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-40"
                                   >
                                     {deletingLine === line.id ? "…" : "Delete"}
                                   </button>
@@ -463,22 +470,22 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                   </table>
                 </div>
               ) : (
-                <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 text-sm">
+                <div className="text-center py-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 dark:text-gray-400 text-sm">
                   No analysis lines yet. Add resource lines to build up this rate.
                 </div>
               )}
 
               {/* Add line form */}
               {isAdmin && showAddLine ? (
-                <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
-                  <p className="text-xs font-semibold text-blue-800">Add Resource Line</p>
+                <div className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 space-y-3">
+                  <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">Add Resource Line</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Resource</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Resource</label>
                       <select
                         value={addForm.resourceId}
                         onChange={e => setAddForm(f => ({ ...f, resourceId: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select resource…</option>
                         {RESOURCE_CATEGORIES.map(({ value, label }) => {
@@ -497,17 +504,17 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Line Type</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Line Type</label>
                       <select
                         value={addForm.lineType}
                         onChange={e => setAddForm(f => ({ ...f, lineType: e.target.value as typeof LINE_TYPES[number] }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         {LINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Qty per {rate.unit || "unit"}
                       </label>
                       <input
@@ -517,11 +524,11 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                         value={addForm.qtyPerUnit}
                         onChange={e => setAddForm(f => ({ ...f, qtyPerUnit: e.target.value }))}
                         placeholder="0.000"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Wastage %</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Wastage %</label>
                       <input
                         type="number"
                         min="0"
@@ -530,20 +537,20 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                         value={addForm.wastagePercent}
                         onChange={e => setAddForm(f => ({ ...f, wastagePercent: e.target.value }))}
                         placeholder="0"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Notes (optional)</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
                       <input
                         value={addForm.notes}
                         onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
                         placeholder="e.g. for 1:4 mortar"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
-                  {addError && <p className="text-red-600 text-xs">{addError}</p>}
+                  {addError && <p className="text-red-600 dark:text-red-400 text-xs">{addError}</p>}
                   <div className="flex gap-2">
                     <button
                       onClick={addLine}
@@ -554,7 +561,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                     </button>
                     <button
                       onClick={() => { setShowAddLine(false); setAddError(""); }}
-                      className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       Cancel
                     </button>
@@ -563,7 +570,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
               ) : isAdmin && allResources.length > 0 ? (
                 <button
                   onClick={() => setShowAddLine(true)}
-                  className="w-full py-2 text-xs font-medium text-blue-700 bg-blue-50 border-2 border-dashed border-blue-200 rounded-lg hover:bg-blue-100 transition"
+                  className="w-full py-2 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
                 >
                   + Add Resource Line
                 </button>
@@ -571,79 +578,79 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
 
               {/* Cost breakdown */}
               {lines.length > 0 && settings && (
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                     Cost Breakdown
                   </div>
-                  <div className="divide-y divide-gray-100">
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
                     {subtotalMaterial > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-600">Materials</span>
-                        <span className="tabular-nums font-medium">NRS {NRS(subtotalMaterial)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Materials</span>
+                        <span className="tabular-nums font-medium text-gray-800 dark:text-gray-200">NRS {NRS(subtotalMaterial)}</span>
                       </div>
                     )}
                     {subtotalLabour > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-600">Labour</span>
-                        <span className="tabular-nums font-medium">NRS {NRS(subtotalLabour)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Labour</span>
+                        <span className="tabular-nums font-medium text-gray-800 dark:text-gray-200">NRS {NRS(subtotalLabour)}</span>
                       </div>
                     )}
                     {subtotalEquipment > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-600">Equipment</span>
-                        <span className="tabular-nums font-medium">NRS {NRS(subtotalEquipment)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Equipment</span>
+                        <span className="tabular-nums font-medium text-gray-800 dark:text-gray-200">NRS {NRS(subtotalEquipment)}</span>
                       </div>
                     )}
                     {subtotalOther > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-600">Other</span>
-                        <span className="tabular-nums font-medium">NRS {NRS(subtotalOther)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Other</span>
+                        <span className="tabular-nums font-medium text-gray-800 dark:text-gray-200">NRS {NRS(subtotalOther)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between px-4 py-2 text-xs font-semibold bg-gray-50">
-                      <span className="text-gray-700">Direct Cost</span>
-                      <span className="tabular-nums">NRS {NRS(directCost)}</span>
+                    <div className="flex justify-between px-4 py-2 text-xs font-semibold bg-gray-50 dark:bg-gray-800">
+                      <span className="text-gray-700 dark:text-gray-300">Direct Cost</span>
+                      <span className="tabular-nums text-gray-900 dark:text-gray-100">NRS {NRS(directCost)}</span>
                     </div>
                     {overhead > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-500">+ Overhead ({settings.overheadPct}%)</span>
-                        <span className="tabular-nums text-gray-600">NRS {NRS(overhead)}</span>
+                        <span className="text-gray-500 dark:text-gray-400">+ Overhead ({settings.overheadPct}%)</span>
+                        <span className="tabular-nums text-gray-600 dark:text-gray-300">NRS {NRS(overhead)}</span>
                       </div>
                     )}
                     {profit > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-500">+ Profit ({settings.profitPct}%)</span>
-                        <span className="tabular-nums text-gray-600">NRS {NRS(profit)}</span>
+                        <span className="text-gray-500 dark:text-gray-400">+ Profit ({settings.profitPct}%)</span>
+                        <span className="tabular-nums text-gray-600 dark:text-gray-300">NRS {NRS(profit)}</span>
                       </div>
                     )}
                     {contingency > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-500">+ Contingency ({settings.contingencyPct}%)</span>
-                        <span className="tabular-nums text-gray-600">NRS {NRS(contingency)}</span>
+                        <span className="text-gray-500 dark:text-gray-400">+ Contingency ({settings.contingencyPct}%)</span>
+                        <span className="tabular-nums text-gray-600 dark:text-gray-300">NRS {NRS(contingency)}</span>
                       </div>
                     )}
                     {leadLift > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-500">+ Lead and Lift ({settings.leadLiftPct}%)</span>
-                        <span className="tabular-nums text-gray-600">NRS {NRS(leadLift)}</span>
+                        <span className="text-gray-500 dark:text-gray-400">+ Lead and Lift ({settings.leadLiftPct}%)</span>
+                        <span className="tabular-nums text-gray-600 dark:text-gray-300">NRS {NRS(leadLift)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between px-4 py-2.5 bg-green-50 border-t border-green-200">
-                      <span className="text-xs font-bold text-green-900">Rate for BOQ (pre-VAT)</span>
-                      <span className="text-xs font-bold text-green-900 tabular-nums">NRS {NRS(preVat)}</span>
+                    <div className="flex justify-between px-4 py-2.5 bg-green-50 dark:bg-green-900/20 border-t border-green-200 dark:border-green-800">
+                      <span className="text-xs font-bold text-green-900 dark:text-green-300">Rate for BOQ (pre-VAT)</span>
+                      <span className="text-xs font-bold text-green-900 dark:text-green-300 tabular-nums">NRS {NRS(preVat)}</span>
                     </div>
                     {vat > 0 && (
                       <div className="flex justify-between px-4 py-2 text-xs">
-                        <span className="text-gray-500">+ VAT ({settings.vatPct}%) — applied at BOQ level</span>
-                        <span className="tabular-nums text-gray-600">NRS {NRS(vat)}</span>
+                        <span className="text-gray-500 dark:text-gray-400">+ VAT ({settings.vatPct}%) — applied at BOQ level</span>
+                        <span className="tabular-nums text-gray-600 dark:text-gray-300">NRS {NRS(vat)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between px-4 py-3 bg-blue-50">
-                      <span className="text-sm font-bold text-blue-900">Total Rate (incl. VAT) per {rate.unit}</span>
-                      <span className="text-sm font-bold text-blue-900 tabular-nums">NRS {NRS(totalRate)}</span>
+                    <div className="flex justify-between px-4 py-3 bg-blue-50 dark:bg-blue-900/20">
+                      <span className="text-sm font-bold text-blue-900 dark:text-blue-300">Total Rate (incl. VAT) per {rate.unit}</span>
+                      <span className="text-sm font-bold text-blue-900 dark:text-blue-300 tabular-nums">NRS {NRS(totalRate)}</span>
                     </div>
                     {contingency > 0 && (
-                      <div className="px-4 py-2 text-xs text-amber-700 bg-amber-50 border-t border-amber-200">
+                      <div className="px-4 py-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800">
                         This rate includes {settings.contingencyPct}% contingency. If your project also applies a contingency percentage at the BOQ level, contingency will be counted twice. Set the project contingency to 0% if it is already included here.
                       </div>
                     )}
@@ -655,10 +662,10 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 flex-shrink-0">
-          <div className="text-xs text-gray-500">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
             {lines.length > 0 && settings ? (
-              <>Pre-VAT rate: <span className="font-semibold text-gray-800">NRS {NRS(preVat)}</span> per {rate.unit}</>
+              <>Pre-VAT rate: <span className="font-semibold text-gray-800 dark:text-gray-200">NRS {NRS(preVat)}</span> per {rate.unit}</>
             ) : (
               "Add resource lines to compute the rate"
             )}
@@ -675,7 +682,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
             )}
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               Close
             </button>

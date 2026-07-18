@@ -8,8 +8,9 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { LINE_TYPES } from "@/lib/line-types";
+import { CACHE_TTL } from "@/lib/cache-constants";
 
-const CACHE_TTL = 300;
+const LINE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 const createSchema = z.object({
   rateItemId: z.string().min(1),
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
     const orgId = token.orgId as string;
     const rateItemId = req.nextUrl.searchParams.get("rateItemId") ?? "";
     if (!rateItemId) return apiError("VALIDATION_ERROR", "rateItemId query param is required.", 400);
+    if (!LINE_ID_RE.test(rateItemId) || rateItemId.length > 128) return apiError("VALIDATION_ERROR", "Invalid rateItemId.", 400);
 
     const key = ck(orgId, rateItemId);
     const hit = await redis.get(key).catch(() => null);
