@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { fmtNum } from "@/lib/format";
 import { useConfirm } from "@/hooks/useConfirm";
 import { CAT_COLORS, RESOURCE_CATEGORIES } from "@/lib/resource-constants";
+import { LINE_TYPES } from "@/lib/line-types";
 
 interface Resource {
   id: string;
@@ -48,7 +49,7 @@ interface Props {
   onRateUpdated?: (newRate: number) => void;
 }
 
-const LINE_TYPES = ["MATERIAL", "LABOUR", "EQUIPMENT", "OTHER"] as const;
+
 
 
 const NRS = (n: number) => fmtNum(n, 2);
@@ -89,13 +90,19 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
         fetch("/api/orgs/rate-settings"),
         fetch("/api/resources"),
       ]);
-      const lData = await lRes.json();
-      const sData = await sRes.json();
-      const rData = await rRes.json();
+      if (!lRes.ok || !sRes.ok || !rRes.ok) {
+        const failed = [lRes, sRes, rRes].find(r => !r.ok);
+        const d = failed ? await failed.json().catch(() => ({})) : {};
+        toast.error(d?.error?.message ?? "Failed to load rate analysis data.");
+        setLines([]); setSettings(null);
+        return;
+      }
+      const [lData, sData, rData] = await Promise.all([lRes.json(), sRes.json(), rRes.json()]);
       setLines(lData.lines ?? []);
       setSettings(sData.settings ?? null);
       setAllResources(rData.resources ?? []);
     } catch {
+      toast.error("Network error loading rate analysis.");
       setLines([]); setSettings(null);
     } finally {
       setLoading(false);
@@ -235,7 +242,12 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
     if (!ok) return;
     setDeletingLine(line.id);
     try {
-      await fetch(`/api/rate-analysis-lines/${line.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/rate-analysis-lines/${line.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error?.message ?? "Failed to remove line.");
+        return;
+      }
       loadAll();
     } finally {
       setDeletingLine(null);
@@ -403,9 +415,9 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                                   </button>
                                   <button
                                     onClick={() => setEditLineId(null)}
-                                    className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded"
+                                    className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
                                   >
-                                    x
+                                    Cancel
                                   </button>
                                 </div>
                               ) : (

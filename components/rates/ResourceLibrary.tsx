@@ -384,7 +384,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
               <h3 className="font-semibold text-gray-900">
                 {editTarget ? "Edit Resource" : "Add Resource"}
               </h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-600 hover:text-gray-600 text-xl">x</button>
+              <button onClick={() => setShowForm(false)} className="text-gray-500 hover:text-gray-800 text-sm font-medium px-2 py-1 rounded hover:bg-gray-100">Close</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>

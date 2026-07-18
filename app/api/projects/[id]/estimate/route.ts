@@ -5,22 +5,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
-
-function computeLineValues(
-  totalQuantity: number,
-  rate: number,
-  wastePct: number,
-  markupPct: number,
-  vatRate: number
-) {
-  const itemCost = totalQuantity * rate * (1 + wastePct / 100);
-  // Markup-on-cost: consistent with DUDBC add-on method (overhead%, profit%, contingency% are all additive)
-  const saleRate = rate * (1 + wastePct / 100) * (1 + markupPct / 100);
-  const totalSale = totalQuantity * saleRate;
-  const vatAmount = totalSale * (vatRate / 100);
-  const totalWithVat = totalSale + vatAmount;
-  return { itemCost, saleRate, totalSale, vatAmount, totalWithVat };
-}
+import { computeEstimateLine } from "@/lib/estimate-formula";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -38,10 +23,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
+    const orgId = project.orgId;
     const [boq, overrides] = await Promise.all([
       generateBOQ(params.id),
       prisma.estimateLineOverride.findMany({
-        where: { projectId: params.id },
+        where: { projectId: params.id, orgId },
         select: { groupId: true, wastePct: true, markupPct: true, notes: true },
       }),
     ]);
@@ -59,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         const markupPct = ov?.markupPct ?? 0;
         const notes = ov?.notes ?? null;
 
-        const computed = computeLineValues(g.totalQuantity, g.rate, wastePct, markupPct, vatRate);
+        const computed = computeEstimateLine(g.totalQuantity, g.rate, wastePct, markupPct, vatRate);
         discTotalSale += computed.totalSale;
         discTotalWithVat += computed.totalWithVat;
 

@@ -7,14 +7,14 @@ import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
+import { LINE_TYPES } from "@/lib/line-types";
 
 const CACHE_TTL = 300;
-const VALID_LINE_TYPES = ["MATERIAL", "LABOUR", "EQUIPMENT", "OTHER"] as const;
 
 const createSchema = z.object({
   rateItemId: z.string().min(1),
   resourceId: z.string().min(1),
-  lineType: z.enum(VALID_LINE_TYPES).default("MATERIAL"),
+  lineType: z.enum(LINE_TYPES).default("MATERIAL"),
   qtyPerUnit: z.number().min(0),
   wastagePercent: z.number().min(0).max(100).default(0),
   notes: z.string().max(500).trim().optional().nullable(),

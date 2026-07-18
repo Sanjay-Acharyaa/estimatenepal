@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fmtNum } from "@/lib/format";
+import { computeEstimateLine } from "@/lib/estimate-formula";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,22 +83,6 @@ function NRS(value: number) {
 
 function pct(value: number) {
   return value.toFixed(2);
-}
-
-function computeFromOverrides(
-  totalQuantity: number,
-  rate: number,
-  wastePct: number,
-  markupPct: number,
-  vatRate: number
-) {
-  const itemCost = totalQuantity * rate * (1 + wastePct / 100);
-  // Markup-on-cost: consistent with DUDBC add-on method used throughout the system
-  const saleRate = rate * (1 + wastePct / 100) * (1 + markupPct / 100);
-  const totalSale = totalQuantity * saleRate;
-  const vatAmount = totalSale * (vatRate / 100);
-  const totalWithVat = totalSale + vatAmount;
-  return { itemCost, saleRate, totalSale, vatAmount, totalWithVat };
 }
 
 // ---------------------------------------------------------------------------
@@ -415,6 +400,40 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
       .filter((d) => d.groups.length > 0);
   }, [doc, searchLower]);
 
+  // Hooks must all appear before early returns (Rules of Hooks).
+  // vatRate is derived from doc here with a null guard so this memo is safe before doc is loaded.
+  const vatRate = doc?.vatRate ?? 0;
+  const showVat = doc?.project.vatEnabled ?? false;
+
+  const { liveTotalSale, liveTotalWithVat, summaryFigures } = useMemo(() => {
+    if (!doc) {
+      return {
+        liveTotalSale: 0,
+        liveTotalWithVat: 0,
+        summaryFigures: { contingencyPct: 0, contingencyAmount: 0, provisionalSum: 0, subtotalBeforeVat: 0, vatAmount: 0, grandPayable: 0 },
+      };
+    }
+    let totalSale = 0;
+    for (const disc of doc.disciplines) {
+      for (const g of disc.groups) {
+        const ov = overrides.get(g.id) ?? { wastePct: 0, markupPct: 0, notes: null };
+        const c = computeEstimateLine(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
+        totalSale += c.totalSale;
+      }
+    }
+    const contingencyPct = doc.project.contingencyPct ?? 0;
+    const provisionalSum = doc.project.provisionalSum ?? 0;
+    const contingencyAmount = totalSale * (contingencyPct / 100);
+    const subtotalBeforeVat = totalSale + contingencyAmount + provisionalSum;
+    const vatAmount = subtotalBeforeVat * (vatRate / 100);
+    const grandPayable = subtotalBeforeVat + vatAmount;
+    return {
+      liveTotalSale: totalSale,
+      liveTotalWithVat: grandPayable,
+      summaryFigures: { contingencyPct, contingencyAmount, provisionalSum, subtotalBeforeVat, vatAmount, grandPayable },
+    };
+  }, [doc, overrides, vatRate]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-48 text-sm text-gray-500 dark:text-gray-400">
@@ -432,34 +451,6 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
   }
 
   if (!doc) return null;
-
-  const vatRate = doc.vatRate;
-  const showVat = doc.project.vatEnabled;
-
-  // Memoize grand totals and summary figures - recomputed only when overrides or doc changes
-  const { liveTotalSale, liveTotalWithVat, summaryFigures } = useMemo(() => {
-    let totalSale = 0;
-    let totalWithVat = 0;
-    for (const disc of doc.disciplines) {
-      for (const g of disc.groups) {
-        const ov = overrides.get(g.id) ?? { wastePct: 0, markupPct: 0, notes: null };
-        const c = computeFromOverrides(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
-        totalSale += c.totalSale;
-        totalWithVat += c.totalWithVat;
-      }
-    }
-    const contingencyPct = doc.project.contingencyPct ?? 0;
-    const provisionalSum = doc.project.provisionalSum ?? 0;
-    const contingencyAmount = totalSale * (contingencyPct / 100);
-    const subtotalBeforeVat = totalSale + contingencyAmount + provisionalSum;
-    const vatAmount = subtotalBeforeVat * (vatRate / 100);
-    const grandPayable = subtotalBeforeVat + vatAmount;
-    return {
-      liveTotalSale: totalSale,
-      liveTotalWithVat: totalWithVat,
-      summaryFigures: { contingencyPct, contingencyAmount, provisionalSum, subtotalBeforeVat, vatAmount, grandPayable },
-    };
-  }, [doc, overrides, vatRate]);
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900">
@@ -547,7 +538,7 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
               let discWithVat = 0;
               const groupRows = disc.groups.map((g) => {
                 const ov = overrides.get(g.id) ?? { wastePct: 0, markupPct: 0, notes: null };
-                const c = computeFromOverrides(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
+                const c = computeEstimateLine(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
                 discSale += c.totalSale;
                 discWithVat += c.totalWithVat;
                 return { g, ov, c };
