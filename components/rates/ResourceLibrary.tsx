@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { fmtNum } from "@/lib/format";
+import { RESOURCE_CATEGORIES, CAT_COLORS, catLabel } from "@/lib/resource-constants";
 
 interface OrgResource {
   id: string;
@@ -16,34 +17,6 @@ interface OrgResource {
   isDefault: boolean;
   priceUpdatedAt: string | null;
 }
-
-const CATEGORIES = [
-  { value: "CEMENT", label: "Cement" },
-  { value: "FINE_AGGREGATE", label: "Fine Aggregate" },
-  { value: "COARSE_AGGREGATE", label: "Coarse Aggregate" },
-  { value: "MASONRY", label: "Masonry" },
-  { value: "STEEL", label: "Steel" },
-  { value: "TIMBER", label: "Timber" },
-  { value: "LABOUR_SKILLED", label: "Skilled Labour" },
-  { value: "LABOUR_UNSKILLED", label: "Unskilled Labour" },
-  { value: "EQUIPMENT", label: "Equipment" },
-  { value: "OTHER", label: "Other" },
-];
-
-const CAT_COLORS: Record<string, string> = {
-  CEMENT:           "bg-gray-100 text-gray-700",
-  FINE_AGGREGATE:   "bg-yellow-100 text-yellow-700",
-  COARSE_AGGREGATE: "bg-orange-100 text-orange-700",
-  MASONRY:          "bg-red-100 text-red-700",
-  STEEL:            "bg-blue-100 text-blue-700",
-  TIMBER:           "bg-green-100 text-green-700",
-  LABOUR_SKILLED:   "bg-purple-100 text-purple-700",
-  LABOUR_UNSKILLED: "bg-pink-100 text-pink-700",
-  EQUIPMENT:        "bg-cyan-100 text-cyan-700",
-  OTHER:            "bg-slate-100 text-slate-700",
-};
-
-const catLabel = (cat: string) => CATEGORIES.find(c => c.value === cat)?.label ?? cat;
 
 const BLANK_FORM = {
   name: "", category: "CEMENT", unit: "bag", unitRate: "", wastagePercent: "0", notes: "",
@@ -64,16 +37,26 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
   const [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const sp = new URLSearchParams();
       if (filterCat) sp.set("category", filterCat);
       const res = await fetch(`/api/resources?${sp}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error?.message ?? `Failed to load resources (${res.status}).`);
+        setResources([]);
+        return;
+      }
       const data = await res.json();
       setResources(data.resources ?? []);
-    } catch { setResources([]); }
-    finally { setLoading(false); }
+    } catch {
+      toast.error("Network error loading resources.");
+      setResources([]);
+    } finally { setLoading(false); }
   }, [filterCat]);
 
   useEffect(() => { load(); }, [load]);
@@ -177,10 +160,36 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
     }
   };
 
-  const grouped = CATEGORIES.reduce<Record<string, OrgResource[]>>((acc, cat) => {
-    acc[cat.value] = resources.filter(r => r.category === cat.value);
+  const searchLower = search.toLowerCase().trim();
+  const filteredResources = searchLower
+    ? resources.filter(r =>
+        r.name.toLowerCase().includes(searchLower) ||
+        (r.notes ?? "").toLowerCase().includes(searchLower)
+      )
+    : resources;
+
+  const grouped = RESOURCE_CATEGORIES.reduce<Record<string, OrgResource[]>>((acc, cat) => {
+    acc[cat.value] = filteredResources.filter(r => r.category === cat.value);
     return acc;
   }, {});
+
+  function fmtDate(iso: string | null): string {
+    if (!iso) return "--";
+    const d = new Date(iso);
+    const months = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    if (months < 1) return "This month";
+    if (months < 12) return `${months}mo ago`;
+    const years = Math.floor(months / 12);
+    return `${years}yr ago`;
+  }
+
+  function priceAgeClass(iso: string | null): string {
+    if (!iso) return "text-gray-400";
+    const months = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24 * 30));
+    if (months >= 12) return "text-red-500";
+    if (months >= 6) return "text-amber-500";
+    return "text-gray-400";
+  }
 
   return (
     <div className="space-y-4">
@@ -224,6 +233,17 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
+      {/* Search */}
+      {resources.length > 0 && (
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by name or notes..."
+          className="w-full max-w-sm text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      )}
+
       {/* Category filter */}
       <div className="flex flex-wrap gap-1.5">
         <button
@@ -232,7 +252,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
         >
           All ({resources.length})
         </button>
-        {CATEGORIES.map(cat => {
+        {RESOURCE_CATEGORIES.map(cat => {
           const count = grouped[cat.value]?.length ?? 0;
           if (count === 0 && filterCat !== cat.value) return null;
           return (
@@ -266,9 +286,13 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
             </button>
           )}
         </div>
+      ) : filteredResources.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">
+          No resources match your search.
+        </div>
       ) : (
         <div className="space-y-4">
-          {CATEGORIES.filter(cat => (grouped[cat.value]?.length ?? 0) > 0).map(cat => (
+          {RESOURCE_CATEGORIES.filter(cat => (grouped[cat.value]?.length ?? 0) > 0).map(cat => (
             <div key={cat.value}>
               <p className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2 ${CAT_COLORS[cat.value]}`}>
                 {cat.label}
@@ -278,11 +302,12 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">Name</th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 w-20">Unit</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-32">Rate (NRS)</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Wastage %</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 w-40">Notes</th>
-                      {isAdmin && <th className="px-3 py-2.5 w-20" />}
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Unit</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-28">Rate (NRS)</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-20">Wastage %</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 w-24" title="When the unit rate was last updated">Rate Updated</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 w-36">Notes</th>
+                      {isAdmin && <th className="px-3 py-2.5 w-24" />}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -291,7 +316,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                         <td className="px-3 py-2.5 text-gray-800 text-xs">
                           {r.name}
                           {r.isDefault && (
-                            <span className="ml-1.5 text-gray-400 text-xs">(default)</span>
+                            <span className="ml-1.5 text-gray-400 text-[10px]">(default)</span>
                           )}
                         </td>
                         <td className="px-3 py-2.5 text-center text-gray-600 text-xs">{r.unit}</td>
@@ -300,6 +325,10 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                         </td>
                         <td className="px-3 py-2.5 text-right text-gray-600 text-xs tabular-nums">
                           {r.wastagePercent}%
+                        </td>
+                        <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${priceAgeClass(r.priceUpdatedAt)}`}
+                            title={r.priceUpdatedAt ? `Rate set on ${new Date(r.priceUpdatedAt).toLocaleDateString()}` : "Never updated"}>
+                          {fmtDate(r.priceUpdatedAt)}
                         </td>
                         <td className="px-3 py-2.5 text-gray-500 text-xs truncate max-w-xs">
                           {r.notes}
@@ -318,7 +347,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                                 disabled={deleting === r.id}
                                 className="px-2 py-1 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded disabled:opacity-40"
                               >
-                                {deleting === r.id ? "…" : "Del"}
+                                {deleting === r.id ? "..." : "Delete"}
                               </button>
                             </div>
                           </td>
@@ -370,7 +399,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                     onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {CATEGORIES.map(c => (
+                    {RESOURCE_CATEGORIES.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>

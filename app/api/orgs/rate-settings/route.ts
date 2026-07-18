@@ -7,6 +7,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
+import { RATE_DEFAULTS } from "@/lib/rate-defaults";
 
 const CACHE_TTL = 300;
 
@@ -19,16 +20,6 @@ const updateSchema = z.object({
   dryVolumeMortar: z.number().min(1).max(2).optional(),
   dryVolumeConcrete: z.number().min(1).max(2).optional(),
 });
-
-const DEFAULTS = {
-  overheadPct: 12,
-  profitPct: 10,
-  contingencyPct: 5,
-  vatPct: 13,
-  leadLiftPct: 0,
-  dryVolumeMortar: 1.3,
-  dryVolumeConcrete: 1.54,
-};
 
 function ck(orgId: string) {
   return `rate-settings:${orgId}`;
@@ -51,7 +42,7 @@ export async function GET(req: NextRequest) {
     const settings = await prisma.orgRateSettings.findUnique({ where: { orgId } });
 
     const payload = {
-      settings: settings ?? { orgId, ...DEFAULTS },
+      settings: settings ?? { orgId, ...RATE_DEFAULTS },
     };
 
     redis.set(ck(orgId), JSON.stringify(payload), "EX", CACHE_TTL).catch(() => {});
@@ -84,7 +75,7 @@ export async function PUT(req: NextRequest) {
 
     const settings = await prisma.orgRateSettings.upsert({
       where: { orgId },
-      create: { orgId, ...DEFAULTS, ...data },
+      create: { orgId, ...RATE_DEFAULTS, ...data },
       update: data,
     });
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { fmtNum } from "@/lib/format";
 import { useConfirm } from "@/hooks/useConfirm";
+import { CAT_COLORS } from "@/lib/resource-constants";
 
 interface Resource {
   id: string;
@@ -49,18 +50,6 @@ interface Props {
 
 const LINE_TYPES = ["MATERIAL", "LABOUR", "EQUIPMENT", "OTHER"] as const;
 
-const CAT_COLORS: Record<string, string> = {
-  CEMENT:           "bg-gray-100 text-gray-700",
-  FINE_AGGREGATE:   "bg-yellow-100 text-yellow-700",
-  COARSE_AGGREGATE: "bg-orange-100 text-orange-700",
-  MASONRY:          "bg-red-100 text-red-700",
-  STEEL:            "bg-blue-100 text-blue-700",
-  TIMBER:           "bg-green-100 text-green-700",
-  LABOUR_SKILLED:   "bg-purple-100 text-purple-700",
-  LABOUR_UNSKILLED: "bg-pink-100 text-pink-700",
-  EQUIPMENT:        "bg-cyan-100 text-cyan-700",
-  OTHER:            "bg-slate-100 text-slate-700",
-};
 
 const NRS = (n: number) => fmtNum(n, 2);
 

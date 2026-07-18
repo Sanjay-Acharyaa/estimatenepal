@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { RATE_DEFAULTS } from "@/lib/rate-defaults";
 
 interface RateSettings {
   overheadPct: number;
@@ -12,16 +13,6 @@ interface RateSettings {
   dryVolumeMortar: number;
   dryVolumeConcrete: number;
 }
-
-const DEFAULTS: RateSettings = {
-  overheadPct: 12,
-  profitPct: 10,
-  contingencyPct: 5,
-  vatPct: 13,
-  leadLiftPct: 0,
-  dryVolumeMortar: 1.30,
-  dryVolumeConcrete: 1.54,
-};
 
 const FIELDS: Array<{
   key: keyof RateSettings;
@@ -52,13 +43,13 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
     fetch("/api/orgs/rate-settings")
       .then(r => r.json())
       .then(d => {
-        const s = d.settings ?? DEFAULTS;
+        const s = d.settings ?? RATE_DEFAULTS;
         setSettings(s);
         setForm(Object.fromEntries(FIELDS.map(f => [f.key, String(s[f.key])])));
       })
       .catch(() => {
-        setSettings(DEFAULTS);
-        setForm(Object.fromEntries(FIELDS.map(f => [f.key, String(DEFAULTS[f.key])])));
+        setSettings(RATE_DEFAULTS as RateSettings);
+        setForm(Object.fromEntries(FIELDS.map(f => [f.key, String(RATE_DEFAULTS[f.key])])));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -100,7 +91,7 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const resetToDefaults = () => {
-    setForm(Object.fromEntries(FIELDS.map(f => [f.key, String(DEFAULTS[f.key])])));
+    setForm(Object.fromEntries(FIELDS.map(f => [f.key, String(RATE_DEFAULTS[f.key])])));
     setDirty(true);
   };
 
@@ -128,7 +119,7 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
           <div key={field.key}>
             <label className="block text-sm font-medium text-gray-700 mb-0.5">
               {field.label}
-              <span className="ml-1 text-gray-400 font-normal">(default: {DEFAULTS[field.key]}{field.suffix})</span>
+              <span className="ml-1 text-gray-400 font-normal">(default: {RATE_DEFAULTS[field.key]}{field.suffix})</span>
             </label>
             <div className="flex items-center gap-3">
               {isAdmin ? (

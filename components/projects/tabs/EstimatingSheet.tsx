@@ -230,8 +230,20 @@ interface ColToggleProps {
 }
 
 function ColTogglePanel({ visible, onChange, onClose }: ColToggleProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
   return (
-    <div className="absolute right-0 top-10 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 w-52">
+    <div ref={panelRef} className="absolute right-0 top-10 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 w-52">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Columns</span>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs">
@@ -419,20 +431,22 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
   if (!doc) return null;
 
   const vatRate = doc.vatRate;
-
-  // Grand totals from live override state
-  let liveTotalSale = 0;
-  let liveTotalWithVat = 0;
-  for (const disc of doc.disciplines) {
-    for (const g of disc.groups) {
-      const ov = overrides.get(g.id) ?? { wastePct: 0, markupPct: 0, notes: null };
-      const c = computeFromOverrides(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
-      liveTotalSale += c.totalSale;
-      liveTotalWithVat += c.totalWithVat;
-    }
-  }
-
   const showVat = doc.project.vatEnabled;
+
+  // Memoize grand totals - recomputed only when overrides or doc changes, not on every render
+  const { liveTotalSale, liveTotalWithVat } = useMemo(() => {
+    let totalSale = 0;
+    let totalWithVat = 0;
+    for (const disc of doc.disciplines) {
+      for (const g of disc.groups) {
+        const ov = overrides.get(g.id) ?? { wastePct: 0, markupPct: 0, notes: null };
+        const c = computeFromOverrides(g.totalQuantity, g.rate, ov.wastePct, ov.markupPct, vatRate);
+        totalSale += c.totalSale;
+        totalWithVat += c.totalWithVat;
+      }
+    }
+    return { liveTotalSale: totalSale, liveTotalWithVat: totalWithVat };
+  }, [doc, overrides, vatRate]);
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900">
@@ -448,7 +462,23 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
         <span className="text-xs text-gray-500 dark:text-gray-400">
           {showVat ? `VAT ${vatRate}%` : "VAT disabled"}
         </span>
-        <div className="relative ml-auto">
+        <div className="flex gap-1 ml-auto">
+          <button
+            onClick={() => setCollapsed(new Set())}
+            className="px-2 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            title="Expand all sections"
+          >
+            Expand all
+          </button>
+          <button
+            onClick={() => setCollapsed(new Set(doc.disciplines.map(d => d.id)))}
+            className="px-2 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            title="Collapse all sections"
+          >
+            Collapse all
+          </button>
+        </div>
+        <div className="relative">
           <button
             onClick={() => setShowColPanel((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -555,13 +585,20 @@ export function EstimatingSheet({ projectId }: { projectId: string }) {
                   ? groupRows.map(({ g, ov, c }, idx) => (
                       <tr
                         key={g.id}
-                        className={`border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-                          idx % 2 === 0 ? "" : "bg-gray-50/50 dark:bg-gray-800/20"
+                        className={`border-b transition-colors ${
+                          g.rate === 0
+                            ? "bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/20"
+                            : `border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${idx % 2 === 0 ? "" : "bg-gray-50/50 dark:bg-gray-800/20"}`
                         } ${saving.has(g.id) ? "opacity-60" : ""}`}
                       >
                         <td className="sticky left-0 z-10 bg-white dark:bg-gray-900 px-3 py-2 border-r border-gray-100 dark:border-gray-800">
-                          <div className="font-medium text-gray-900 dark:text-gray-100 leading-tight">
+                          <div className="font-medium text-gray-900 dark:text-gray-100 leading-tight flex items-center gap-1.5 flex-wrap">
                             {g.name}
+                            {g.rate === 0 && (
+                              <span className="inline-flex items-center px-1.5 py-0 rounded text-[9px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                No rate
+                              </span>
+                            )}
                           </div>
                           {g.rateCode && (
                             <div className="text-gray-400 dark:text-gray-500 mt-0.5 text-[10px]">
