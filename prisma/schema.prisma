@@ -167,6 +167,7 @@ model Project {
   retentionEnabled  Boolean           @default(false)
   retentionPct      Float             @default(5)
   retentionReleases RetentionRelease[]
+  estimateOverrides EstimateLineOverride[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -500,6 +501,23 @@ model RateAnalysis {
   @@unique([projectId, rateItemId])
   @@index([projectId])
   @@index([rateItemId])
+}
+
+// Estimating Sheet line overrides (markup, waste, notes per takeoff group)
+model EstimateLineOverride {
+  id        String   @id @default(cuid())
+  orgId     String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  groupId   String
+  markupPct Float    @default(0)
+  wastePct  Float    @default(0)
+  notes     String?  @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, groupId])
+  @@index([projectId])
+  @@index([orgId])
 }
 
 // BOQ Overrides
