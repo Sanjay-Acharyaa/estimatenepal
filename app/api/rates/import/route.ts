@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
             data: {
               orgId: token.orgId as string,
               name: finalBatchName,
-              type: ["CUSTOM", "DISTRICT"].includes(batchType) ? batchType : "CUSTOM",
+              type: (["CUSTOM", "DISTRICT"].includes(batchType) ? batchType : "CUSTOM") as "CUSTOM" | "DISTRICT",
               itemCount: toInsert.length,
               fiscalYear: dominantFY,
             },
