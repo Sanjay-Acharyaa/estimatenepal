@@ -33,3 +33,9 @@ export const TENANT_CACHE_TTL = 60;
 // Cron audit-cleanup: rows deleted per batch and how far back to keep
 export const AUDIT_CLEANUP_BATCH_SIZE = 5_000;
 export const AUDIT_RETENTION_DAYS = 90;
+
+// How long the latest DUDBC fiscal year is cached in Redis (seconds)
+export const LATEST_FY_CACHE_TTL = 600;
+
+// Default page limit for rate-batches list
+export const RATE_BATCHES_DEFAULT_LIMIT = 50;

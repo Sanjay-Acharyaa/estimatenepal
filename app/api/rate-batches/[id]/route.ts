@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ipAddress: ip,
     });
 
-    invalidateRatesCache().catch(() => {});
+    invalidateRatesCache(token.orgId as string).catch(() => {});
 
     return NextResponse.json({ id: updated.id, name: updated.name });
   } catch (err) {
@@ -112,7 +112,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       ipAddress: ip,
     });
 
-    invalidateRatesCache().catch(() => {});
+    invalidateRatesCache(token.orgId as string).catch(() => {});
 
     return NextResponse.json({ deleted: batch._count.items, message: `Rate book "${batch.name}" deleted.` });
   } catch (err) {

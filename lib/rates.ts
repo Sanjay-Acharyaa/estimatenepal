@@ -1,8 +1,8 @@
 import { redis } from "./redis";
 import { prisma } from "./prisma";
+import { LATEST_FY_CACHE_TTL } from "./cache-constants";
 
 const LATEST_FY_KEY = "latest_dudbc_fy";
-const LATEST_FY_TTL = 600; // 10 minutes
 
 // Returns the most recently published DUDBC fiscal year string, Redis-cached.
 export async function getLatestDudbcFY(): Promise<string | null> {
@@ -16,7 +16,7 @@ export async function getLatestDudbcFY(): Promise<string | null> {
   });
 
   if (rec?.fiscalYear) {
-    redis.set(LATEST_FY_KEY, rec.fiscalYear, "EX", LATEST_FY_TTL).catch(() => {});
+    redis.set(LATEST_FY_KEY, rec.fiscalYear, "EX", LATEST_FY_CACHE_TTL).catch(() => {});
   }
   return rec?.fiscalYear ?? null;
 }
@@ -26,13 +26,15 @@ export async function invalidateLatestFYCache(): Promise<void> {
   await redis.del(LATEST_FY_KEY);
 }
 
-// Clears all paginated rates list cache entries (pattern rates:*).
-// Call after any import, publish, or delete that changes visible rate items.
-export async function invalidateRatesCache(): Promise<void> {
+// Clears paginated rates list cache entries.
+// Pass orgId to scope the scan to one org (org-specific rate changes).
+// Omit orgId only for global DUDBC changes that affect all orgs.
+export async function invalidateRatesCache(orgId?: string): Promise<void> {
+  const pattern = orgId ? `rates:${orgId}:*` : "rates:*";
   let cursor = "0";
   const keys: string[] = [];
   do {
-    const [next, batch] = await redis.scan(cursor, "MATCH", "rates:*", "COUNT", 200);
+    const [next, batch] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 200);
     cursor = next;
     keys.push(...batch);
   } while (cursor !== "0");

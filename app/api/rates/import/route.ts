@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Invalidate cached rate list so this org's rate picker shows the new batch immediately.
-    invalidateRatesCache().catch((e) => console.error("[rates/import] Cache invalidation failed:", e));
+    invalidateRatesCache(token.orgId as string).catch((e) => console.error("[rates/import] Cache invalidation failed:", e));
 
     await appendAuditLog({
       orgId: token.orgId as string,

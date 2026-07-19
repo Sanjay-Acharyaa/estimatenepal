@@ -390,7 +390,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
   const grandTotal = boqDisciplines.reduce((s, d) => s + d.subtotal, 0);
   const contingencyPct = project.contingencyPct ?? 0;
   const contingencyAmount = grandTotal * (contingencyPct / 100);
-  const provisionalSum = project.provisionalSum ?? 0;
+  const provisionalSum = Math.max(0, project.provisionalSum ?? 0);
   const subtotalAfterAdditions = grandTotal + contingencyAmount + provisionalSum;
   const vatAmount = project.vatEnabled
     ? subtotalAfterAdditions * (project.vatRate / 100)

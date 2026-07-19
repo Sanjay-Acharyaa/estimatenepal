@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
       ipAddress: ip,
     });
 
-    invalidateRatesCache().catch(() => {});
+    invalidateRatesCache(rate.orgId ?? undefined).catch(() => {});
 
     return NextResponse.json(updated);
   } catch (err) {
@@ -123,6 +123,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { rateId: s
       meta: { code: rate.code } as any,
       ipAddress: ip,
     });
+
+    invalidateRatesCache(rate.orgId ?? undefined).catch(() => {});
 
     return NextResponse.json({ message: "Rate item deleted." });
   } catch (err) {

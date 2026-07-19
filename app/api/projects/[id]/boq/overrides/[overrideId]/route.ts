@@ -6,6 +6,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, unauthorized, notFound, forbidden, apiError } from "@/lib/errors";
+import { invalidateBOQCache } from "@/lib/boq";
 
 const reviewSchema = z.object({
   action: z.enum(["approve", "reject"]),
@@ -67,6 +68,8 @@ export async function PUT(
       meta: { action: parsed.data.action, approvedValue },
       ipAddress: ip,
     });
+
+    invalidateBOQCache(params.id);
 
     // Notify the member who proposed the override
     if (override.submittedBy && override.submittedBy !== token.id as string) {

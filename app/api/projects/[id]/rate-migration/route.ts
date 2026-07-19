@@ -6,6 +6,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { getLatestDudbcFY } from "@/lib/rates";
+import { invalidateBOQCache } from "@/lib/boq";
 
 // GET /api/projects/[id]/rate-migration
 // Returns { needsMigration, latestFY, projectFY } so the client can show a banner.
@@ -124,7 +125,7 @@ export async function POST(
       );
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token!.id as string,
       event: "project.rate_migration",
@@ -132,6 +133,8 @@ export async function POST(
       meta: { migrated, unmatched, targetFY: latestFYPost } as any,
       ipAddress: getClientIp(req),
     });
+
+    invalidateBOQCache(params.id);
 
     return NextResponse.json({ migrated, unmatched, targetFY: latestFYPost });
   } catch (err) {
