@@ -140,6 +140,11 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
               <span className="text-sm text-gray-500 dark:text-gray-400">{field.suffix}</span>
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{field.help}</p>
+            {field.key === "contingencyPct" && parseFloat(form[field.key] ?? "0") > 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1.5 px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded">
+                This contingency is embedded into rates built through Resource Analysis. If the project BOQ separately adds a project-level contingency, the two will compound (e.g. 5% here and 5% in the project equals about 10.25% total). Set one to 0 to avoid double-counting in bids.
+              </p>
+            )}
           </div>
         ))}
       </div>

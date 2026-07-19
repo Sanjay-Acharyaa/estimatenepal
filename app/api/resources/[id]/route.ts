@@ -8,6 +8,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound, conflict } from "@/lib/errors";
 import { ResourceCategory } from "@prisma/client";
+import { UNIT_RATE_MAX } from "@/lib/cache-constants";
 
 const RESOURCE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -17,7 +18,7 @@ const updateSchema = z.object({
   name: z.string().min(1).max(200).trim().optional(),
   category: z.enum(VALID_CATEGORIES as [ResourceCategory, ...ResourceCategory[]]).optional(),
   unit: z.string().min(1).max(50).trim().optional(),
-  unitRate: z.number().min(0).optional(),
+  unitRate: z.number().min(0).max(UNIT_RATE_MAX).optional(),
   wastagePercent: z.number().min(0).max(100).optional(),
   notes: z.string().max(500).trim().nullable().optional(),
 });

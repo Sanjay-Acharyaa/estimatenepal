@@ -20,6 +20,9 @@ const analysisSchema = z.object({
   overheadPct: z.number().min(0).max(100).default(0),
   profitPct: z.number().min(0).max(100).default(0),
   wastagePct: z.number().min(0).max(100).default(0),
+  // useComputedRate is accepted from clients but always stored as false.
+  // This formula omits contingency, VAT, and Lead & Lift; using it would understate
+  // the BOQ rate by 18-25%. Use Resource Analysis → Apply to Base Rate instead.
   useComputedRate: z.boolean().default(false),
 });
 
@@ -83,15 +86,16 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
     if (!user || (!["OWNER", "ADMIN"].includes(user.role) && !user.isSuperAdmin)) throw forbidden();
 
     const breakdown = computeCompositeRate(parsed.data);
-    const { projectId, ...fields } = parsed.data;
+    const { projectId, useComputedRate: _ignored, ...fields } = parsed.data;
 
     const analysis = await prisma.rateAnalysis.upsert({
       where: { projectId_rateItemId: { projectId, rateItemId: params.rateId } },
-      update: { ...fields, computedRate: breakdown.computedRate },
+      update: { ...fields, useComputedRate: false, computedRate: breakdown.computedRate },
       create: {
         rateItemId: params.rateId,
         projectId,
         ...fields,
+        useComputedRate: false,
         computedRate: breakdown.computedRate,
       },
     });

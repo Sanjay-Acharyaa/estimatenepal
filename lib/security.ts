@@ -121,7 +121,8 @@ export async function checkApiRateLimit(ip: string) {
     if (e instanceof RateLimiterRes) {
       return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429 });
     }
-    throw e;
+    console.error("[rate-limit] checkApiRateLimit error:", (e as Error).message);
+    return null;
   }
 }
 
@@ -142,7 +143,8 @@ export async function checkUploadRateLimit(ip: string) {
         { status: 429 }
       );
     }
-    throw e;
+    console.error("[rate-limit] checkUploadRateLimit error:", (e as Error).message);
+    return null;
   }
 }
 
@@ -181,7 +183,8 @@ export async function checkExportRateLimit(ip: string) {
     if (e instanceof RateLimiterRes) {
       return NextResponse.json({ error: "Export rate limit exceeded. Please wait a moment." }, { status: 429 });
     }
-    throw e;
+    console.error("[rate-limit] checkExportRateLimit error:", (e as Error).message);
+    return null;
   }
 }
 
@@ -193,7 +196,8 @@ export async function checkOcrRateLimit(ip: string) {
     if (e instanceof RateLimiterRes) {
       return NextResponse.json({ error: "OCR rate limit exceeded. Please wait a moment." }, { status: 429 });
     }
-    throw e;
+    console.error("[rate-limit] checkOcrRateLimit error:", (e as Error).message);
+    return null;
   }
 }
 
@@ -205,7 +209,8 @@ export async function checkCouponRateLimit(orgId: string) {
     if (e instanceof RateLimiterRes) {
       return NextResponse.json({ error: "Too many coupon attempts. Please wait before trying again." }, { status: 429 });
     }
-    throw e;
+    console.error("[rate-limit] checkCouponRateLimit error:", (e as Error).message);
+    return null;
   }
 }
 

@@ -20,9 +20,9 @@ const DEFAULTS: Array<{ keywords: string[]; pct: number; reason: string }> = [
   { keywords: ["waterproof", "membrane", "bitumen"],                    pct: 5,  reason: "laps & cutting" },
   { keywords: ["roofing", "gci", "tin sheet", "zinc"],                  pct: 5,  reason: "cutting & laps" },
   { keywords: ["formwork", "shuttering", "centering", "falsework"],     pct: 15, reason: "damage & reuse factor" },
-  { keywords: ["stone", "boulder", "rubble", "dhunge"],                 pct: 5,  reason: "irregular sizing & breaking" },
-  { keywords: ["marble", "granite"],                                     pct: 10, reason: "cutting & polishing losses" },
   { keywords: ["aggregate"],                                             pct: 3,  reason: "handling losses" },
+  { keywords: ["marble", "granite"],                                     pct: 10, reason: "cutting & polishing losses" },
+  { keywords: ["stone", "boulder", "rubble", "dhunge"],                 pct: 5,  reason: "irregular sizing & breaking" },
 ];
 
 export function getWastageDefault(label: string): WastageDefault | null {

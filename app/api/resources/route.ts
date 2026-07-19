@@ -8,14 +8,14 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { ResourceCategory } from "@prisma/client";
-import { CACHE_TTL } from "@/lib/cache-constants";
+import { CACHE_TTL, RESOURCES_FETCH_LIMIT, UNIT_RATE_MAX } from "@/lib/cache-constants";
 const VALID_CATEGORIES = Object.values(ResourceCategory);
 
 const createSchema = z.object({
   name: z.string().min(1).max(200).trim(),
   category: z.enum(VALID_CATEGORIES as [ResourceCategory, ...ResourceCategory[]]),
   unit: z.string().min(1).max(50).trim(),
-  unitRate: z.number().min(0).max(9_999_999),
+  unitRate: z.number().min(0).max(UNIT_RATE_MAX),
   wastagePercent: z.number().min(0).max(100).default(0),
   notes: z.string().max(500).trim().optional().nullable(),
 });
@@ -40,18 +40,29 @@ export async function GET(req: NextRequest) {
     const category = VALID_CATEGORIES.includes(rawCat as ResourceCategory)
       ? (rawCat as ResourceCategory)
       : undefined;
+    const search = sp.get("search")?.trim() ?? "";
 
+    // Skip cache when a text search is active — results vary per query
     const key = ck(orgId, category);
-    const hit = await redis.get(key).catch(() => null);
-    if (hit) return NextResponse.json(JSON.parse(hit as string));
+    if (!search) {
+      const hit = await redis.get(key).catch(() => null);
+      if (hit) return NextResponse.json(JSON.parse(hit as string));
+    }
 
     const resources = await prisma.orgResource.findMany({
-      where: { orgId, ...(category ? { category } : {}) },
+      where: {
+        orgId,
+        ...(category ? { category } : {}),
+        ...(search ? { OR: [{ name: { contains: search } }, { notes: { contains: search } }] } : {}),
+      },
       orderBy: [{ category: "asc" }, { name: "asc" }],
+      take: RESOURCES_FETCH_LIMIT,
     });
 
     const payload = { resources };
-    redis.set(key, JSON.stringify(payload), "EX", CACHE_TTL).catch(() => {});
+    if (!search) {
+      redis.set(key, JSON.stringify(payload), "EX", CACHE_TTL).catch(() => {});
+    }
     return NextResponse.json(payload);
   } catch (err) {
     return handleApiError(err);

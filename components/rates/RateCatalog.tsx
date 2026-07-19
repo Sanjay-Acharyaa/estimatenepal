@@ -273,7 +273,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   };
 
   const deleteRate = async (rate: RateItem) => {
-    const ok = await confirm({ title: "Delete Rate", message: `Delete "${rate.code} — ${rate.description.slice(0, 60)}"?`, variant: "danger", confirmLabel: "Delete" });
+    const ok = await confirm({ title: "Delete Rate", message: `Delete "${rate.code}: ${rate.description.slice(0, 60)}"?`, variant: "danger", confirmLabel: "Delete" });
     if (!ok) return;
     setDeleting(rate.id);
     try {

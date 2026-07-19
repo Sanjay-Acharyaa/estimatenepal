@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       redis.del(`resources:${orgId}:${cat}`).catch(() => {});
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId,
       userId: token.id as string,
       event: "resource.seed",

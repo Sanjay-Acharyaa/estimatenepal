@@ -14,11 +14,11 @@ const GOVT_FIELD_MAX = 200;
 
 export const maxDuration = 60;
 
-// GET /api/projects/[id]/boq/export/govt
+// POST /api/projects/[id]/boq/export/govt
 // Generates a Nepal government-standard BOQ (DUDBC format) as Excel.
-// Query params: ministry, department, office, schemeNo, ward, fiscalYear,
-//               contractorName, preparedBy, checkedBy, approvedBy
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+// Body fields (all optional): ministry, department, office, schemeNo, ward, fiscalYear,
+//                              contractorName, preparedBy, checkedBy, approvedBy
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const ip = getClientIp(req);
     const limited = await checkExportRateLimit(ip);
@@ -39,24 +39,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     trackEvent("govt_boq_export", { orgId: project.orgId, userId: token.id as string, meta: { projectId: params.id } });
 
     const boq = await generateBOQ(params.id);
-    const qp = req.nextUrl.searchParams;
+    const body = await req.json().catch(() => ({}));
 
-    const trim = (v: string | null, fallback?: string | null) =>
-      (v ?? fallback ?? "").slice(0, GOVT_FIELD_MAX) || undefined;
+    const trim = (v: unknown, fallback?: string | null) =>
+      (typeof v === "string" ? v : (fallback ?? "")).slice(0, GOVT_FIELD_MAX) || undefined;
 
     const meta: GovtBOQMeta = {
-      ministry:       trim(qp.get("ministry")),
-      department:     trim(qp.get("department")),
-      office:         trim(qp.get("office")),
+      ministry:       trim(body.ministry),
+      department:     trim(body.department),
+      office:         trim(body.office),
       projectName:    project.name,
-      schemeNo:       trim(qp.get("schemeNo"), project.projectNumber),
-      district:       trim(qp.get("district"), project.district),
-      ward:           trim(qp.get("ward")),
-      fiscalYear:     trim(qp.get("fiscalYear")),
-      contractorName: trim(qp.get("contractorName"), project.clientCompany),
-      preparedBy:     trim(qp.get("preparedBy")),
-      checkedBy:      trim(qp.get("checkedBy")),
-      approvedBy:     trim(qp.get("approvedBy")),
+      schemeNo:       trim(body.schemeNo, project.projectNumber),
+      district:       trim(body.district, project.district),
+      ward:           trim(body.ward),
+      fiscalYear:     trim(body.fiscalYear),
+      contractorName: trim(body.contractorName, project.clientCompany),
+      preparedBy:     trim(body.preparedBy),
+      checkedBy:      trim(body.checkedBy),
+      approvedBy:     trim(body.approvedBy),
     };
 
     const result = await withSemaphore("excel", 5, async () => {

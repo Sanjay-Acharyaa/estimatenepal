@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { fmtNum } from "@/lib/format";
 import { RESOURCE_CATEGORIES, CAT_COLORS, CATEGORY_DEFAULT_UNIT, CATEGORY_DEFAULT_WASTAGE } from "@/lib/resource-constants";
+import { UNIT_RATE_MAX } from "@/lib/cache-constants";
 
 interface OrgResource {
   id: string;
@@ -19,7 +20,12 @@ interface OrgResource {
 }
 
 const BLANK_FORM = {
-  name: "", category: "CEMENT", unit: "bag", unitRate: "", wastagePercent: "0", notes: "",
+  name: "",
+  category: RESOURCE_CATEGORIES[0].value,
+  unit: CATEGORY_DEFAULT_UNIT[RESOURCE_CATEGORIES[0].value] ?? "unit",
+  unitRate: "",
+  wastagePercent: String(CATEGORY_DEFAULT_WASTAGE[RESOURCE_CATEGORIES[0].value] ?? 0),
+  notes: "",
 };
 
 export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
@@ -32,7 +38,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
 
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<OrgResource | null>(null);
-  const [form, setForm] = useState({ ...BLANK_FORM });
+  const [form, setForm] = useState<{ name: string; category: string; unit: string; unitRate: string; wastagePercent: string; notes: string }>({ ...BLANK_FORM });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -444,7 +450,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                   <input
                     type="number"
                     min="0"
-                    max="9999999"
+                    max={UNIT_RATE_MAX}
                     step="0.01"
                     value={form.unitRate}
                     onChange={e => setForm(f => ({ ...f, unitRate: e.target.value }))}

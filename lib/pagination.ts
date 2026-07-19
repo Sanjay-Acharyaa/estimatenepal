@@ -1,4 +1,4 @@
-export const DEFAULT_PAGE_LIMIT = 20;
+export const DEFAULT_PAGE_LIMIT = 30;
 export const MAX_PAGE_LIMIT = 100;
 
 export function parsePagination(searchParams: URLSearchParams) {

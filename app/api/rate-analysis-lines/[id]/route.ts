@@ -8,12 +8,13 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { LINE_TYPES } from "@/lib/line-types";
+import { QTY_PER_UNIT_MAX } from "@/lib/cache-constants";
 
 const LINE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 const updateSchema = z.object({
   lineType: z.enum(LINE_TYPES).optional(),
-  qtyPerUnit: z.number().min(0).optional(),
+  qtyPerUnit: z.number().min(0).max(QTY_PER_UNIT_MAX).optional(),
   wastagePercent: z.number().min(0).max(100).optional(),
   notes: z.string().max(500).trim().nullable().optional(),
   sortOrder: z.number().int().min(0).optional(),

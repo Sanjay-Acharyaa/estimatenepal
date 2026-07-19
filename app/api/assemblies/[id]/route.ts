@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { withTenantGuard } from "@/lib/auth";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
@@ -18,7 +19,12 @@ async function getAssemblyOrThrow(id: string) {
     include: {
       groups: {
         where: { parentId: null },
-        include: { children: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          children: {
+            orderBy: { sortOrder: "asc" },
+            include: { children: { orderBy: { sortOrder: "asc" } } },
+          },
+        },
         orderBy: { sortOrder: "asc" },
       },
     },
@@ -40,6 +46,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const assembly = await getAssemblyOrThrow(params.id);
     if (assembly.orgId && assembly.orgId !== orgId) throw forbidden();
+
+    // Verify the user is still an active member of the org (guards removed users)
+    if (orgId) await withTenantGuard(token.id as string, orgId);
 
     return NextResponse.json(assembly);
   } catch (err) {
@@ -69,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const updated = await prisma.assembly.update({ where: { id: params.id }, data: parsed.data });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: orgId ?? "SYSTEM",
       userId: token.id as string,
       event: "assembly.updated",
@@ -102,7 +111,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     await prisma.assembly.delete({ where: { id: params.id } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: orgId ?? "SYSTEM",
       userId: token.id as string,
       event: "assembly.deleted",

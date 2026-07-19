@@ -17,3 +17,9 @@ export const QTY_PER_UNIT_MAX = 99_999;
 
 // Maximum dry-volume factor for mortar and concrete (shared by UI and API Zod schema)
 export const DRY_VOLUME_MAX = 1.8;
+
+// Maximum unit rate for a resource (shared by UI form max attr and API Zod schema)
+export const UNIT_RATE_MAX = 9_999_999;
+
+// Maximum rows returned by GET /api/resources to prevent unbounded memory use
+export const RESOURCES_FETCH_LIMIT = 500;

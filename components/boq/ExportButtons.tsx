@@ -71,9 +71,11 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
     setDownloading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      Object.entries(fields).forEach(([k, v]) => { if (v) params.set(k, v); });
-      const res = await fetch(`/api/projects/${projectId}/boq/export/govt?${params}`);
+      const res = await fetch(`/api/projects/${projectId}/boq/export/govt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error?.message ?? `Export failed (${res.status})`);

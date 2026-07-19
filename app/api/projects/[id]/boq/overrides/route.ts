@@ -12,7 +12,6 @@ import { OverrideStatus } from "@prisma/client";
 const proposeSchema = z.object({
   rateItemId: z.string().min(1),
   field: z.enum(["rate", "description"]),
-  originalValue: z.string().min(1),
   proposedValue: z.string().min(1),
 });
 
@@ -77,9 +76,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const parsed = proposeSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
 
-    // Verify the rate item exists
+    // Verify the rate item exists and look up the authoritative original value server-side
     const rateItem = await prisma.rateItem.findUnique({ where: { id: parsed.data.rateItemId } });
     if (!rateItem) throw notFound("Rate item");
+
+    // Determine original value from DB — never trust client-supplied original
+    const originalValue = parsed.data.field === "rate"
+      ? rateItem.baseRate.toString()
+      : rateItem.description;
 
     // Check for existing PENDING override on same field for this project+rateItem
     const existing = await prisma.bOQOverride.findFirst({
@@ -94,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         projectId: params.id,
         rateItemId: parsed.data.rateItemId,
         field: parsed.data.field,
-        originalValue: parsed.data.originalValue,
+        originalValue,
         proposedValue: parsed.data.proposedValue,
         status: "PENDING",
         submittedBy: token.id as string,
