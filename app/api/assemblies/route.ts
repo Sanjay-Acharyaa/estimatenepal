@@ -2,16 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
-import { handleApiError, apiError, unauthorized } from "@/lib/errors";
+import { withTenantGuard } from "@/lib/auth";
+import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { DEFAULT_ASSEMBLY_COLOUR } from "@/lib/cache-constants";
+
+const VALID_SOURCES = ["platform", "org", "all"] as const;
+const SEARCH_MAX = 200;
+const CATEGORY_MAX = 100;
 
 const groupSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
     name: z.string().min(1).max(100).trim(),
     type: z.enum(["LINEAR", "AREA", "VOLUME", "COUNT", "COUNT_BY_DISTANCE", "VERTICAL_WALL_AREA"]).default("LINEAR"),
-    colour: z.string().default("#3B82F6"),
+    colour: z.string().default(DEFAULT_ASSEMBLY_COLOUR),
     lineWidth: z.number().int().min(1).max(20).default(2),
     additionalParams: z.any().optional(),
     rateCode: z.string().max(50).optional(),
@@ -36,27 +42,40 @@ export async function GET(req: NextRequest) {
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
+    if (!token.orgId) throw forbidden();
 
-    const orgId = token.orgId as string | null;
+    await withTenantGuard(token.id as string, token.orgId as string);
+
+    const orgId = token.orgId as string;
 
     const sp = req.nextUrl.searchParams;
     const { page, limit, skip } = parsePagination(sp);
-    const search = sp.get("search")?.trim() ?? "";
-    const category = sp.get("category")?.trim() ?? "";
-    const source = sp.get("source") ?? "all"; // platform | org | all
+    const search = (sp.get("search") ?? "").trim().slice(0, SEARCH_MAX);
+    const category = (sp.get("category") ?? "").trim().slice(0, CATEGORY_MAX);
+    const rawSource = sp.get("source") ?? "all";
+    const source = VALID_SOURCES.includes(rawSource as any) ? rawSource : "all";
 
-    const where: any = {
+    // Build org-isolation filter separately from the search filter to prevent overwrite
+    const orgFilter = {
       OR: [
-        ...(source !== "platform" && orgId ? [{ orgId }] : []),
+        ...(source !== "platform" ? [{ orgId }] : []),
         ...(source !== "org" ? [{ orgId: null, isPublic: true }] : []),
       ],
-      ...(search ? {
-        OR: [
-          { name: { contains: search } },
-          { description: { contains: search } },
-        ],
-      } : {}),
-      ...(category ? { category } : {}),
+    };
+
+    const where: any = {
+      AND: [
+        orgFilter,
+        ...(search
+          ? [{
+              OR: [
+                { name: { contains: search } },
+                { description: { contains: search } },
+              ],
+            }]
+          : []),
+        ...(category ? [{ category }] : []),
+      ],
     };
 
     const [total, items] = await Promise.all([
@@ -83,7 +102,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/assemblies — create org assembly
+// POST /api/assemblies — create org assembly (OWNER/ADMIN only)
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
@@ -92,7 +111,12 @@ export async function POST(req: NextRequest) {
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
-    const orgId = token.orgId as string | null;
+    if (!token.orgId) throw forbidden();
+
+    const user = await withTenantGuard(token.id as string, token.orgId as string);
+    if (!["OWNER", "ADMIN"].includes(user.role)) throw forbidden();
+
+    const orgId = token.orgId as string;
     const userId = token.id as string;
 
     const body = await req.json();
@@ -101,23 +125,18 @@ export async function POST(req: NextRequest) {
 
     const { name, description, category, groups = [] } = parsed.data;
 
-    const assembly = await prisma.assembly.create({
-      data: {
-        name,
-        description,
-        category,
-        orgId,
-        isPublic: false,
-        createdById: userId,
-      },
+    // Create assembly + all groups in a single transaction so a partial group failure rolls back everything
+    const assembly = await prisma.$transaction(async (tx) => {
+      const created = await tx.assembly.create({
+        data: { name, description, category, orgId, isPublic: false, createdById: userId },
+      });
+      await createAssemblyGroupsTx(tx, created.id, groups, null);
+      return created;
     });
 
-    // Create groups recursively
-    await createAssemblyGroups(assembly.id, groups, null);
-
-    await appendAuditLog({
-      orgId: orgId ?? "SYSTEM",
-      userId: userId,
+    appendAuditLog({
+      orgId,
+      userId,
       event: "assembly.created",
       resourceId: assembly.id,
       meta: { name } as any,
@@ -126,7 +145,13 @@ export async function POST(req: NextRequest) {
 
     const full = await prisma.assembly.findUnique({
       where: { id: assembly.id },
-      include: { groups: { where: { parentId: null }, include: { children: { orderBy: { sortOrder: "asc" } } }, orderBy: { sortOrder: "asc" } } },
+      include: {
+        groups: {
+          where: { parentId: null },
+          include: { children: { orderBy: { sortOrder: "asc" } } },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
     });
 
     return NextResponse.json(full, { status: 201 });
@@ -135,15 +160,15 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function createAssemblyGroups(assemblyId: string, groups: any[], parentId: string | null) {
+async function createAssemblyGroupsTx(tx: any, assemblyId: string, groups: any[], parentId: string | null) {
   for (const grp of groups) {
-    const created = await prisma.assemblyGroup.create({
+    const created = await tx.assemblyGroup.create({
       data: {
         assemblyId,
         parentId,
         name: grp.name,
         type: grp.type ?? "LINEAR",
-        colour: grp.colour ?? "#3B82F6",
+        colour: grp.colour ?? DEFAULT_ASSEMBLY_COLOUR,
         lineWidth: grp.lineWidth ?? 2,
         additionalParams: grp.additionalParams ?? undefined,
         rateCode: grp.rateCode ?? null,
@@ -151,7 +176,7 @@ async function createAssemblyGroups(assemblyId: string, groups: any[], parentId:
       },
     });
     if (grp.children?.length) {
-      await createAssemblyGroups(assemblyId, grp.children, created.id);
+      await createAssemblyGroupsTx(tx, assemblyId, grp.children, created.id);
     }
   }
 }

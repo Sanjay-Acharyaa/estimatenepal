@@ -15,16 +15,16 @@ export const RESOURCE_CATEGORIES = [
 ] as const;
 
 export const CAT_COLORS: Record<string, string> = {
-  CEMENT:           "bg-gray-100 text-gray-700",
-  FINE_AGGREGATE:   "bg-yellow-100 text-yellow-700",
-  COARSE_AGGREGATE: "bg-orange-100 text-orange-700",
-  MASONRY:          "bg-red-100 text-red-700",
-  STEEL:            "bg-blue-100 text-blue-700",
-  TIMBER:           "bg-green-100 text-green-700",
-  LABOUR_SKILLED:   "bg-purple-100 text-purple-700",
-  LABOUR_UNSKILLED: "bg-pink-100 text-pink-700",
-  EQUIPMENT:        "bg-cyan-100 text-cyan-700",
-  OTHER:            "bg-slate-100 text-slate-700",
+  CEMENT:           "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+  FINE_AGGREGATE:   "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  COARSE_AGGREGATE: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  MASONRY:          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  STEEL:            "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  TIMBER:           "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  LABOUR_SKILLED:   "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  LABOUR_UNSKILLED: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
+  EQUIPMENT:        "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+  OTHER:            "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
 };
 
 export const catLabel = (cat: string): string =>
@@ -42,6 +42,14 @@ export const CATEGORY_DEFAULT_UNIT: Record<string, string> = {
   LABOUR_UNSKILLED: "day",
   EQUIPMENT:        "hour",
   OTHER:            "unit",
+};
+
+// Shared badge styles for rate source labels (DUDBC, DISTRICT, CUSTOM).
+// Used by CatalogBrowser and RateCatalog to ensure consistent display.
+export const SOURCE_BADGE: Record<string, string> = {
+  DUDBC:    "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  DISTRICT: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  CUSTOM:   "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
 };
 
 // Default wastage % per category — used by ResourceLibrary form when creating a new resource.

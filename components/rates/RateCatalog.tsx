@@ -9,6 +9,9 @@ import { ResourceLibrary } from "./ResourceLibrary";
 import { ResourceLineAnalysis } from "./ResourceLineAnalysis";
 import { RateSettingsPanel } from "./RateSettingsPanel";
 import { fmtNum } from "@/lib/format";
+import { ASSEMBLY_CATEGORIES } from "@/lib/nepal-constants";
+import { PAGE_SIZE, DEFAULT_ASSEMBLY_COLOUR } from "@/lib/cache-constants";
+import { SOURCE_BADGE } from "@/lib/resource-constants";
 
 type CatalogTab = "rates" | "resources" | "settings";
 
@@ -46,14 +49,8 @@ interface Props {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  CUSTOM:   "bg-blue-100 text-blue-700 border-blue-200",
-  DISTRICT: "bg-orange-100 text-orange-700 border-orange-200",
-};
-
-const SOURCE_BADGE: Record<string, string> = {
-  DUDBC:    "bg-green-100 text-green-700",
-  DISTRICT: "bg-yellow-100 text-yellow-700",
-  CUSTOM:   "bg-blue-100 text-blue-700",
+  CUSTOM:   "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
+  DISTRICT: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700",
 };
 
 export function RateCatalog({ isAdmin, projectId }: Props) {
@@ -70,6 +67,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [editTarget, setEditTarget] = useState<RateItem | null>(null);
   const [analysisTarget, setAnalysisTarget] = useState<RateItem | null>(null);
   const [resourceAnalysisTarget, setResourceAnalysisTarget] = useState<RateItem | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingBatch, setDeletingBatch] = useState<string | null>(null);
   const [unbatchedCount, setUnbatchedCount] = useState(0);
@@ -116,15 +114,17 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
 
   const loadRates = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
-      const sp = new URLSearchParams({ page: String(page), limit: "30" });
+      const sp = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (search) sp.set("search", search);
       if (selectedBatchId !== "all") sp.set("batchId", selectedBatchId);
       const res = await fetch(`/api/rates?${sp}`);
+      if (!res.ok) { setLoadError(true); setRates([]); return; }
       const data = await res.json();
       setRates(data.data ?? []);
       setPagination(data.pagination ?? null);
-    } catch { setRates([]); }
+    } catch { setLoadError(true); setRates([]); }
     finally { setLoading(false); }
   }, [page, search, selectedBatchId]);
 
@@ -191,7 +191,12 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     setDeletingBatch(batchId);
     try {
       const param = batchId === "all" ? "" : batchId === "none" ? "?batchId=none" : `?batchId=${batchId}`;
-      await fetch(`/api/rates/delete-all${param}`, { method: "DELETE" });
+      const res = await fetch(`/api/rates/delete-all${param}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error?.message ?? "Failed to delete rates.");
+        return;
+      }
       if (selectedBatchId === batchId) setSelectedBatchId("all");
       loadBatches(); loadUnbatchedCount(); loadRates();
       toast.success("Rates deleted.");
@@ -207,7 +212,12 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     if (!ok) return;
     setDeletingBatch(batch.id);
     try {
-      await fetch(`/api/rate-batches/${batch.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/rate-batches/${batch.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error?.message ?? "Failed to delete rate book.");
+        return;
+      }
       if (selectedBatchId === batch.id) setSelectedBatchId("all");
       loadBatches(); loadRates();
       toast.success("Rate book deleted.");
@@ -216,13 +226,23 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
 
   const renameBatch = async (batchId: string) => {
     if (!renameValue.trim()) { setRenamingBatchId(null); return; }
-    await fetch(`/api/rate-batches/${batchId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: renameValue.trim() }),
-    });
-    setRenamingBatchId(null);
-    loadBatches();
+    try {
+      const res = await fetch(`/api/rate-batches/${batchId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: renameValue.trim() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error?.message ?? "Failed to rename.");
+      } else {
+        loadBatches();
+      }
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setRenamingBatchId(null);
+    }
   };
 
   const createRate = async (data: any) => {
@@ -256,8 +276,15 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     const ok = await confirm({ title: "Delete Rate", message: `Delete "${rate.code} — ${rate.description.slice(0, 60)}"?`, variant: "danger", confirmLabel: "Delete" });
     if (!ok) return;
     setDeleting(rate.id);
-    try { await fetch(`/api/rates/${rate.id}`, { method: "DELETE" }); loadRates(); loadBatches(); toast.success("Rate deleted."); }
-    finally { setDeleting(null); }
+    try {
+      const res = await fetch(`/api/rates/${rate.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error?.message ?? "Failed to delete rate.");
+        return;
+      }
+      loadRates(); loadBatches(); toast.success("Rate deleted.");
+    } finally { setDeleting(null); }
   };
 
   function unitToGroupType(unit: string): string {
@@ -277,7 +304,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       const layers = selectedRates.map((r, i) => ({
         name: r.description.slice(0, 100).trim() || r.code,
         type: unitToGroupType(r.unit),
-        colour: "#3B82F6",
+        colour: DEFAULT_ASSEMBLY_COLOUR,
         lineWidth: 2,
         rateCode: r.code.slice(0, 50),
         sortOrder: i,
@@ -290,7 +317,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         ? [{
             name: assemblyForm.name.trim().slice(0, 100),
             type: "LINEAR" as const,
-            colour: "#3B82F6",
+            colour: DEFAULT_ASSEMBLY_COLOUR,
             lineWidth: 2,
             rateCode: undefined,
             sortOrder: 0,
@@ -319,15 +346,18 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     }
   }
 
-  // Use live pagination total when on "All Rates" so unbatched legacy rates are counted
+  // Use batch item counts (not filtered pagination.total) so search never distorts the sidebar count
+  const allRatesTotal = batches.reduce((s, b) => s + b.itemCount, 0) + unbatchedCount;
   const totalRates = selectedBatchId === "all"
-    ? (pagination?.total ?? batches.reduce((s, b) => s + b.itemCount, 0))
-    : batches.reduce((s, b) => s + b.itemCount, 0);
+    ? allRatesTotal
+    : selectedBatchId === "none"
+    ? unbatchedCount
+    : (batches.find(b => b.id === selectedBatchId)?.itemCount ?? 0);
 
   return (
     <div className="space-y-4">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200">
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
         {([
           { key: "rates" as CatalogTab, label: "Rate Books" },
           { key: "resources" as CatalogTab, label: "Resource Library" },
@@ -338,8 +368,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition ${
               activeTab === tab.key
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "border-blue-600 text-blue-700 dark:text-blue-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500"
             }`}
           >
             {tab.label}
@@ -365,7 +395,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition">
             Save as Assembly
           </button>
-          <button onClick={() => setSelectedRateIds(new Map())} className="text-gray-600 hover:text-white text-sm">✕ Clear</button>
+          <button onClick={() => setSelectedRateIds(new Map())} className="text-gray-400 hover:text-white text-sm">Clear</button>
         </div>
       )}
 
@@ -378,50 +408,50 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
           aria-labelledby="save-assembly-title"
           onKeyDown={e => { if (e.key === "Escape") setShowSaveAsAssembly(false); }}
         >
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 id="save-assembly-title" className="font-semibold text-gray-800 mb-1">Save as Assembly</h3>
-            <p className="text-sm text-gray-500 mb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 id="save-assembly-title" className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Save as Assembly</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               {selectedRateIds.size} rate item{selectedRateIds.size !== 1 ? "s" : ""} will be saved as layers. Units are auto-mapped to measurement types.
             </p>
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Assembly name <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Assembly name <span className="text-red-500">*</span></label>
                 <input value={assemblyForm.name} onChange={e => setAssemblyForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Standard Road Subbase" autoFocus
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
                 <select value={assemblyForm.category} onChange={e => setAssemblyForm(f => ({ ...f, category: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                  <option value="">— None —</option>
-                  {["Structural","Civil","MEP","Architectural","Road","Irrigation"].map(c => <option key={c} value={c}>{c}</option>)}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  <option value="">None</option>
+                  {ASSEMBLY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Structure</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Structure</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button"
                     onClick={() => setAssemblyStructure("nested")}
-                    className={`p-2.5 rounded-lg border-2 text-left transition ${assemblyStructure === "nested" ? "border-orange-400 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
+                    className={`p-2.5 rounded-lg border-2 text-left transition ${assemblyStructure === "nested" ? "border-orange-400 bg-orange-50 dark:bg-orange-900/20" : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"}`}
                   >
-                    <p className={`text-xs font-semibold ${assemblyStructure === "nested" ? "text-orange-700" : "text-gray-700"}`}>Grouped (recommended)</p>
-                    <p className="text-xs text-gray-500 mt-0.5">1 group → {selectedRateIds.size} layers inside</p>
+                    <p className={`text-xs font-semibold ${assemblyStructure === "nested" ? "text-orange-700 dark:text-orange-300" : "text-gray-700 dark:text-gray-300"}`}>Grouped (recommended)</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">1 group → {selectedRateIds.size} layers inside</p>
                   </button>
                   <button type="button"
                     onClick={() => setAssemblyStructure("flat")}
-                    className={`p-2.5 rounded-lg border-2 text-left transition ${assemblyStructure === "flat" ? "border-orange-400 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
+                    className={`p-2.5 rounded-lg border-2 text-left transition ${assemblyStructure === "flat" ? "border-orange-400 bg-orange-50 dark:bg-orange-900/20" : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"}`}
                   >
-                    <p className={`text-xs font-semibold ${assemblyStructure === "flat" ? "text-orange-700" : "text-gray-700"}`}>Flat</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{selectedRateIds.size} separate groups</p>
+                    <p className={`text-xs font-semibold ${assemblyStructure === "flat" ? "text-orange-700 dark:text-orange-300" : "text-gray-700 dark:text-gray-300"}`}>Flat</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{selectedRateIds.size} separate groups</p>
                   </button>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Description (optional)</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
                 <input value={assemblyForm.description} onChange={e => setAssemblyForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Brief description…"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
             </div>
             <div className="flex gap-3">
@@ -429,7 +459,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-lg text-sm transition disabled:opacity-50">
                 {savingAssembly ? "Saving…" : "Save Assembly"}
               </button>
-              <button onClick={() => setShowSaveAsAssembly(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={() => setShowSaveAsAssembly(false)} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
             </div>
           </div>
         </div>
@@ -438,9 +468,9 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       {/* ── Left: Rate Books sidebar ── */}
       <div className="w-full sm:w-64 flex-shrink-0 space-y-2">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Rate Books</p>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rate Books</p>
           <a href="/api/rates/template" download
-            className="text-xs text-blue-600 hover:underline">↓ Template</a>
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline">↓ Template</a>
         </div>
 
         {/* All rates */}
@@ -448,13 +478,13 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
           onClick={() => { setSelectedBatchId("all"); setPage(1); }}
           className={`w-full text-left px-3 py-2.5 rounded-lg border transition text-sm ${
             selectedBatchId === "all"
-              ? "bg-gray-900 text-white border-gray-900"
-              : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+              ? "bg-gray-900 dark:bg-gray-700 text-white border-gray-900 dark:border-gray-600"
+              : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500"
           }`}
         >
           <div className="flex items-center justify-between">
             <span className="font-medium">All Rates</span>
-            <span className={`text-xs ${selectedBatchId === "all" ? "text-gray-300" : "text-gray-600"}`}>
+            <span className={`text-xs ${selectedBatchId === "all" ? "text-gray-300" : "text-gray-600 dark:text-gray-400"}`}>
               {totalRates}
             </span>
           </div>
@@ -464,29 +494,29 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         {unbatchedCount > 0 && (
           <div className={`rounded-lg border transition ${
             selectedBatchId === "none"
-              ? "border-amber-400 bg-amber-50"
-              : "border-gray-200 bg-white hover:border-gray-300"
+              ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20"
+              : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-500"
           }`}>
             <button
               onClick={() => { setSelectedBatchId("none"); setPage(1); }}
               className="w-full text-left px-3 py-2.5"
             >
               <div className="flex items-center justify-between">
-                <span className={`text-sm font-medium ${selectedBatchId === "none" ? "text-amber-800" : "text-gray-700"}`}>
+                <span className={`text-sm font-medium ${selectedBatchId === "none" ? "text-amber-800 dark:text-amber-300" : "text-gray-700 dark:text-gray-200"}`}>
                   Unbatched Rates
                 </span>
-                <span className="text-xs text-amber-600 font-bold">{unbatchedCount}</span>
+                <span className="text-xs text-amber-600 dark:text-amber-400 font-bold">{unbatchedCount}</span>
               </div>
-              <p className="text-xs text-gray-600 mt-0.5">Imported before Rate Books</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Imported before Rate Books</p>
             </button>
             {isAdmin && (
-              <div className="border-t border-gray-100">
+              <div className="border-t border-gray-100 dark:border-gray-700">
                 <button
                   onClick={() => deleteAll("none", "Unbatched Rates", unbatchedCount)}
                   disabled={deletingBatch === "none"}
-                  className="w-full py-1.5 text-xs text-red-600 hover:bg-red-50 transition disabled:opacity-40"
+                  className="w-full py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-40"
                 >
-                  {deletingBatch === "none" ? "Deleting…" : `🗑 Delete all ${unbatchedCount}`}
+                  {deletingBatch === "none" ? "Deleting…" : `Delete all ${unbatchedCount}`}
                 </button>
               </div>
             )}
@@ -498,8 +528,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
           <div key={batch.id}
             className={`rounded-lg border transition ${
               selectedBatchId === batch.id
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-200 bg-white hover:border-gray-300"
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-500"
             }`}
           >
             <button
@@ -517,43 +547,43 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                     if (e.key === "Escape") setRenamingBatchId(null);
                   }}
                   onClick={e => e.stopPropagation()}
-                  className="w-full text-sm border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none"
+                  className="w-full text-sm border border-blue-400 dark:border-blue-500 rounded px-1.5 py-0.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none"
                 />
               ) : (
                 <div className="flex items-center justify-between gap-1">
-                  <span className={`text-sm font-medium truncate flex-1 ${selectedBatchId === batch.id ? "text-blue-800" : "text-gray-800"}`}>
+                  <span className={`text-sm font-medium truncate flex-1 ${selectedBatchId === batch.id ? "text-blue-800 dark:text-blue-200" : "text-gray-800 dark:text-gray-100"}`}>
                     {batch.name}
                   </span>
-                  <span className={`text-xs flex-shrink-0 ${selectedBatchId === batch.id ? "text-blue-600" : "text-gray-600"}`}>
+                  <span className={`text-xs flex-shrink-0 ${selectedBatchId === batch.id ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400"}`}>
                     {batch.itemCount}
                   </span>
                 </div>
               )}
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${TYPE_COLORS[batch.type] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${TYPE_COLORS[batch.type] ?? "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600"}`}>
                   {batch.type}
                 </span>
                 {batch.fiscalYear && (
-                  <span className="text-xs text-gray-600">FY {batch.fiscalYear}</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">FY {batch.fiscalYear}</span>
                 )}
               </div>
             </button>
 
             {/* Batch actions */}
             {isAdmin && (
-              <div className="flex border-t border-gray-100">
+              <div className="flex border-t border-gray-100 dark:border-gray-700">
                 <button
                   onClick={() => { setRenamingBatchId(batch.id); setRenameValue(batch.name); }}
-                  className="flex-1 py-1.5 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition"
+                  className="flex-1 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200 transition"
                   title="Rename"
-                >✏️ Rename</button>
+                >Rename</button>
                 <button
                   onClick={() => deleteBatch(batch)}
                   disabled={deletingBatch === batch.id}
-                  className="flex-1 py-1.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700 transition disabled:opacity-40 border-l border-gray-100"
+                  className="flex-1 py-1.5 text-xs text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-300 transition disabled:opacity-40 border-l border-gray-100 dark:border-gray-700"
                   title="Delete this rate book"
                 >
-                  {deletingBatch === batch.id ? "…" : "🗑 Delete"}
+                  {deletingBatch === batch.id ? "…" : "Delete"}
                 </button>
               </div>
             )}
@@ -572,7 +602,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} className="hidden" />
             <button
               onClick={() => setShowCreate(true)}
-              className="w-full py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+              className="w-full py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               + Add single rate
             </button>
@@ -592,29 +622,29 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             aria-label="Search rates by code or description"
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {selectedBatchId !== "all" && (
-            <span className="text-xs text-gray-500 whitespace-nowrap">
-              {pagination?.total ?? 0} rates in this book
+            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" title="Total in this book (search may show fewer)">
+              {totalRates} rates in this book{search ? ` (${pagination?.total ?? 0} matching)` : ""}
             </span>
           )}
         </div>
 
         {/* Import result/error banners */}
         {importResult && (
-          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800">
-            <span>✓ {importResult.message}</span>
-            <button onClick={() => setImportResult(null)} className="text-green-600 ml-4 text-xs">✕</button>
+          <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-4 py-3 text-sm text-green-800 dark:text-green-300">
+            <span>{importResult.message}</span>
+            <button onClick={() => setImportResult(null)} className="text-green-600 dark:text-green-400 ml-4 text-xs">x</button>
           </div>
         )}
         {importError && (
-          <div role="alert" className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 whitespace-pre-wrap">
+          <div role="alert" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg px-4 py-3 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">
             <div className="flex items-start justify-between gap-3">
               <div>{importError}</div>
-              <button onClick={() => setImportError("")} className="flex-shrink-0 text-red-400">✕</button>
+              <button onClick={() => setImportError("")} className="flex-shrink-0 text-red-400 dark:text-red-500">x</button>
             </div>
-            <p className="text-xs text-red-600 mt-2">
+            <p className="text-xs text-red-600 dark:text-red-400 mt-2">
               <a href="/api/rates/template" download className="underline">Download Template →</a>
             </p>
           </div>
@@ -624,10 +654,14 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-12" aria-label="Loading rates">
             <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" aria-hidden />
-            <span className="text-gray-600 text-sm">Loading…</span>
+            <span className="text-gray-600 dark:text-gray-400 text-sm">Loading…</span>
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-12 text-red-600 dark:text-red-400 text-sm">
+            Failed to load rates. Check your connection and try again.
           </div>
         ) : rates.length === 0 ? (
-          <div className="text-center py-12 text-gray-600 text-sm">
+          <div className="text-center py-12 text-gray-600 dark:text-gray-400 text-sm">
             {search
               ? `No rates matching "${search}".`
               : selectedBatchId !== "all"
@@ -635,11 +669,11 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
               : "No rates yet. Upload a rate book or add individual rates."}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-16">Code</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-16">Code</th>
                   <th className="px-3 py-3 w-8">
                     <input
                       type="checkbox"
@@ -654,16 +688,16 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                       })}
                     />
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Description</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-16">Unit</th>
-                  <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase w-32">Rate (NRS)</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-16">FY</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Description</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-16">Unit</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-32">Rate (NRS)</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-16">FY</th>
                   <th className="px-3 py-3 w-20" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {rates.map(rate => (
-                  <tr key={rate.id} className={`hover:bg-gray-50 ${selectedRateIds.has(rate.id) ? "bg-blue-50" : ""}`}>
+                  <tr key={rate.id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/60 ${selectedRateIds.has(rate.id) ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}>
                     <td className="px-3 py-2.5">
                       <input
                         type="checkbox"
@@ -673,34 +707,34 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                         onChange={e => setSelectedRateIds(prev => { const s = new Map(prev); e.target.checked ? s.set(rate.id, rate) : s.delete(rate.id); return s; })}
                       />
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{rate.code}</td>
-                    <td className="px-3 py-2.5 text-gray-800 text-xs leading-relaxed">{rate.description}</td>
-                    <td className="px-3 py-2.5 text-center text-gray-600 text-xs">{rate.unit}</td>
-                    <td className="px-3 py-2.5 text-right font-medium text-gray-800">
+                    <td className="px-3 py-2.5 font-mono text-xs text-gray-600 dark:text-gray-400">{rate.code}</td>
+                    <td className="px-3 py-2.5 text-gray-800 dark:text-gray-100 text-xs leading-relaxed">{rate.description}</td>
+                    <td className="px-3 py-2.5 text-center text-gray-600 dark:text-gray-400 text-xs">{rate.unit}</td>
+                    <td className="px-3 py-2.5 text-right font-medium text-gray-800 dark:text-gray-100">
                       {fmtNum(rate.baseRate, 2)}
                     </td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500">{rate.fiscalYear}</td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400">{rate.fiscalYear}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-1.5">
                         <button onClick={() => setResourceAnalysisTarget(rate)}
-                          className="px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200" title="Resource analysis">
+                          className="px-2 py-1 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded border border-purple-200 dark:border-purple-700" title="Resource analysis">
                           Resource Analysis
                         </button>
                         {projectId && (
                           <button onClick={() => setAnalysisTarget(rate)}
-                            className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200" title="Rate analysis">
+                            className="px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded border border-blue-200 dark:border-blue-700" title="Rate analysis">
                             Analysis
                           </button>
                         )}
                         {isAdmin && rate.source === "CUSTOM" && (
                           <>
                             <button onClick={() => setEditTarget(rate)}
-                              className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
+                              className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                               title="Edit rate">
                               Edit
                             </button>
                             <button onClick={() => deleteRate(rate)} disabled={deleting === rate.id}
-                              className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 disabled:opacity-40"
+                              className="px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded border border-red-200 dark:border-red-700 disabled:opacity-40"
                               title="Delete this rate">
                               {deleting === rate.id ? "…" : "Delete"}
                             </button>
@@ -719,10 +753,10 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         {pagination && pagination.totalPages > 1 && (
           <div className="flex justify-center gap-2">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40">← Prev</button>
-            <span className="px-3 py-1 text-sm text-gray-600">{page} / {pagination.totalPages} ({pagination.total} rates)</span>
+              className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-40">Prev</button>
+            <span className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">{page} / {pagination.totalPages} ({pagination.total} rates)</span>
             <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page === pagination.totalPages}
-              className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40">Next →</button>
+              className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-40">Next</button>
           </div>
         )}
       </div>
@@ -736,31 +770,31 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
           aria-labelledby="import-dialog-title"
           onKeyDown={e => { if (e.key === "Escape") { setShowImportDialog(false); setImportFile(null); setImportError(""); } }}
         >
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <h2 id="import-dialog-title" className="font-semibold text-gray-900 mb-4">Create Rate Book</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h2 id="import-dialog-title" className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Create Rate Book</h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Rate Book Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   value={importBatchName}
                   onChange={e => setImportBatchName(e.target.value)}
                   placeholder="e.g. District Rate 2081/82, Custom Set 1"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">Type</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Type</label>
                 <div className="flex gap-2">
                   {(["CUSTOM", "DISTRICT"] as const).map(t => (
                     <button key={t} onClick={() => setImportBatchType(t)}
                       className={`flex-1 py-2 text-sm rounded-lg border-2 transition ${
                         importBatchType === t
-                          ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
-                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"
+                          : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
                       }`}
                     >
                       {t === "CUSTOM" ? "Custom / Org Rates" : "District Rates"}
@@ -770,33 +804,32 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
               </div>
 
               {importFile && (
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                  <span className="text-green-500">📎</span>
-                  <span className="text-sm text-gray-700 flex-1 truncate">{importFile.name}</span>
-                  <button onClick={() => setImportFile(null)} className="text-gray-600 hover:text-gray-600">✕</button>
+                <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-700 dark:text-gray-200 flex-1 truncate">{importFile.name}</span>
+                  <button onClick={() => setImportFile(null)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">x</button>
                 </div>
               )}
 
               {/* Rate book limit info */}
-              <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              <div className="text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg px-3 py-2">
                 You currently have <strong>{batches.length}</strong> rate book{batches.length !== 1 ? "s" : ""}.
                 {batches.filter(b => b.type === "DISTRICT").length >= 1 && importBatchType === "DISTRICT" && (
-                  <span className="text-amber-600 block mt-1">
-                    ⚠ You already have a District rate book. Consider replacing it instead.
+                  <span className="text-amber-600 dark:text-amber-400 block mt-1">
+                    You already have a District rate book. Consider replacing it instead.
                   </span>
                 )}
               </div>
             </div>
 
             {importError && (
-              <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 whitespace-pre-wrap">
+              <div className="mt-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap">
                 {importError}
               </div>
             )}
 
             <div className="flex gap-3 justify-end mt-5">
               <button onClick={() => { setShowImportDialog(false); setImportFile(null); setImportError(""); }}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
                 Cancel
               </button>
               <button onClick={runImport} disabled={importing || !importBatchName.trim() || !importFile}

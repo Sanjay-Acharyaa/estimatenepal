@@ -30,7 +30,6 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
   const [overhead, setOverhead] = useState("0");
   const [profit, setProfit] = useState("0");
   const [wastage, setWastage] = useState("0");
-  const [useComputed, setUseComputed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +48,6 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
           setOverhead(String(data.overheadPct));
           setProfit(String(data.profitPct));
           setWastage(String(data.wastagePct));
-          setUseComputed(data.useComputedRate);
         }
       })
       .catch(() => {})
@@ -85,7 +83,7 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
           overheadPct: n(overhead),
           profitPct: n(profit),
           wastagePct: n(wastage),
-          useComputedRate: useComputed,
+          useComputedRate: false,
         }),
       });
       if (!res.ok) {
@@ -105,37 +103,46 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
 
   const field = (label: string, value: string, set: (v: string) => void, suffix = "") => (
     <div>
-      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</label>
       <div className="flex items-center gap-1.5">
-        {!suffix && <span className="text-xs text-gray-600">NRS</span>}
+        {!suffix && <span className="text-xs text-gray-600 dark:text-gray-400">NRS</span>}
         <input type="number" min="0" step="0.01" value={value} onChange={e => set(e.target.value)}
-          className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-        {suffix && <span className="text-xs text-gray-600">{suffix}</span>}
+          className="flex-1 border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        {suffix && <span className="text-xs text-gray-600 dark:text-gray-400">{suffix}</span>}
       </div>
     </div>
   );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+
+        {/* Deprecation notice */}
+        <div className="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 px-5 py-2.5">
+          <p className="text-xs text-amber-800 dark:text-amber-300 font-medium">
+            Legacy analysis builder. For the live BOQ rate, use
+            <span className="font-bold"> Resource Analysis</span> instead - it writes directly to the base rate.
+          </p>
+        </div>
+
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="font-semibold text-gray-900">Rate Analysis Builder</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              <span className="font-mono">{rate.code}</span> — {rate.description}
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Rate Analysis Builder</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <span className="font-mono">{rate.code}</span> - {rate.description}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-xl ml-4">×</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl ml-4">x</button>
         </div>
 
         {loading ? (
-          <div className="p-10 text-center text-gray-600 text-sm">Loading…</div>
+          <div className="p-10 text-center text-gray-500 dark:text-gray-400 text-sm">Loading…</div>
         ) : (
           <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
             {/* Input grid */}
             <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase mb-3">Costs per {rate.unit}</p>
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-3">Costs per {rate.unit}</p>
               <div className="grid grid-cols-2 gap-3">
                 {field("Material Cost", material, setMaterial)}
                 {field("Equipment Cost", equipment, setEquipment)}
@@ -148,76 +155,64 @@ export function RateAnalysisBuilder({ rate, projectId, onClose }: Props) {
               </div>
               {wastageSuggestion && n(wastage) === 0 && (
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs text-gray-500">Suggested wastage for this rate:</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Suggested wastage for this rate:</span>
                   <button
                     type="button"
                     onClick={() => setWastage(String(wastageSuggestion.pct))}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-300 text-amber-800 text-xs rounded-full hover:bg-amber-100 transition"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 text-amber-800 dark:text-amber-300 text-xs rounded-full hover:bg-amber-100 dark:hover:bg-amber-900/60 transition"
                   >
                     <span className="font-semibold">{wastageSuggestion.pct}%</span>
-                    <span className="text-amber-600">— {wastageSuggestion.reason}</span>
+                    <span className="text-amber-600 dark:text-amber-400">- {wastageSuggestion.reason}</span>
                   </button>
                 </div>
               )}
             </div>
 
             {/* Live breakdown */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-1.5">
-              <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Breakdown</p>
-              <div className="flex justify-between text-xs text-gray-600">
+            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-sm space-y-1.5">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-2">Breakdown</p>
+              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                 <span>Material (+ {n(wastage)}% wastage)</span>
                 <span>NRS {NRS(breakdown.materialWithWastage)}</span>
               </div>
-              <div className="flex justify-between text-xs text-gray-600">
+              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                 <span>Labour (skilled + semi + unskilled)</span>
                 <span>NRS {NRS(breakdown.totalLabour)}</span>
               </div>
-              <div className="flex justify-between text-xs text-gray-600">
+              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                 <span>Equipment</span>
                 <span>NRS {NRS(breakdown.equipmentCost)}</span>
               </div>
-              <div className="flex justify-between text-xs font-medium text-gray-700 border-t border-gray-200 pt-1.5">
+              <div className="flex justify-between text-xs font-medium text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-600 pt-1.5">
                 <span>Sub-total</span>
                 <span>NRS {NRS(breakdown.baseTotal)}</span>
               </div>
-              <div className="flex justify-between text-xs text-gray-600">
+              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                 <span>Overhead ({n(overhead)}%)</span>
                 <span>NRS {NRS(breakdown.overheadAmount)}</span>
               </div>
-              <div className="flex justify-between text-xs text-gray-600">
+              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                 <span>Profit ({n(profit)}%)</span>
                 <span>NRS {NRS(breakdown.profitAmount)}</span>
               </div>
-              <div className="flex justify-between text-sm font-bold text-blue-700 border-t border-gray-300 pt-2">
+              <div className="flex justify-between text-sm font-bold text-blue-700 dark:text-blue-400 border-t border-gray-300 dark:border-gray-600 pt-2">
                 <span>Computed Rate</span>
                 <span>NRS {NRS(breakdown.computedRate)} / {rate.unit}</span>
               </div>
-              <div className="flex justify-between text-xs text-gray-500">
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-500">
                 <span>Base Rate (catalog)</span>
                 <span>NRS {NRS(rate.baseRate)} / {rate.unit}</span>
               </div>
             </div>
 
-            {/* Rate toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked={useComputed} onChange={e => setUseComputed(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-              <div>
-                <span className="text-sm font-medium text-gray-800">Use computed rate in BOQ</span>
-                <p className="text-xs text-gray-500">
-                  When checked: BOQ uses NRS {NRS(breakdown.computedRate)} instead of NRS {NRS(rate.baseRate)}
-                </p>
-              </div>
-            </label>
-
             {error && <p className="text-red-500 text-sm">{error}</p>}
-            {saved && <p className="text-green-600 text-sm">Analysis saved.</p>}
+            {saved && <p className="text-green-600 dark:text-green-400 text-sm">Analysis saved.</p>}
           </div>
         )}
 
-        <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-200">
+        <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-200 dark:border-gray-700">
           <button onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
             Close
           </button>
           <button onClick={save} disabled={saving || loading}

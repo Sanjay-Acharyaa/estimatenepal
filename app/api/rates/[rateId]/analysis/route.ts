@@ -8,6 +8,8 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { computeCompositeRate } from "@/lib/rateAnalysis";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 
+const RATE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 const analysisSchema = z.object({
   projectId: z.string().min(1),
   materialCost: z.number().min(0).default(0),
@@ -26,6 +28,9 @@ export async function GET(req: NextRequest, { params }: { params: { rateId: stri
     const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
+
+    if (!RATE_ID_RE.test(params.rateId) || params.rateId.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid rate ID.", 400);
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
@@ -52,6 +57,9 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
     const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
+
+    if (!RATE_ID_RE.test(params.rateId) || params.rateId.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid rate ID.", 400);
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();

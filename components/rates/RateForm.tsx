@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { fmtNum } from "@/lib/format";
+import { COMMON_UNITS, NEPAL_DISTRICTS } from "@/lib/nepal-constants";
 
 export interface RateFormData {
   code: string;
@@ -10,41 +11,6 @@ export interface RateFormData {
   baseRate: number;
   fiscalYear: string;
 }
-
-// Common Nepal construction units
-const COMMON_UNITS = [
-  { label: "Cu.m — Cubic Metre",       value: "Cu.m" },
-  { label: "Sq.m — Square Metre",      value: "Sq.m" },
-  { label: "Rmt — Running Metre",      value: "Rmt" },
-  { label: "Cu.ft — Cubic Feet",       value: "Cu.ft" },
-  { label: "Sq.ft — Square Feet",      value: "Sq.ft" },
-  { label: "Rft — Running Feet",       value: "Rft" },
-  { label: "Kg — Kilogram",            value: "Kg" },
-  { label: "MT — Metric Ton",          value: "MT" },
-  { label: "No. — Number / Each",      value: "No." },
-  { label: "LS — Lump Sum",            value: "LS" },
-  { label: "Bag — Cement bag (50 kg)", value: "Bag" },
-  { label: "Litre",                    value: "Litre" },
-  { label: "Day — Equipment/labour day", value: "Day" },
-  { label: "Set",                      value: "Set" },
-  { label: "Pair",                     value: "Pair" },
-  { label: "Point",                    value: "Point" },
-];
-
-// Nepal's 77 districts
-const NEPAL_DISTRICTS = [
-  "Achham","Arghakhanchi","Baglung","Bajhang","Bajura","Banke","Bara","Bardiya",
-  "Bhaktapur","Bhojpur","Chitwan","Dadeldhura","Dailekh","Dang","Darchula",
-  "Dhading","Dhankuta","Dhanusha","Dolakha","Dolpa","Doti","Gorkha","Gulmi",
-  "Humla","Ilam","Jajarkot","Jhapa","Jumla","Kailali","Kalikot","Kanchanpur",
-  "Kapilvastu","Kaski","Kathmandu","Kavrepalanchok","Khotang","Lalitpur","Lamjung",
-  "Mahottari","Makwanpur","Manang","Morang","Mugu","Mustang","Myagdi","Nawalparasi East",
-  "Nawalparasi West","Nuwakot","Okhaldhunga","Palpa","Panchthar","Parbat","Parsa",
-  "Pyuthan","Ramechhap","Rasuwa","Rautahat","Rolpa","Rukum East","Rukum West",
-  "Rupandehi","Salyan","Sankhuwasabha","Saptari","Sarlahi","Sindhuli","Sindhupalchok",
-  "Siraha","Solukhumbu","Sunsari","Surkhet","Syangja","Tanahu","Taplejung",
-  "Terhathum","Udayapur",
-].sort();
 
 type RateMode = "manual" | "linked";
 type LinkedSource = "dudbc" | "district" | "analysis";
@@ -88,7 +54,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
   const [fiscalYear, setFiscalYear] = useState(initial?.fiscalYear ?? currentFY);
 
   // Base rate source
-  const [rateMode, setRateMode] = useState<RateMode>(initial?.baseRate !== undefined ? "manual" : "manual");
+  const [rateMode, setRateMode] = useState<RateMode>(initial?.baseRate !== undefined ? "manual" : "linked");
   const [linkedSource, setLinkedSource] = useState<LinkedSource>("dudbc");
 
   // DUDBC / District linked state
@@ -204,33 +170,33 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-          <h2 className="font-semibold text-gray-900">{title}</h2>
-          <button onClick={onCancel} className="text-gray-600 hover:text-gray-600 text-xl">×</button>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">x</button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
           {/* ── Item Details ── */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Item Details</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Item Details</p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   S.N / Item Code <span className="text-red-500">*</span>
                 </label>
                 <input value={code} onChange={e => setCode(e.target.value)}
                   placeholder="e.g. 40, E1.1.1, B2.3"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Fiscal Year <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Fiscal Year <span className="text-red-500">*</span></label>
                 <input value={fiscalYear} onChange={e => setFiscalYear(e.target.value)}
                   placeholder="e.g. 2081/82"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
 
@@ -241,11 +207,11 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
               <textarea value={description} onChange={e => setDescription(e.target.value)}
                 rows={4}
                 placeholder="Providing & laying brick masonry work using first class bricks as per NS 1/2035 in cement mortar (1:4)…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
             </div>
 
             <div className="w-56">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Unit <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Unit <span className="text-red-500">*</span></label>
               <div className="flex gap-1.5">
                 <select
                   value={COMMON_UNITS.some(u => u.value === unit) ? unit : "__custom__"}
@@ -253,7 +219,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                     if (e.target.value !== "__custom__") setUnit(e.target.value);
                     else setUnit("");
                   }}
-                  className="flex-1 border border-gray-300 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="__custom__">Custom…</option>
                   {COMMON_UNITS.map(u => (
@@ -266,34 +232,34 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                     value={unit}
                     onChange={e => setUnit(e.target.value)}
                     placeholder="type unit…"
-                    className="w-24 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-24 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 )}
               </div>
               {unit && (
-                <p className="text-xs text-gray-600 mt-1">Unit: <span className="font-medium text-gray-600">{unit}</span></p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Unit: <span className="font-medium">{unit}</span></p>
               )}
             </div>
           </div>
 
           {/* ── Base Rate ── */}
-          <div className="border-t border-gray-100 pt-5">
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-5">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Base Rate</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Base Rate</p>
 
               {/* Manual / Linked toggle */}
-              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs">
                 <button
                   onClick={() => { setRateMode("manual"); setManualOverride(false); }}
-                  className={`px-3 py-1.5 transition ${rateMode === "manual" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  className={`px-3 py-1.5 transition ${rateMode === "manual" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                 >
-                  ✎ Manual entry
+                  Manual entry
                 </button>
                 <button
                   onClick={() => setRateMode("linked")}
-                  className={`px-3 py-1.5 border-l border-gray-300 transition ${rateMode === "linked" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  className={`px-3 py-1.5 border-l border-gray-300 dark:border-gray-600 transition ${rateMode === "linked" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                 >
-                  🔗 Link to rate source
+                  Link to rate source
                 </button>
               </div>
             </div>
@@ -301,13 +267,13 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
             {/* ── Manual mode ── */}
             {rateMode === "manual" && (
               <div className="w-48">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Base Rate (NRS)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Base Rate (NRS)</label>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-600">NRS</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">NRS</span>
                   <input type="number" min="0" step="0.01" value={manualRate}
                     onChange={e => setManualRate(e.target.value)}
                     placeholder="0.00"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
             )}
@@ -317,12 +283,12 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
               <div className="space-y-4">
                 {/* Source type selector */}
                 <div>
-                  <p className="text-xs font-medium text-gray-700 mb-2">Choose rate source</p>
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Choose rate source</p>
                   <div className="flex gap-2">
                     {([
                       { key: "dudbc" as LinkedSource, label: "DUDBC Rate", desc: "National standard rates" },
                       { key: "district" as LinkedSource, label: "District Rate", desc: "Location-adjusted rates" },
-                      { key: "analysis" as LinkedSource, label: "Rate Analysis", desc: "Org computed breakdown", disabled: !projectId && !orgComputedRate },
+                      { key: "analysis" as LinkedSource, label: "Rate Analysis", desc: "Legacy flat-input builder", disabled: !projectId && !orgComputedRate },
                     ]).map(({ key, label, desc, disabled }) => (
                       <button
                         key={key}
@@ -330,12 +296,12 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                         disabled={disabled}
                         className={`flex-1 text-left px-3 py-2.5 rounded-lg border-2 transition text-xs disabled:opacity-40 disabled:cursor-not-allowed ${
                           linkedSource === key
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300"
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+                            : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
                         }`}
                       >
-                        <p className={`font-semibold ${linkedSource === key ? "text-blue-700" : "text-gray-700"}`}>{label}</p>
-                        <p className="text-gray-500 mt-0.5">{desc}</p>
+                        <p className={`font-semibold ${linkedSource === key ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>{label}</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-0.5">{desc}</p>
                       </button>
                     ))}
                   </div>
@@ -344,41 +310,41 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                 {/* DUDBC search */}
                 {(linkedSource === "dudbc" || linkedSource === "district") && (
                   <div ref={searchRef} className="relative">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Search DUDBC rate catalog
                     </label>
                     <input
                       value={catalogSearch}
                       onChange={e => { setCatalogSearch(e.target.value); setShowCatalogDropdown(true); setSelectedCatalog(null); }}
                       onFocus={() => setShowCatalogDropdown(true)}
-                      placeholder="Type code or description… (DUDBC Phase 8 — may be empty now)"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Type code or description to search the catalog…"
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
 
                     {showCatalogDropdown && (catalogResults.length > 0 || catalogLoading || catalogSearch.length >= 2) && (
-                      <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                      <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl max-h-52 overflow-y-auto">
                         {catalogLoading && (
-                          <p className="text-center py-4 text-xs text-gray-600">Searching…</p>
+                          <p className="text-center py-4 text-xs text-gray-600 dark:text-gray-400">Searching…</p>
                         )}
                         {!catalogLoading && catalogResults.length === 0 && (
                           <div className="py-4 px-3 text-center">
-                            <p className="text-xs text-gray-500">No DUDBC rates found.</p>
-                            <p className="text-xs text-gray-600 mt-1">DUDBC catalog is added in Phase 8. You can still enter a manual rate.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">No DUDBC rates found.</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">DUDBC catalog is added in Phase 8. You can still enter a manual rate.</p>
                           </div>
                         )}
                         {catalogResults.map(r => (
                           <button
                             key={r.id}
                             onClick={() => selectCatalogRate(r)}
-                            className="flex items-start gap-3 w-full px-3 py-2.5 text-left hover:bg-blue-50 border-b border-gray-50 last:border-0"
+                            className="flex items-start gap-3 w-full px-3 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 border-b border-gray-50 dark:border-gray-700 last:border-0"
                           >
-                            <span className="font-mono text-xs text-gray-500 flex-shrink-0 mt-0.5">{r.code}</span>
+                            <span className="font-mono text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5">{r.code}</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs text-gray-700 truncate">{r.description}</p>
-                              <p className="text-xs text-gray-600">{r.unit} · FY {r.fiscalYear}</p>
+                              <p className="text-xs text-gray-700 dark:text-gray-200 truncate">{r.description}</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">{r.unit} · FY {r.fiscalYear}</p>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <p className="text-xs font-semibold text-gray-800">NRS {NRS(r.baseRate)}</p>
+                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">NRS {NRS(r.baseRate)}</p>
                             </div>
                           </button>
                         ))}
@@ -386,14 +352,14 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                     )}
 
                     {selectedCatalog && (
-                      <div className="mt-2 flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                        <span className="text-green-600 text-xs">✓</span>
-                        <div className="flex-1 text-xs text-green-800 min-w-0">
+                      <div className="mt-2 flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-3 py-2">
+                        <span className="text-green-600 dark:text-green-400 text-xs">ok</span>
+                        <div className="flex-1 text-xs text-green-800 dark:text-green-300 min-w-0">
                           <span className="font-mono font-medium">{selectedCatalog.code}</span>
-                          <span className="text-green-600 ml-2">DUDBC rate: NRS {NRS(selectedCatalog.baseRate)} / {selectedCatalog.unit}</span>
+                          <span className="text-green-600 dark:text-green-400 ml-2">DUDBC rate: NRS {NRS(selectedCatalog.baseRate)} / {selectedCatalog.unit}</span>
                         </div>
                         <button onClick={() => { setSelectedCatalog(null); setCatalogSearch(""); }}
-                          className="text-gray-600 hover:text-gray-600 text-sm ml-1">×</button>
+                          className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-sm ml-1">x</button>
                       </div>
                     )}
                   </div>
@@ -402,25 +368,25 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                 {/* District selector */}
                 {linkedSource === "district" && selectedCatalog && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">District</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">District</label>
                     <select value={selectedDistrict} onChange={e => setSelectedDistrict(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select district…</option>
                       {NEPAL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
 
                     {selectedDistrict && (
                       districtRateLoading ? (
-                        <p className="text-xs text-gray-600 mt-1.5">Loading district rate…</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5">Loading district rate…</p>
                       ) : (
                         <div className="mt-2 text-xs">
                           {getDistrictRate() ? (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg px-3 py-2 text-blue-800 dark:text-blue-300">
                               <span className="font-medium">{selectedDistrict} rate:</span>{" "}
                               <span className="font-bold">NRS {NRS(getDistrictRate()!.rate)}</span> / {selectedCatalog.unit}
                             </div>
                           ) : (
-                            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-amber-700">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2 text-amber-700 dark:text-amber-400">
                               No specific rate for {selectedDistrict}. Using DUDBC base rate:{" "}
                               <span className="font-bold">NRS {NRS(selectedCatalog.baseRate)}</span>
                             </div>
@@ -433,21 +399,21 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
 
                 {/* Rate Analysis source */}
                 {linkedSource === "analysis" && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
+                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-3">
                     {orgComputedRate !== undefined ? (
                       <div>
-                        <p className="text-xs text-purple-700 font-medium">
-                          Computed from Rate Analysis: <span className="text-lg font-bold text-purple-900">NRS {NRS(orgComputedRate)}</span>
+                        <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
+                          Legacy flat-input rate analysis: <span className="text-lg font-bold text-purple-900 dark:text-purple-200">NRS {NRS(orgComputedRate)}</span>
                         </p>
-                        <p className="text-xs text-purple-600 mt-1">
-                          This rate is derived from your organisation's material + labour + equipment breakdown.
+                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                          This is the legacy analysis builder. For live BOQ rates, use Resource Analysis instead.
                         </p>
                       </div>
                     ) : (
                       <div>
-                        <p className="text-xs text-purple-700">No rate analysis found for this project.</p>
-                        <p className="text-xs text-purple-600 mt-1">
-                          Open the Rate Catalog, find this rate item, and click ∑ to build a rate analysis first.
+                        <p className="text-xs text-purple-700 dark:text-purple-300">No legacy rate analysis found for this project.</p>
+                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                          Open the Rate Catalog, find this rate item, and click "Resource Analysis" to build one first.
                         </p>
                       </div>
                     )}
@@ -456,22 +422,22 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
 
                 {/* Effective rate display */}
                 {effectiveRate !== null && !manualOverride && (
-                  <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3">
                     <div>
-                      <p className="text-xs text-gray-500">Effective base rate</p>
-                      <p className="text-xl font-bold text-gray-900 mt-0.5">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Effective base rate</p>
+                      <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-0.5">
                         NRS {NRS(effectiveRate)}
-                        <span className="text-sm font-normal text-gray-500 ml-1">/ {unit || "unit"}</span>
+                        <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-1">/ {unit || "unit"}</span>
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-600 mb-1">Source</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Source</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        linkedSource === "dudbc" ? "bg-green-100 text-green-700" :
-                        linkedSource === "district" ? "bg-blue-100 text-blue-700" :
-                        "bg-purple-100 text-purple-700"
+                        linkedSource === "dudbc" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                        linkedSource === "district" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                        "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
                       }`}>
-                        {linkedSource === "dudbc" ? "DUDBC" : linkedSource === "district" ? `District (${selectedDistrict || "—"})` : "Rate Analysis"}
+                        {linkedSource === "dudbc" ? "DUDBC" : linkedSource === "district" ? `District (${selectedDistrict || "n/a"})` : "Rate Analysis"}
                       </span>
                     </div>
                   </div>
@@ -482,21 +448,21 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                   <input type="checkbox" checked={manualOverride} onChange={e => {
                     setManualOverride(e.target.checked);
                     if (e.target.checked && effectiveRate !== null) setManualRate(String(effectiveRate));
-                  }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                  <span className="text-xs text-gray-600">
+                  }} className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
                     Override rate manually
-                    <span className="text-gray-600 ml-1">(use a custom value instead of the linked source)</span>
+                    <span className="text-gray-500 dark:text-gray-500 ml-1">(use a custom value instead of the linked source)</span>
                   </span>
                 </label>
 
                 {manualOverride && (
                   <div className="flex items-center gap-2 pl-6">
-                    <span className="text-xs text-gray-600">NRS</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">NRS</span>
                     <input type="number" min="0" step="0.01" value={manualRate}
                       onChange={e => setManualRate(e.target.value)}
                       placeholder="0.00"
-                      className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <span className="text-xs text-gray-600">/ {unit || "unit"}</span>
+                      className="w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <span className="text-xs text-gray-600 dark:text-gray-400">/ {unit || "unit"}</span>
                   </div>
                 )}
               </div>
@@ -507,15 +473,15 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 flex-shrink-0">
-          <div className="text-xs text-gray-600">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <div className="text-xs text-gray-600 dark:text-gray-400">
             {effectiveRate !== null
               ? `Will save at NRS ${NRS(effectiveRate)} / ${unit || "unit"}`
               : "Set a base rate before saving"}
           </div>
           <div className="flex gap-3">
             <button onClick={onCancel}
-              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
               Cancel
             </button>
             <button onClick={submit} disabled={saving || effectiveRate === null}

@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
-import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
+import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
+
+const BATCH_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 // DELETE /api/rates/delete-all?batchId=xxx   → delete all rates in a specific batch
 // DELETE /api/rates/delete-all?batchId=none  → delete all unbatched (batchId IS NULL) custom rates
@@ -24,6 +26,12 @@ export async function DELETE(req: NextRequest) {
     if (!["OWNER", "ADMIN"].includes(user.role)) throw forbidden();
 
     const batchIdParam = req.nextUrl.searchParams.get("batchId");
+
+    // Validate batchId if provided (the sentinel "none" is also allowed)
+    if (batchIdParam && batchIdParam !== "none") {
+      if (!BATCH_ID_RE.test(batchIdParam) || batchIdParam.length > 128)
+        return apiError("VALIDATION_ERROR", "Invalid batch ID.", 400);
+    }
 
     let where: any = { orgId: token.orgId as string, source: "CUSTOM" };
 

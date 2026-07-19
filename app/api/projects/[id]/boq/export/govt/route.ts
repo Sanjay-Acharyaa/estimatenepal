@@ -4,10 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
 import { buildGovtBOQExcel, type GovtBOQMeta } from "@/lib/export";
-import { handleApiError, unauthorized, notFound } from "@/lib/errors";
+import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import { trackEvent } from "@/lib/analytics";
+
+const PROJECT_ID_RE = /^[a-zA-Z0-9_-]+$/;
+const GOVT_FIELD_MAX = 200;
 
 export const maxDuration = 60;
 
@@ -20,6 +23,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const ip = getClientIp(req);
     const limited = await checkExportRateLimit(ip);
     if (limited) return limited;
+
+    if (!PROJECT_ID_RE.test(params.id) || params.id.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid project ID.", 400);
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
@@ -35,19 +41,22 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const boq = await generateBOQ(params.id);
     const qp = req.nextUrl.searchParams;
 
+    const trim = (v: string | null, fallback?: string | null) =>
+      (v ?? fallback ?? "").slice(0, GOVT_FIELD_MAX) || undefined;
+
     const meta: GovtBOQMeta = {
-      ministry:       qp.get("ministry")       ?? undefined,
-      department:     qp.get("department")     ?? undefined,
-      office:         qp.get("office")         ?? undefined,
+      ministry:       trim(qp.get("ministry")),
+      department:     trim(qp.get("department")),
+      office:         trim(qp.get("office")),
       projectName:    project.name,
-      schemeNo:       qp.get("schemeNo")       ?? project.projectNumber ?? undefined,
-      district:       qp.get("district")       ?? project.district      ?? undefined,
-      ward:           qp.get("ward")           ?? undefined,
-      fiscalYear:     qp.get("fiscalYear")     ?? undefined,
-      contractorName: qp.get("contractorName") ?? project.clientCompany ?? undefined,
-      preparedBy:     qp.get("preparedBy")     ?? undefined,
-      checkedBy:      qp.get("checkedBy")      ?? undefined,
-      approvedBy:     qp.get("approvedBy")     ?? undefined,
+      schemeNo:       trim(qp.get("schemeNo"), project.projectNumber),
+      district:       trim(qp.get("district"), project.district),
+      ward:           trim(qp.get("ward")),
+      fiscalYear:     trim(qp.get("fiscalYear")),
+      contractorName: trim(qp.get("contractorName"), project.clientCompany),
+      preparedBy:     trim(qp.get("preparedBy")),
+      checkedBy:      trim(qp.get("checkedBy")),
+      approvedBy:     trim(qp.get("approvedBy")),
     };
 
     const result = await withSemaphore("excel", 5, async () => {

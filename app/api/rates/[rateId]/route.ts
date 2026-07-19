@@ -22,11 +22,12 @@ async function getRateAndGuard(rateId: string, token: any) {
   if (!rate) throw notFound("Rate item");
   // DUDBC rates (orgId=null) are read-only for non-super-admins
   if (rate.source !== "CUSTOM" && !token.isSuperAdmin) throw forbidden();
-  // CUSTOM rates: must belong to user's org
+  // CUSTOM rates: must belong to user's org; withTenantGuard returns the member so role is checked once
+  let member: { role: string } | null = null;
   if (rate.source === "CUSTOM" && rate.orgId) {
-    await withTenantGuard(token.id as string, rate.orgId);
+    member = await withTenantGuard(token.id as string, rate.orgId);
   }
-  return rate;
+  return { rate, member };
 }
 
 export async function GET(req: NextRequest, { params }: { params: { rateId: string } }) {
@@ -66,11 +67,10 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
-    const rate = await getRateAndGuard(params.rateId, token);
+    const { rate, member } = await getRateAndGuard(params.rateId, token);
 
-    // Only OWNER/ADMIN can edit
-    const user = await prisma.user.findUnique({ where: { id: token.id as string } });
-    if (!user || (!["OWNER", "ADMIN"].includes(user.role) && !user.isSuperAdmin)) throw forbidden();
+    // Only OWNER/ADMIN can edit — member already fetched by getRateAndGuard
+    if (!member || (!["OWNER", "ADMIN"].includes(member.role) && !token.isSuperAdmin)) throw forbidden();
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
@@ -107,9 +107,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { rateId: s
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
-    const rate = await getRateAndGuard(params.rateId, token);
-    const user = await prisma.user.findUnique({ where: { id: token.id as string } });
-    if (!user || (!["OWNER", "ADMIN"].includes(user.role) && !user.isSuperAdmin)) throw forbidden();
+    const { rate, member } = await getRateAndGuard(params.rateId, token);
+    if (!member || (!["OWNER", "ADMIN"].includes(member.role) && !token.isSuperAdmin)) throw forbidden();
 
     await prisma.rateItem.delete({ where: { id: params.rateId } });
 

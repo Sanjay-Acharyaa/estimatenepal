@@ -39,10 +39,10 @@ const COL_LABELS: Record<ColKey, string> = {
 type ExportType = "pdf" | "excel" | "mb" | "govt";
 
 const EXPORTS: { type: ExportType; label: string; desc: string; icon: string; colsApply: boolean }[] = [
-  { type: "pdf",   label: "BOQ PDF",           desc: "Nepal-standard BOQ format, ready to print",               icon: "📄", colsApply: false },
-  { type: "excel", label: "BOQ Excel",          desc: "Summary + detail sheets per discipline",                  icon: "📊", colsApply: true  },
-  { type: "mb",    label: "Measurement Book",   desc: "Excel with site location, measured dates & remarks",      icon: "📐", colsApply: false },
-  { type: "govt",  label: "Govt BOQ (DUDBC)",   desc: "Nepal government standard format — DUDBC/DoR submission", icon: "🏛️", colsApply: false },
+  { type: "pdf",   label: "BOQ PDF",           desc: "Nepal-standard BOQ format, ready to print",               icon: "PDF",  colsApply: false },
+  { type: "excel", label: "BOQ Excel",          desc: "Summary + detail sheets per discipline",                  icon: "XLS",  colsApply: true  },
+  { type: "mb",    label: "Measurement Book",   desc: "Excel with site location, measured dates & remarks",      icon: "MB",   colsApply: false },
+  { type: "govt",  label: "Govt BOQ (DUDBC)",   desc: "Nepal government standard format — DUDBC/DoR submission", icon: "GOVT", colsApply: false },
 ];
 
 // ── Govt export modal ─────────────────────────────────────────────────────────
@@ -99,45 +99,45 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
 
   const input = (label: string, k: keyof typeof fields, placeholder = "") => (
     <div key={k}>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>
       <input
         value={fields[k]}
         onChange={set(k)}
         placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900">Government BOQ (DUDBC Format)</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Fill optional fields for the government header. All fields can be left blank.</p>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Government BOQ (DUDBC Format)</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fill optional fields for the government header. All fields can be left blank.</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">x</button>
         </div>
         <div className="p-5 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Government Office</p>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Government Office</p>
           {input("Ministry (मन्त्रालय)", "ministry", "Ministry of Urban Development")}
           {input("Department (विभाग)", "department", "DUDBC")}
           {input("Office (कार्यालय)", "office", "Division Road Office, ...")}
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-2">Project Details</p>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide pt-2">Project Details</p>
           {input("Scheme No. (योजना नं.)", "schemeNo")}
           {input("District (जिल्ला)", "district")}
           {input("Ward No. (वडा नं.)", "ward")}
           {input("Fiscal Year (आ.व.)", "fiscalYear", "२०८१/०८२")}
           {input("Contractor Name (ठेकेदार)", "contractorName")}
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-2">Signatures</p>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide pt-2">Signatures</p>
           {input("Prepared by (तयार गर्ने)", "preparedBy")}
           {input("Checked by (जाँच गर्ने)", "checkedBy")}
           {input("Approved by (स्वीकृत)", "approvedBy")}
-          {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{error}</p>}
+          {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg p-2">{error}</p>}
         </div>
-        <div className="flex gap-3 p-5 border-t border-gray-100">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+        <div className="flex gap-3 p-5 border-t border-gray-100 dark:border-gray-700">
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
             Cancel
           </button>
           <button
@@ -180,7 +180,7 @@ export function ExportButtons({ projectId }: Props) {
       .catch(() => {});
   }, [projectId]);
 
-  async function saveConfig(next: SavedConfig) {
+  async function saveConfig(next: SavedConfig, previous: SavedConfig) {
     setSaving(true);
     setSaveMsg("");
     try {
@@ -189,8 +189,14 @@ export function ExportButtons({ projectId }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ exportConfig: next }),
       });
-      if (res.ok) setSaveMsg("Saved");
+      if (res.ok) {
+        setSaveMsg("Saved");
+      } else {
+        setConfig(previous);
+        setSaveMsg("Failed to save");
+      }
     } catch {
+      setConfig(previous);
       setSaveMsg("Failed to save");
     } finally {
       setSaving(false);
@@ -199,9 +205,10 @@ export function ExportButtons({ projectId }: Props) {
   }
 
   function toggleCol(key: ColKey) {
+    const previous = config;
     const next = { ...config, [key]: !config[key] };
     setConfig(next);
-    saveConfig(next);
+    saveConfig(next, previous);
   }
 
   function moveCol(index: number, dir: -1 | 1) {
@@ -209,24 +216,27 @@ export function ExportButtons({ projectId }: Props) {
     const target = index + dir;
     if (target < 0 || target >= order.length) return;
     [order[index], order[target]] = [order[target], order[index]];
+    const previous = config;
     const next = { ...config, colOrder: order };
     setConfig(next);
-    saveConfig(next);
+    saveConfig(next, previous);
   }
 
   function addCustomCol() {
     const label = newColLabel.trim();
     if (!label || config.customCols.includes(label)) return;
+    const previous = config;
     const next = { ...config, customCols: [...config.customCols, label] };
     setConfig(next);
     setNewColLabel("");
-    saveConfig(next);
+    saveConfig(next, previous);
   }
 
   function removeCustomCol(label: string) {
+    const previous = config;
     const next = { ...config, customCols: config.customCols.filter(c => c !== label) };
     setConfig(next);
-    saveConfig(next);
+    saveConfig(next, previous);
   }
 
   const download = async (type: ExportType) => {
@@ -268,39 +278,39 @@ export function ExportButtons({ projectId }: Props) {
     <div className="space-y-6">
       {showGovtModal && <GovtModal projectId={projectId} onClose={() => setShowGovtModal(false)} />}
 
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         Exports use the current BOQ snapshot including any approved rate overrides.
         Overridden rates are highlighted in yellow.
       </p>
 
       {/* ── Excel Column Config ── */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+      <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-700">Excel Column Settings</span>
-          <span className="text-xs text-gray-400">(applies to BOQ Excel export)</span>
-          {saving  && <span className="text-xs text-gray-400 ml-auto">Saving…</span>}
-          {saveMsg && <span className="text-xs text-green-600 ml-auto">{saveMsg}</span>}
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Excel Column Settings</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">(applies to BOQ Excel export)</span>
+          {saving  && <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">Saving…</span>}
+          {saveMsg && <span className={`text-xs ml-auto ${saveMsg === "Saved" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{saveMsg}</span>}
         </div>
 
         {/* Standard columns — reorderable */}
         <div>
-          <p className="text-xs text-gray-500 mb-2">Column order & visibility — use arrows to reorder</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Column order &amp; visibility — use arrows to reorder</p>
           <div className="space-y-1.5">
             {config.colOrder.map((key, i) => (
-              <div key={key} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
+              <div key={key} className="flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
                 <div className="flex flex-col gap-0.5">
                   <button
                     onClick={() => moveCol(i, -1)}
                     disabled={i === 0}
-                    className="text-gray-400 hover:text-gray-700 disabled:opacity-25 leading-none text-xs"
+                    className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-25 leading-none text-xs"
                     title="Move up"
-                  >▲</button>
+                  >^</button>
                   <button
                     onClick={() => moveCol(i, 1)}
                     disabled={i === config.colOrder.length - 1}
-                    className="text-gray-400 hover:text-gray-700 disabled:opacity-25 leading-none text-xs"
+                    className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-25 leading-none text-xs"
                     title="Move down"
-                  >▼</button>
+                  >v</button>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer flex-1 select-none">
                   <input
@@ -309,21 +319,21 @@ export function ExportButtons({ projectId }: Props) {
                     onChange={() => toggleCol(key)}
                     className="accent-blue-600 w-4 h-4"
                   />
-                  <span className="text-sm text-gray-700">{COL_LABELS[key]}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{COL_LABELS[key]}</span>
                 </label>
               </div>
             ))}
 
             {/* Custom columns */}
             {config.customCols.map(label => (
-              <div key={label} className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <div key={label} className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
                 <div className="w-6" />
-                <span className="flex-1 text-sm text-amber-800">{label} <span className="text-xs text-amber-500">(custom)</span></span>
+                <span className="flex-1 text-sm text-amber-800 dark:text-amber-300">{label} <span className="text-xs text-amber-500 dark:text-amber-400">(custom)</span></span>
                 <button
                   onClick={() => removeCustomCol(label)}
-                  className="text-red-400 hover:text-red-600 text-xs"
+                  className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs"
                   title="Remove column"
-                >✕</button>
+                >x</button>
               </div>
             ))}
           </div>
@@ -331,7 +341,7 @@ export function ExportButtons({ projectId }: Props) {
 
         {/* Add custom column */}
         <div>
-          <p className="text-xs text-gray-500 mb-2">Add a custom empty column (e.g. Remarks, Drawing Ref)</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Add a custom empty column (e.g. Remarks, Drawing Ref)</p>
           <div className="flex gap-2">
             <input
               value={newColLabel}
@@ -339,7 +349,7 @@ export function ExportButtons({ projectId }: Props) {
               onKeyDown={e => e.key === "Enter" && addCustomCol()}
               placeholder="Column label…"
               maxLength={40}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               onClick={addCustomCol}
@@ -351,7 +361,7 @@ export function ExportButtons({ projectId }: Props) {
           </div>
         </div>
 
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-gray-400 dark:text-gray-500">
           Description column is always first. Settings are saved per project.
         </p>
       </div>
@@ -363,13 +373,13 @@ export function ExportButtons({ projectId }: Props) {
             key={type}
             onClick={() => download(type)}
             disabled={!!downloading}
-            className="flex flex-col items-center gap-2 p-6 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
+            className="flex flex-col items-center gap-2 p-6 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
           >
-            <span className="text-3xl" aria-hidden>{icon}</span>
-            <span className="font-semibold text-gray-800 group-hover:text-blue-700">
+            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 tracking-widest">{icon}</span>
+            <span className="font-semibold text-gray-800 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-400">
               {downloading === type ? "Downloading…" : label}
             </span>
-            <span className="text-xs text-gray-500 text-center">{desc}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 text-center">{desc}</span>
             {colsApply && (
               <span className="text-xs text-blue-400">Uses column settings above</span>
             )}
@@ -381,15 +391,15 @@ export function ExportButtons({ projectId }: Props) {
       </div>
 
       {error && (
-        <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">
+        <div role="alert" className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-3 text-sm text-red-600 dark:text-red-400">
           {error}
         </div>
       )}
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300">
         <p className="font-medium mb-1">Export notes</p>
-        <ul className="space-y-1 text-xs text-blue-700 list-disc list-inside">
-          <li>PDF generation may take 10–30 seconds for large BOQs</li>
+        <ul className="space-y-1 text-xs text-blue-700 dark:text-blue-400 list-disc list-inside">
+          <li>PDF generation may take 10-30 seconds for large BOQs</li>
           <li>Excel files open in Microsoft Excel or LibreOffice Calc</li>
           <li>Measurement Book includes site-level breakdown for field verification</li>
           <li>Govt BOQ (DUDBC) follows Nepal government standard submission format</li>

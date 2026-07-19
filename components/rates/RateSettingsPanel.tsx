@@ -99,7 +99,7 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
     return (
       <div className="flex items-center justify-center gap-2 py-12">
         <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-gray-600 text-sm">Loading settings…</span>
+        <span className="text-gray-500 dark:text-gray-400 text-sm">Loading settings…</span>
       </div>
     );
   }
@@ -107,8 +107,8 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="max-w-xl space-y-5">
       <div>
-        <p className="text-sm font-semibold text-gray-800">Rate Calculation Settings</p>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Rate Calculation Settings</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
           These values apply to all resource-based rate analyses in your organisation.
           Individual analyses can override them in the future.
         </p>
@@ -117,9 +117,9 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
       <div className="space-y-4">
         {FIELDS.map(field => (
           <div key={field.key}>
-            <label className="block text-sm font-medium text-gray-700 mb-0.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-0.5">
               {field.label}
-              <span className="ml-1 text-gray-400 font-normal">(default: {RATE_DEFAULTS[field.key]}{field.suffix})</span>
+              <span className="ml-1 text-gray-400 dark:text-gray-500 font-normal">(default: {RATE_DEFAULTS[field.key]}{field.suffix})</span>
             </label>
             <div className="flex items-center gap-3">
               {isAdmin ? (
@@ -130,16 +130,16 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
                   step={field.step}
                   value={form[field.key] ?? ""}
                   onChange={e => handleChange(field.key, e.target.value)}
-                  className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-28 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               ) : (
-                <span className="text-sm font-semibold text-gray-800 w-28 inline-block">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 w-28 inline-block">
                   {settings?.[field.key]}{field.suffix}
                 </span>
               )}
-              <span className="text-sm text-gray-500">{field.suffix}</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{field.suffix}</span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">{field.help}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{field.help}</p>
           </div>
         ))}
       </div>
@@ -155,12 +155,12 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
           </button>
           <button
             onClick={resetToDefaults}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             Reset to DUDBC Defaults
           </button>
           {!dirty && !saving && (
-            <span className="text-xs text-gray-400">All saved</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">All saved</span>
           )}
         </div>
       )}

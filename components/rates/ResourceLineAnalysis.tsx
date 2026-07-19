@@ -174,7 +174,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   const overhead = settings ? directCost * (settings.overheadPct / 100) : 0;
   const profit = settings ? (directCost + overhead) * (settings.profitPct / 100) : 0;
   const contingency = settings ? (directCost + overhead + profit) * (settings.contingencyPct / 100) : 0;
-  const leadLift = settings ? directCost * (settings.leadLiftPct / 100) : 0;
+  const leadLift = settings ? (directCost + overhead) * (settings.leadLiftPct / 100) : 0;
   const preVat = directCost + overhead + profit + contingency + leadLift;
   const vat = settings ? preVat * (settings.vatPct / 100) : 0;
   const totalRate = preVat + vat;
@@ -670,7 +670,12 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
               "Add resource lines to compute the rate"
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            {isAdmin && lines.length > 0 && settings && preVat <= 0 && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                Rate is zero — add quantities to resource lines to enable applying the rate.
+              </span>
+            )}
             {isAdmin && lines.length > 0 && settings && preVat > 0 && (
               <button
                 onClick={updateBaseRate}

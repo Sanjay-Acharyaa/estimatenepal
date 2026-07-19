@@ -7,8 +7,10 @@ import { fmtNum } from "@/lib/format";
 
 const NRS = (n: number) => fmtNum(n, 2);
 
-const qty = (n: number) =>
-  n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const qty = (n: number, isCount = false) =>
+  isCount && Number.isInteger(n)
+    ? n.toLocaleString("en-US")
+    : n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 interface Props {
   projectId: string;
@@ -52,7 +54,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
 
   if (loading) {
     return (
-      <div className="text-center py-16 text-gray-600 text-sm">
+      <div className="text-center py-16 text-gray-500 dark:text-gray-400 text-sm">
         <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
         Generating BOQ…
       </div>
@@ -75,7 +77,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
   return (
     <div className="overflow-x-auto">
       {!hasAnyItems && (
-        <div className="text-center py-12 text-gray-600 text-sm">
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">
           No takeoff items yet. Add items on the drawing canvas first.
         </div>
       )}
@@ -83,7 +85,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
       {hasAnyItems && (
         <table className="w-full text-sm border-collapse">
           <thead>
-            <tr className="bg-blue-900 text-white">
+            <tr className="bg-blue-900 dark:bg-blue-950 text-white">
               <th className="px-3 py-2 text-left w-10">S.No.</th>
               <th className="px-3 py-2 text-left">Description of Work</th>
               <th className="px-3 py-2 text-right w-20">No.</th>
@@ -124,7 +126,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
               <FinRow label={`VAT (${boq.project.vatRate}%)`} value={boq.vatAmount} />
             )}
             {boq.project.tdsEnabled && (
-              <FinRow label={`TDS (${boq.project.tdsRate}%)`} value={-boq.tdsAmount} />
+              <FinRow label={`TDS (${boq.project.tdsRate}%)`} value={boq.tdsAmount} deduction />
             )}
             <FinRow label="FINAL PAYABLE (NRS)" value={boq.finalPayable} bold highlight />
           </tbody>
@@ -163,7 +165,7 @@ function DisciplineSection({
   return (
     <>
       {/* Discipline header */}
-      <tr className="bg-blue-600 text-white">
+      <tr className="bg-blue-600 dark:bg-blue-800 text-white">
         <td colSpan={10} className="px-3 py-2 font-bold text-sm uppercase">
           {disc.name}
         </td>
@@ -182,15 +184,15 @@ function DisciplineSection({
       ))}
 
       {/* Discipline subtotal */}
-      <tr className="bg-blue-50 border-t-2 border-blue-200">
-        <td colSpan={9} className="px-3 py-2 text-right font-semibold text-blue-800 text-sm">
+      <tr className="bg-blue-50 dark:bg-blue-900/20 border-t-2 border-blue-200 dark:border-blue-700">
+        <td colSpan={9} className="px-3 py-2 text-right font-semibold text-blue-800 dark:text-blue-300 text-sm">
           {disc.name} Sub-Total
         </td>
-        <td className="px-3 py-2 text-right font-bold text-blue-900 text-sm">
+        <td className="px-3 py-2 text-right font-bold text-blue-900 dark:text-blue-200 text-sm">
           NRS {NRS(disc.subtotal)}
         </td>
       </tr>
-      <tr><td colSpan={10} className="py-1 bg-gray-50 border-b border-gray-200" /></tr>
+      <tr><td colSpan={10} className="py-1 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700" /></tr>
     </>
   );
 }
@@ -213,18 +215,18 @@ function GroupRows({
   onProposeOverride: () => void;
 }) {
   const rateCell = (
-    <td className={`px-3 py-2 text-right ${grp.isOverridden ? "bg-yellow-100" : ""}`}>
+    <td className={`px-3 py-2 text-right ${grp.isOverridden ? "bg-yellow-100 dark:bg-yellow-900/20" : ""}`}>
       <div className="flex items-center justify-end gap-1">
         {grp.isOverridden && (
           <span
-            className="text-xs text-amber-600 cursor-help"
+            className="text-xs text-amber-600 dark:text-amber-400 font-semibold cursor-help"
             title={`Original: NRS ${NRS(grp.originalRate ?? 0)}`}
           >
-            ⚠
+            [!]
           </span>
         )}
         {grp.pendingOverride && (
-          <span className="text-xs bg-orange-100 text-orange-700 px-1 rounded" title="Pending override review">
+          <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1 rounded" title="Pending override review">
             pending
           </span>
         )}
@@ -232,19 +234,19 @@ function GroupRows({
         {grp.rateItemId && !isAdmin && (
           <button
             onClick={onProposeOverride}
-            className="ml-1 text-gray-600 hover:text-blue-600 text-xs"
+            className="ml-1 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-xs"
             aria-label="Propose override"
           >
-            ✎
+            [edit]
           </button>
         )}
         {grp.rateItemId && isAdmin && (
           <button
             onClick={onProposeOverride}
-            className="ml-1 text-gray-600 hover:text-blue-600 text-xs"
+            className="ml-1 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-xs"
             aria-label="Override rate"
           >
-            ✎
+            [edit]
           </button>
         )}
       </div>
@@ -256,7 +258,7 @@ function GroupRows({
       {/* Category separator if it's the first in its category */}
       {/* Group header row */}
       <tr
-        className="bg-blue-50 hover:bg-blue-100 cursor-pointer border-b border-blue-100"
+        className="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer border-b border-blue-100 dark:border-blue-800"
         onClick={onToggle}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         tabIndex={0}
@@ -264,25 +266,25 @@ function GroupRows({
         aria-expanded={expanded}
         aria-label={`${grp.name} — click to ${expanded ? "collapse" : "expand"}`}
       >
-        <td className="px-3 py-2 text-gray-500 text-xs">{sno}</td>
+        <td className="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{sno}</td>
         <td className="px-3 py-2">
           <div className="flex items-start gap-1">
-            <span className="text-gray-600 mt-0.5 text-xs" aria-hidden>{expanded ? "▼" : "▶"}</span>
+            <span className="text-gray-500 dark:text-gray-400 mt-0.5 text-xs" aria-hidden>{expanded ? "v" : ">"}</span>
             <div>
-              <div className="font-semibold text-gray-800">{grp.name}</div>
+              <div className="font-semibold text-gray-800 dark:text-gray-100">{grp.name}</div>
               {grp.preamble && (
-                <div className="text-xs text-gray-500 italic mt-0.5">{grp.preamble}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 italic mt-0.5">{grp.preamble}</div>
               )}
               {grp.rateCode && (
-                <div className="text-xs text-gray-600 mt-0.5">Code: {grp.rateCode}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Code: {grp.rateCode}</div>
               )}
             </div>
           </div>
         </td>
         <td colSpan={5} />
-        <td className="px-3 py-2 text-center text-gray-600">{grp.unit}</td>
+        <td className="px-3 py-2 text-center text-gray-600 dark:text-gray-300">{grp.unit}</td>
         {rateCell}
-        <td className="px-3 py-2 text-right font-semibold text-gray-800">
+        <td className="px-3 py-2 text-right font-semibold text-gray-800 dark:text-gray-100">
           {NRS(grp.amount)}
         </td>
       </tr>
@@ -290,9 +292,9 @@ function GroupRows({
       {/* Item sub-rows (expanded) */}
       {expanded &&
         grp.items.map((item) => (
-          <tr key={item.id} className="text-xs text-gray-600 border-b border-gray-100">
+          <tr key={item.id} className="text-xs text-gray-600 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
             <td className="px-3 py-1" />
-            <td className="px-3 py-1 pl-10 text-gray-700">{item.label}</td>
+            <td className="px-3 py-1 pl-10 text-gray-700 dark:text-gray-300">{item.label}</td>
             <td className="px-3 py-1 text-right text-gray-500">
               {item.multiplier !== 1 ? item.multiplier : ""}
             </td>
@@ -305,25 +307,35 @@ function GroupRows({
             <td className="px-3 py-1 text-right">
               {item.height != null ? qty(item.height) : ""}
             </td>
-            <td className="px-3 py-1 text-right font-medium">{qty(item.quantity)}</td>
+            <td className="px-3 py-1 text-right font-medium">{qty(item.quantity, grp.type === "COUNT")}</td>
             <td className="px-3 py-1 text-center">{item.unit}</td>
-            <td colSpan={2} className="px-3 py-1 text-gray-600 text-xs">
-              {item.siteLocation && <span className="mr-2">📍 {item.siteLocation}</span>}
-              {item.notes && <span>📝 {item.notes}</span>}
+            <td colSpan={2} className="px-3 py-1 text-gray-600 dark:text-gray-400 text-xs">
+              {item.siteLocation && (
+                <span className="inline-flex items-center gap-1 mr-2">
+                  <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 rounded text-[10px] font-medium">loc</span>
+                  {item.siteLocation}
+                </span>
+              )}
+              {item.notes && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 rounded text-[10px] font-medium">note</span>
+                  {item.notes}
+                </span>
+              )}
             </td>
           </tr>
         ))}
 
       {/* Group total sub-row when expanded */}
       {expanded && grp.items.length > 0 && (
-        <tr className="bg-blue-50 text-xs border-b border-blue-200">
+        <tr className="bg-blue-50 dark:bg-blue-900/20 text-xs border-b border-blue-200 dark:border-blue-800">
           <td colSpan={6} />
-          <td className="px-3 py-1 text-right font-semibold text-blue-800">
-            {qty(grp.totalQuantity)}
+          <td className="px-3 py-1 text-right font-semibold text-blue-800 dark:text-blue-300">
+            {qty(grp.totalQuantity, grp.type === "COUNT")}
           </td>
-          <td className="px-3 py-1 text-center text-blue-700">{grp.unit}</td>
-          <td className="px-3 py-1 text-right text-blue-700">{NRS(grp.rate)}</td>
-          <td className="px-3 py-1 text-right font-bold text-blue-900">{NRS(grp.amount)}</td>
+          <td className="px-3 py-1 text-center text-blue-700 dark:text-blue-400">{grp.unit}</td>
+          <td className="px-3 py-1 text-right text-blue-700 dark:text-blue-400">{NRS(grp.rate)}</td>
+          <td className="px-3 py-1 text-right font-bold text-blue-900 dark:text-blue-200">{NRS(grp.amount)}</td>
         </tr>
       )}
     </>
@@ -337,22 +349,24 @@ function FinRow({
   value,
   bold = false,
   highlight = false,
+  deduction = false,
 }: {
   label: string;
   value: number;
   bold?: boolean;
   highlight?: boolean;
+  deduction?: boolean;
 }) {
   return (
-    <tr className={highlight ? "bg-blue-900 text-white" : "bg-gray-50"}>
+    <tr className={highlight ? "bg-blue-900 text-white" : "bg-gray-50 dark:bg-gray-800"}>
       <td
         colSpan={9}
-        className={`px-3 py-2 text-right ${bold ? "font-bold" : ""} text-sm`}
+        className={`px-3 py-2 text-right ${bold ? "font-bold" : ""} text-sm ${highlight ? "" : "text-gray-700 dark:text-gray-300"}`}
       >
         {label}
       </td>
-      <td className={`px-3 py-2 text-right ${bold ? "font-bold" : ""} text-sm`}>
-        NRS {NRS(value)}
+      <td className={`px-3 py-2 text-right ${bold ? "font-bold" : ""} text-sm ${deduction ? "text-orange-600 dark:text-orange-400" : highlight ? "" : "text-gray-800 dark:text-gray-100"}`}>
+        {deduction ? `(${NRS(value)})` : `NRS ${NRS(value)}`}
       </td>
     </tr>
   );

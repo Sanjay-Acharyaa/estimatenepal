@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatBS } from "@/lib/bs-date";
+import { NEPAL_DISTRICTS } from "@/lib/nepal-constants";
 import { NotesPanel } from "@/components/projects/NotesPanel";
 import { TasksPanel } from "@/components/projects/TasksPanel";
 import { RateMigrationBanner } from "@/components/projects/RateMigrationBanner";
@@ -44,9 +45,9 @@ type Props = {
 };
 
 const PRIORITY_OPTS = [
-  { value: "HIGH",   label: "High",   cls: "bg-red-100 text-red-700" },
-  { value: "MEDIUM", label: "Medium", cls: "bg-amber-100 text-amber-700" },
-  { value: "LOW",    label: "Low",    cls: "bg-gray-100 text-gray-600" },
+  { value: "HIGH",   label: "High"   },
+  { value: "MEDIUM", label: "Medium" },
+  { value: "LOW",    label: "Low"    },
 ];
 
 const STATUS_OPTS = [
@@ -57,8 +58,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
-        <label className="block text-xs font-medium text-gray-600">{label}</label>
-        {hint && <span className="text-xs text-gray-600 italic">{hint}</span>}
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{label}</label>
+        {hint && <span className="text-xs text-gray-500 dark:text-gray-400 italic">{hint}</span>}
       </div>
       {children}
     </div>
@@ -66,7 +67,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 function inputCls(disabled = false) {
-  return `w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}`;
+  return `w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100 ${disabled ? "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed" : "bg-white dark:bg-gray-800"}`;
 }
 
 export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props) {
@@ -157,9 +158,9 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
           <RateMigrationBanner projectId={project.id} />
 
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-800">Estimate Overview</h2>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Estimate Overview</h2>
             <div className="flex items-center gap-2">
-              {saved && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
+              {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">Saved</span>}
               {error && <span className="text-xs text-red-600">{error}</span>}
               {isAdmin && (
                 <button onClick={async () => {
@@ -171,7 +172,7 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
                   });
                   if (res.ok) { const { toast } = await import("sonner"); toast.success(`Template "${name}" saved.`); }
                 }}
-                  className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition">
+                  className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition">
                   Save as Template
                 </button>
               )}
@@ -229,8 +230,11 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
                 placeholder="e.g. DKA Construction" className={inputCls(!isAdmin)} />
             </Field>
             <Field label="District">
-              <input value={district} onChange={e => setDistrict(e.target.value)} disabled={!isAdmin}
-                className={inputCls(!isAdmin)} />
+              <select value={district} onChange={e => setDistrict(e.target.value)} disabled={!isAdmin}
+                className={inputCls(!isAdmin)}>
+                <option value="">Select district…</option>
+                {NEPAL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
             </Field>
           </div>
 
@@ -288,15 +292,15 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
                 disabled={!isAdmin}
                 className={inputCls(!isAdmin)}
               >
-                <option value="unlocked">🔓 Unlocked</option>
-                <option value="locked">🔒 Locked</option>
+                <option value="unlocked">Unlocked</option>
+                <option value="locked">Locked</option>
               </select>
             </Field>
           </div>
 
           {/* Financial settings */}
-          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Financial Settings</h3>
+          <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
+            <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Financial Settings</h3>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Contingency %">
                 <input type="number" min="0" max="100" step="0.5" value={contingencyPct}
@@ -309,25 +313,25 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
                 <input type="checkbox" id="vat" checked={vatEnabled}
                   onChange={e => setVatEnabled(e.target.checked)} disabled={!isAdmin}
                   className="w-4 h-4 accent-blue-600" />
-                <label htmlFor="vat" className="text-sm text-gray-700">VAT</label>
+                <label htmlFor="vat" className="text-sm text-gray-700 dark:text-gray-300">VAT</label>
                 {vatEnabled && (
                   <input type="number" min="0" max="100" value={vatRate}
                     onChange={e => setVatRate(e.target.value)} disabled={!isAdmin}
-                    className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none" />
+                    className="w-20 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none" />
                 )}
-                {vatEnabled && <span className="text-sm text-gray-500">%</span>}
+                {vatEnabled && <span className="text-sm text-gray-500 dark:text-gray-400">%</span>}
               </div>
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="tds" checked={tdsEnabled}
                   onChange={e => setTdsEnabled(e.target.checked)} disabled={!isAdmin}
                   className="w-4 h-4 accent-blue-600" />
-                <label htmlFor="tds" className="text-sm text-gray-700">TDS</label>
+                <label htmlFor="tds" className="text-sm text-gray-700 dark:text-gray-300">TDS</label>
                 {tdsEnabled && (
                   <input type="number" min="0" max="100" value={tdsRate}
                     onChange={e => setTdsRate(e.target.value)} disabled={!isAdmin}
-                    className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none" />
+                    className="w-20 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none" />
                 )}
-                {tdsEnabled && <span className="text-sm text-gray-500">%</span>}
+                {tdsEnabled && <span className="text-sm text-gray-500 dark:text-gray-400">%</span>}
               </div>
             </div>
           </div>
@@ -336,10 +340,10 @@ export function OverviewTab({ project, orgUsers, isAdmin, currentUserId }: Props
       </div>
 
       {/* ── Right: Notes + Tasks ── */}
-      <aside className="w-80 border-l border-gray-200 flex flex-col overflow-hidden flex-shrink-0">
+      <aside className="w-80 border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden flex-shrink-0">
         <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
           <NotesPanel projectId={project.id} currentUserId={currentUserId} isAdmin={isAdmin} />
-          <div className="border-t border-gray-200" />
+          <div className="border-t border-gray-200 dark:border-gray-700" />
           <TasksPanel projectId={project.id} orgUsers={orgUsers} currentUserId={currentUserId} isAdmin={isAdmin} />
         </div>
       </aside>

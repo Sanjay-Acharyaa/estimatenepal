@@ -8,8 +8,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
-
-const RATES_CACHE_TTL = 300; // 5 minutes
+import { CACHE_TTL } from "@/lib/cache-constants";
 
 const createSchema = z.object({
   code: z.string().min(1).max(50).trim(),
@@ -56,8 +55,8 @@ export async function GET(req: NextRequest) {
       ],
     };
 
-    // Cache key encodes all filter dimensions. Short search prefix avoids key explosion.
-    const cacheKey = `rates:${token.orgId}:${source}:${batchId}:${search.slice(0, 40)}`;
+    // Cache key encodes all filter dimensions. Use full search string to prevent key collisions.
+    const cacheKey = `rates:${token.orgId}:${source}:${batchId}:${search}`;
     try {
       const hit = await redis.get(cacheKey);
       if (hit) {
@@ -92,7 +91,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Cache the full sorted list; pagination is done in-memory from the cached array.
-    redis.set(cacheKey, JSON.stringify({ all: allData, total }), "EX", RATES_CACHE_TTL).catch(() => {});
+    redis.set(cacheKey, JSON.stringify({ all: allData, total }), "EX", CACHE_TTL).catch(() => {});
 
     const data = allData.slice(skip, skip + limit);
 

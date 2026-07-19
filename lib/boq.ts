@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { redis } from "./redis";
+import { BOQ_CACHE_TTL, BOQ_MAX_CACHE_BYTES } from "./cache-constants";
 
 export interface BOQItem {
   id: string;
@@ -72,7 +73,7 @@ export interface BOQDocument {
   generatedAt: string;
 }
 
-const BOQ_CACHE_TTL = 30; // seconds — short enough to feel live, long enough to batch export calls
+// BOQ_CACHE_TTL and BOQ_MAX_CACHE_BYTES are imported from cache-constants
 
 export async function invalidateBOQCache(projectId: string): Promise<void> {
   redis.del(`boq:${projectId}`).catch(() => {});
@@ -88,7 +89,10 @@ export async function generateBOQ(projectId: string): Promise<BOQDocument> {
   }
 
   const boq = await computeBOQ(projectId);
-  redis.set(cacheKey, JSON.stringify(boq), "EX", BOQ_CACHE_TTL).catch(() => {});
+  const serialised = JSON.stringify(boq);
+  if (serialised.length <= BOQ_MAX_CACHE_BYTES) {
+    redis.set(cacheKey, serialised, "EX", BOQ_CACHE_TTL).catch(() => {});
+  }
   return boq;
 }
 
@@ -303,21 +307,28 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
 
           if (layer.type === "VERTICAL_WALL_AREA") {
-            const wH = ap?.wall ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12 : 0;
+            const wH = ap?.wall != null
+              ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12
+              : null;
             mbLength = item.rawQuantity;
-            if (wH > 0) mbHeight = wH;
-            effectiveQty = wH > 0 ? signedRaw * wH * item.multiplier : signedRaw * item.multiplier;
+            if (wH !== null && wH > 0) mbHeight = wH;
+            effectiveQty = wH !== null ? signedRaw * wH * item.multiplier : signedRaw * item.multiplier;
           } else if (layer.type === "VOLUME") {
             const method = ap?.volumeMethod ?? "area_x_h";
-            const h = ap?.height ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12 : 0;
+            // null means "dimension not specified" (use factor of 1); 0 means explicitly zero (quantity = 0)
+            const h = ap?.height != null
+              ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12
+              : null;
             mbLength = item.rawQuantity;
-            if (h > 0) mbHeight = h;
+            if (h !== null && h > 0) mbHeight = h;
             if (method === "lbh") {
-              const b = ap?.breadth ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12 : 0;
-              if (b > 0) mbBreadth = b;
-              effectiveQty = signedRaw * (b > 0 ? b : 1) * (h > 0 ? h : 1) * item.multiplier;
+              const b = ap?.breadth != null
+                ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12
+                : null;
+              if (b !== null && b > 0) mbBreadth = b;
+              effectiveQty = signedRaw * (b ?? 1) * (h ?? 1) * item.multiplier;
             } else {
-              effectiveQty = signedRaw * (h > 0 ? h : 1) * item.multiplier;
+              effectiveQty = signedRaw * (h ?? 1) * item.multiplier;
             }
           } else {
             // COUNT, LINEAR, AREA, COUNT_BY_DISTANCE — stored quantity is correct
