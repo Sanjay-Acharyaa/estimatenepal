@@ -55,7 +55,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 function nepalFY(): string {
   const now = new Date();
-  const isAfterShrawan = now.getMonth() > 6 || (now.getMonth() === 6 && now.getDate() >= 16);
+  const isAfterShrawan = now.getMonth() > 6 || (now.getMonth() === 6 && now.getDate() >= 17);
   const fyStart = now.getFullYear() + (isAfterShrawan ? 57 : 56);
   return `${fyStart}/${String(fyStart + 1).slice(2)}`;
 }
@@ -94,6 +94,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [buildRateForm, setBuildRateForm] = useState({ code: "", description: "", unit: "" });
   const [buildRateSaving, setBuildRateSaving] = useState(false);
   const [buildRateError, setBuildRateError] = useState("");
+  const buildRateButtonRef = useRef<HTMLButtonElement>(null);
+  const isSubmittingBuildRate = useRef(false);
 
   // Import state
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -358,11 +360,20 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     }
   }
 
+  const closeBuildRateModal = () => {
+    setShowBuildRate(false);
+    setBuildRateForm({ code: "", description: "", unit: "" });
+    setBuildRateError("");
+    requestAnimationFrame(() => buildRateButtonRef.current?.focus());
+  };
+
   const buildFromResources = async () => {
+    if (isSubmittingBuildRate.current) return;
     const description = buildRateForm.description.trim();
     const unit = buildRateForm.unit.trim();
     if (!description || !unit) return;
-    const code = buildRateForm.code.trim() || `MR${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    const code = buildRateForm.code.trim() || `MR${Date.now().toString(36).toUpperCase()}`;
+    isSubmittingBuildRate.current = true;
     setBuildRateSaving(true);
     setBuildRateError("");
     try {
@@ -376,16 +387,17 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         setBuildRateError(d.error?.message ?? "Failed to create rate.");
         return;
       }
-      const newRate = await res.json();
+      const newRate = await res.json() as RateItem;
       setShowBuildRate(false);
       setBuildRateForm({ code: "", description: "", unit: "" });
       setBuildRateError("");
       loadRates();
-      loadBatches();
+      loadUnbatchedCount();
       setResourceAnalysisTarget(newRate);
     } catch {
       setBuildRateError("Could not reach the server.");
     } finally {
+      isSubmittingBuildRate.current = false;
       setBuildRateSaving(false);
     }
   };
@@ -645,6 +657,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             </button>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} className="hidden" />
             <button
+              ref={buildRateButtonRef}
+              type="button"
               onClick={() => { setBuildRateError(""); setShowBuildRate(true); }}
               className="w-full py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/10 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/20 transition"
             >
@@ -897,12 +911,12 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="build-rate-title"
-          onKeyDown={e => { if (e.key === "Escape") setShowBuildRate(false); }}
+          onKeyDown={e => { if (e.key === "Escape") closeBuildRateModal(); }}
         >
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
             <h2 id="build-rate-title" className="font-semibold text-gray-900 dark:text-gray-100 mb-1">Build Market Rate</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              Creates a custom rate item then opens Resource Analysis so you can build the composite rate from your resource library. Click "Apply to Base Rate" when done.
+              Creates a custom rate item then opens Resource Analysis so you can build the composite rate from your resource library. Click &ldquo;Apply to Base Rate&rdquo; when done.
             </p>
             <div className="space-y-3">
               <div>
@@ -913,7 +927,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                   autoFocus
                   value={buildRateForm.description}
                   onChange={e => setBuildRateForm(f => ({ ...f, description: e.target.value }))}
-                  onKeyDown={e => { if (e.key === "Enter") buildFromResources(); }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) buildFromResources(); }}
+                  maxLength={500}
                   placeholder="e.g. Plain Cement Concrete 1:2:4"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
@@ -925,7 +940,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 <input
                   value={buildRateForm.unit}
                   onChange={e => setBuildRateForm(f => ({ ...f, unit: e.target.value }))}
-                  onKeyDown={e => { if (e.key === "Enter") buildFromResources(); }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) buildFromResources(); }}
+                  maxLength={50}
                   placeholder="e.g. Cu.m., Sq.m., Rft."
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
@@ -937,7 +953,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 <input
                   value={buildRateForm.code}
                   onChange={e => setBuildRateForm(f => ({ ...f, code: e.target.value }))}
-                  onKeyDown={e => { if (e.key === "Enter") buildFromResources(); }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) buildFromResources(); }}
+                  maxLength={50}
                   placeholder="e.g. MR001"
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
@@ -948,6 +965,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             )}
             <div className="flex gap-3 mt-5">
               <button
+                type="button"
                 onClick={buildFromResources}
                 disabled={buildRateSaving || !buildRateForm.description.trim() || !buildRateForm.unit.trim()}
                 className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg text-sm transition disabled:opacity-50"
@@ -955,7 +973,8 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                 {buildRateSaving ? "Creating…" : "Create & Analyse"}
               </button>
               <button
-                onClick={() => setShowBuildRate(false)}
+                type="button"
+                onClick={closeBuildRateModal}
                 className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancel
