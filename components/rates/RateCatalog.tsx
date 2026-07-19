@@ -53,6 +53,13 @@ const TYPE_COLORS: Record<string, string> = {
   DISTRICT: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700",
 };
 
+function nepalFY(): string {
+  const now = new Date();
+  const isAfterShrawan = now.getMonth() > 6 || (now.getMonth() === 6 && now.getDate() >= 16);
+  const fyStart = now.getFullYear() + (isAfterShrawan ? 57 : 56);
+  return `${fyStart}/${String(fyStart + 1).slice(2)}`;
+}
+
 export function RateCatalog({ isAdmin, projectId }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [activeTab, setActiveTab] = useState<CatalogTab>("rates");
@@ -83,6 +90,11 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [assemblyStructure, setAssemblyStructure] = useState<"flat" | "nested">("nested");
   const [savingAssembly, setSavingAssembly] = useState(false);
 
+  const [showBuildRate, setShowBuildRate] = useState(false);
+  const [buildRateForm, setBuildRateForm] = useState({ code: "", description: "", unit: "" });
+  const [buildRateSaving, setBuildRateSaving] = useState(false);
+  const [buildRateError, setBuildRateError] = useState("");
+
   // Import state
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importBatchName, setImportBatchName] = useState("");
@@ -97,7 +109,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     try {
       const res = await fetch("/api/rate-batches");
       const data = await res.json();
-      setBatches(Array.isArray(data) ? data : []);
+      setBatches(Array.isArray(data) ? data : (data.data ?? []));
     } catch { setBatches([]); }
   }, []);
 
@@ -345,6 +357,38 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       setSavingAssembly(false);
     }
   }
+
+  const buildFromResources = async () => {
+    const description = buildRateForm.description.trim();
+    const unit = buildRateForm.unit.trim();
+    if (!description || !unit) return;
+    const code = buildRateForm.code.trim() || `MR${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    setBuildRateSaving(true);
+    setBuildRateError("");
+    try {
+      const res = await fetch("/api/rates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, description, unit, baseRate: 0, fiscalYear: nepalFY() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setBuildRateError(d.error?.message ?? "Failed to create rate.");
+        return;
+      }
+      const newRate = await res.json();
+      setShowBuildRate(false);
+      setBuildRateForm({ code: "", description: "", unit: "" });
+      setBuildRateError("");
+      loadRates();
+      loadBatches();
+      setResourceAnalysisTarget(newRate);
+    } catch {
+      setBuildRateError("Could not reach the server.");
+    } finally {
+      setBuildRateSaving(false);
+    }
+  };
 
   // Use batch item counts (not filtered pagination.total) so search never distorts the sidebar count
   const allRatesTotal = batches.reduce((s, b) => s + b.itemCount, 0) + unbatchedCount;
@@ -601,6 +645,12 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
             </button>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} className="hidden" />
             <button
+              onClick={() => { setBuildRateError(""); setShowBuildRate(true); }}
+              className="w-full py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/10 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/20 transition"
+            >
+              + Build from Resources
+            </button>
+            <button
               onClick={() => setShowCreate(true)}
               className="w-full py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
             >
@@ -841,6 +891,79 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         </div>
       )}
 
+      {showBuildRate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="build-rate-title"
+          onKeyDown={e => { if (e.key === "Escape") setShowBuildRate(false); }}
+        >
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h2 id="build-rate-title" className="font-semibold text-gray-900 dark:text-gray-100 mb-1">Build Market Rate</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              Creates a custom rate item then opens Resource Analysis so you can build the composite rate from your resource library. Click "Apply to Base Rate" when done.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Description <span className="text-red-500">*</span>
+                </label>
+                <input
+                  autoFocus
+                  value={buildRateForm.description}
+                  onChange={e => setBuildRateForm(f => ({ ...f, description: e.target.value }))}
+                  onKeyDown={e => { if (e.key === "Enter") buildFromResources(); }}
+                  placeholder="e.g. Plain Cement Concrete 1:2:4"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Unit <span className="text-red-500">*</span>
+                </label>
+                <input
+                  value={buildRateForm.unit}
+                  onChange={e => setBuildRateForm(f => ({ ...f, unit: e.target.value }))}
+                  onKeyDown={e => { if (e.key === "Enter") buildFromResources(); }}
+                  placeholder="e.g. Cu.m., Sq.m., Rft."
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Code <span className="text-xs text-gray-400 font-normal">(auto-generated if blank)</span>
+                </label>
+                <input
+                  value={buildRateForm.code}
+                  onChange={e => setBuildRateForm(f => ({ ...f, code: e.target.value }))}
+                  onKeyDown={e => { if (e.key === "Enter") buildFromResources(); }}
+                  placeholder="e.g. MR001"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+            {buildRateError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-3">{buildRateError}</p>
+            )}
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={buildFromResources}
+                disabled={buildRateSaving || !buildRateForm.description.trim() || !buildRateForm.unit.trim()}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg text-sm transition disabled:opacity-50"
+              >
+                {buildRateSaving ? "Creating…" : "Create & Analyse"}
+              </button>
+              <button
+                onClick={() => setShowBuildRate(false)}
+                className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showCreate && (
         <RateForm title="New Rate Item" onSave={createRate} onCancel={() => setShowCreate(false)} />
       )}

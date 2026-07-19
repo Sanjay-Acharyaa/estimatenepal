@@ -9,6 +9,7 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { CACHE_TTL, RATES_MAX_CACHED_ROWS, UNIT_RATE_MAX } from "@/lib/cache-constants";
+import { invalidateRatesCache } from "@/lib/rates";
 
 const BATCH_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -140,6 +141,8 @@ export async function POST(req: NextRequest) {
       meta: { code: parsed.data.code, description: parsed.data.description } as any,
       ipAddress: ip,
     });
+
+    invalidateRatesCache(token.orgId as string).catch(() => {});
 
     return NextResponse.json(rate, { status: 201 });
   } catch (err) {
