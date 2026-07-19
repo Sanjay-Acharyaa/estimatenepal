@@ -23,3 +23,13 @@ export const UNIT_RATE_MAX = 9_999_999;
 
 // Maximum rows returned by GET /api/resources to prevent unbounded memory use
 export const RESOURCES_FETCH_LIMIT = 500;
+
+// Maximum file size accepted by the rate-import endpoint (bytes)
+export const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+// How long withTenantGuard caches user identity in Redis (seconds)
+export const TENANT_CACHE_TTL = 60;
+
+// Cron audit-cleanup: rows deleted per batch and how far back to keep
+export const AUDIT_CLEANUP_BATCH_SIZE = 5_000;
+export const AUDIT_RETENTION_DAYS = 90;

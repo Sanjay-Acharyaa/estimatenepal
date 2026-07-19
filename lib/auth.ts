@@ -6,6 +6,7 @@ import { redis } from "./redis";
 import { z } from "zod";
 import { ApiException } from "./errors";
 import { trackEvent } from "./analytics";
+import { TENANT_CACHE_TTL } from "./cache-constants";
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -63,9 +64,9 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Opportunistically re-hash to BCRYPT_COST if stored hash used a higher cost
+        // Opportunistically upgrade stored hash to current cost if it was stored at a lower cost
         const BCRYPT_COST = 10;
-        if (bcrypt.getRounds(user.passwordHash) > BCRYPT_COST) {
+        if (bcrypt.getRounds(user.passwordHash) < BCRYPT_COST) {
           bcrypt.hash(parsed.data.password, BCRYPT_COST).then(newHash =>
             prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } })
           ).catch(() => {});
@@ -169,8 +170,6 @@ export const authOptions: NextAuthOptions = {
 export async function getSession() {
   return getServerSession(authOptions);
 }
-
-const TENANT_CACHE_TTL = 60; // seconds
 
 // Verifies the calling user owns or belongs to the resource's org.
 // User identity fields (orgId, role, isSuperAdmin) are Redis-cached for 60s to

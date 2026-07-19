@@ -13,3 +13,7 @@ export const RATE_DEFAULTS = {
 } as const;
 
 export type RateDefaultKey = keyof typeof RATE_DEFAULTS;
+
+// Project-level tax defaults (separate from rate-analysis percentages above)
+export const VAT_DEFAULT_RATE  = 13;   // Nepal VAT on construction works — matches vatPct above
+export const TDS_DEFAULT_RATE  = 1.5;  // TDS withheld on construction contract payments (IRD)

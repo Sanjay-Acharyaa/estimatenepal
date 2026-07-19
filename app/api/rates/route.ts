@@ -8,15 +8,15 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
-import { CACHE_TTL, RATES_MAX_CACHED_ROWS } from "@/lib/cache-constants";
+import { CACHE_TTL, RATES_MAX_CACHED_ROWS, UNIT_RATE_MAX } from "@/lib/cache-constants";
 
 const BATCH_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 const createSchema = z.object({
   code: z.string().min(1).max(50).trim(),
-  description: z.string().min(1).trim(),
+  description: z.string().min(1).max(500).trim(),
   unit: z.string().min(1).max(50).trim(),
-  baseRate: z.number().min(0),
+  baseRate: z.number().min(0).max(UNIT_RATE_MAX),
   fiscalYear: z.string().min(4).max(10).trim(),
 });
 
@@ -81,8 +81,8 @@ export async function GET(req: NextRequest) {
     ]);
 
     allData.sort((a, b) => {
-      // Group by source first (DUDBC before CUSTOM alphabetically)
-      if (a.source !== b.source) return a.source.localeCompare(b.source);
+      // DUDBC standard rates before CUSTOM — reverse alphabetical so D comes before C
+      if (a.source !== b.source) return b.source.localeCompare(a.source);
       // Natural sort on code: if both fully numeric, compare as numbers
       const nA = Number(a.code);
       const nB = Number(b.code);

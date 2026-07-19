@@ -8,6 +8,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { withTenantGuard } from "@/lib/auth";
 import { trackEvent } from "@/lib/analytics";
+import { RATE_DEFAULTS, VAT_DEFAULT_RATE, TDS_DEFAULT_RATE } from "@/lib/rate-defaults";
 
 const VALID_SORT_FIELDS = ["name", "createdAt", "bidDueDate", "status", "estimatedValue"] as const;
 type SortField = typeof VALID_SORT_FIELDS[number];
@@ -34,9 +35,9 @@ const createSchema = z.object({
   contingencyPct: z.number().min(0).max(100).optional(),
   provisionalSum: z.number().min(0).optional(),
   vatEnabled: z.boolean().default(true),
-  vatRate: z.number().min(0).max(100).default(13),
+  vatRate: z.number().min(0).max(100).default(VAT_DEFAULT_RATE),
   tdsEnabled: z.boolean().default(false),
-  tdsRate: z.number().min(0).max(100).default(1.5),
+  tdsRate: z.number().min(0).max(100).default(TDS_DEFAULT_RATE),
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]).default("MEDIUM"),
   squareFootage: z.number().positive().nullable().optional(),
   office: z.string().max(200).optional(),
@@ -140,6 +141,21 @@ export async function POST(req: NextRequest) {
       data: { ...parsed.data, orgId: token.orgId as string },
     });
 
+    // Detect double-contingency: project-level + org rate-settings level both > 0
+    let _contingencyWarning: string | null = null;
+    const projectContingency = parsed.data.contingencyPct ?? 0;
+    if (projectContingency > 0) {
+      const orgSettings = await prisma.orgRateSettings.findUnique({
+        where: { orgId: token.orgId as string },
+        select: { contingencyPct: true },
+      });
+      const rateContingency = orgSettings?.contingencyPct ?? RATE_DEFAULTS.contingencyPct;
+      if (rateContingency > 0) {
+        const compounded = ((1 + projectContingency / 100) * (1 + rateContingency / 100) - 1) * 100;
+        _contingencyWarning = `Project contingency is ${projectContingency}% and the organisation's rate settings also include ${rateContingency}% embedded in resource-based rates. These will compound to approximately ${compounded.toFixed(1)}% total. Set one to 0 to avoid double-counting in bids.`;
+      }
+    }
+
     const DEFAULT_FOLDERS = ["General", "Architectural", "Structural", "Civil", "MEP"];
     await prisma.drawingFolder.createMany({
       data: DEFAULT_FOLDERS.map((name, i) => ({ projectId: project.id, name, sortOrder: i })),
@@ -174,7 +190,10 @@ export async function POST(req: NextRequest) {
 
     trackEvent("project_created", { orgId: token.orgId as string, userId: token.id as string, meta: { projectId: project.id } });
 
-    return NextResponse.json(project, { status: 201 });
+    return NextResponse.json(
+      _contingencyWarning ? { ...project, _contingencyWarning } : project,
+      { status: 201 }
+    );
   } catch (err) {
     return handleApiError(err);
   }

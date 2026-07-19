@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
-    const project = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true, orgId: true } });
+    const project = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true, orgId: true, name: true } });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         data: admins.map(a => ({
           userId: a.id,
           type: "override_proposed",
-          message: `A BOQ rate override was proposed and needs your review.`,
+          message: `Override proposed for rate ${rateItem.code} (${rateItem.description.slice(0, 60)}) in project "${project.name}". Proposed value: ${parsed.data.proposedValue}. Review required.`,
           link: `/dashboard/projects/${params.id}?tab=estimating`,
         })),
       }).catch((err) => console.error("[boq/overrides] notification failed:", err));

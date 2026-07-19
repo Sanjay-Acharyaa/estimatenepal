@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Props {
   projectId: string;
@@ -166,6 +166,9 @@ export function ExportButtons({ projectId }: Props) {
   const [newColLabel, setNewColLabel]   = useState("");
   const [showGovtModal, setShowGovtModal] = useState(false);
 
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rollbackRef  = useRef<SavedConfig | null>(null);
+
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
       .then(r => r.ok ? r.json() : null)
@@ -182,7 +185,7 @@ export function ExportButtons({ projectId }: Props) {
       .catch(() => {});
   }, [projectId]);
 
-  async function saveConfig(next: SavedConfig, previous: SavedConfig) {
+  async function saveConfig(next: SavedConfig, rollback: SavedConfig) {
     setSaving(true);
     setSaveMsg("");
     try {
@@ -194,11 +197,11 @@ export function ExportButtons({ projectId }: Props) {
       if (res.ok) {
         setSaveMsg("Saved");
       } else {
-        setConfig(previous);
+        setConfig(rollback);
         setSaveMsg("Failed to save");
       }
     } catch {
-      setConfig(previous);
+      setConfig(rollback);
       setSaveMsg("Failed to save");
     } finally {
       setSaving(false);
@@ -206,11 +209,26 @@ export function ExportButtons({ projectId }: Props) {
     }
   }
 
+  // Debounce config saves by 500ms so rapid toggles/reorders fire a single API call.
+  // The rollback target is captured from the state BEFORE the first change in the window.
+  function debouncedSave(next: SavedConfig, previous: SavedConfig) {
+    if (saveTimerRef.current === null) {
+      rollbackRef.current = previous;
+    } else {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      saveConfig(next, rollbackRef.current!);
+      rollbackRef.current = null;
+    }, 500);
+  }
+
   function toggleCol(key: ColKey) {
     const previous = config;
     const next = { ...config, [key]: !config[key] };
     setConfig(next);
-    saveConfig(next, previous);
+    debouncedSave(next, previous);
   }
 
   function moveCol(index: number, dir: -1 | 1) {
@@ -221,7 +239,7 @@ export function ExportButtons({ projectId }: Props) {
     const previous = config;
     const next = { ...config, colOrder: order };
     setConfig(next);
-    saveConfig(next, previous);
+    debouncedSave(next, previous);
   }
 
   function addCustomCol() {
@@ -231,14 +249,14 @@ export function ExportButtons({ projectId }: Props) {
     const next = { ...config, customCols: [...config.customCols, label] };
     setConfig(next);
     setNewColLabel("");
-    saveConfig(next, previous);
+    debouncedSave(next, previous);
   }
 
   function removeCustomCol(label: string) {
     const previous = config;
     const next = { ...config, customCols: config.customCols.filter(c => c !== label) };
     setConfig(next);
-    saveConfig(next, previous);
+    debouncedSave(next, previous);
   }
 
   const download = async (type: ExportType) => {

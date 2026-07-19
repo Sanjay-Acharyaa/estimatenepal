@@ -147,7 +147,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
   // The old RateAnalysis.useComputedRate path is intentionally removed: the resource-based
   // analysis system writes directly to rateItem.baseRate via "Apply to Base Rate", so
   // baseOrDistrictRate always reflects the most recent computed rate.
-  const [rateItems, districtRates, allOverrides] = await Promise.all([
+  const [rateItems, districtRates, approvedOverrides, pendingOverrides] = await Promise.all([
     rateItemIds.length > 0
       ? prisma.rateItem.findMany({ where: { id: { in: rateItemIds } } })
       : Promise.resolve([]),
@@ -157,26 +157,25 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           select: { rateItemId: true, rate: true },
         })
       : Promise.resolve([]),
+    // Use distinct to fetch only the most-recent approved override per rate item —
+    // avoids loading the full override history on projects with many negotiated rates.
     prisma.bOQOverride.findMany({
-      where: { projectId },
+      where: { projectId, status: "APPROVED" },
       orderBy: { createdAt: "desc" },
+      distinct: ["rateItemId"],
+    }),
+    prisma.bOQOverride.findMany({
+      where: { projectId, status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+      distinct: ["rateItemId"],
     }),
   ]);
 
   const rateMap = new Map(rateItems.map((r) => [r.id, r]));
   const districtRateMap = new Map(districtRates.map((r) => [r.rateItemId, r.rate]));
 
-  // Most-recent approved and pending override per rateItemId
-  const approvedMap = new Map<string, (typeof allOverrides)[0]>();
-  const pendingMap = new Map<string, (typeof allOverrides)[0]>();
-  for (const ov of allOverrides) {
-    if (ov.status === "APPROVED" && !approvedMap.has(ov.rateItemId)) {
-      approvedMap.set(ov.rateItemId, ov);
-    }
-    if (ov.status === "PENDING" && !pendingMap.has(ov.rateItemId)) {
-      pendingMap.set(ov.rateItemId, ov);
-    }
-  }
+  const approvedMap = new Map(approvedOverrides.map((ov) => [ov.rateItemId, ov]));
+  const pendingMap  = new Map(pendingOverrides.map((ov)  => [ov.rateItemId, ov]));
 
   const boqDisciplines: BOQDiscipline[] = [];
 
@@ -243,7 +242,12 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         if (spacingFt > 0) {
           const countTotal = layer.items.reduce((s, i) => {
             const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
-            return s + (Math.floor(raw / spacingFt) + 1);
+            // Fence-post correction (+1) counts one object at each endpoint of a span.
+            // Deduction layers (raw < 0) represent voids/openings; no extra post at the boundary.
+            const count = raw >= 0
+              ? Math.floor(raw / spacingFt) + 1
+              : Math.ceil(raw / spacingFt);
+            return s + count;
           }, 0);
           totalQuantity = countTotal * layer.multiplier;
           unit = "each";
@@ -262,10 +266,13 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       // Final guard — malformed additionalParams or multiplier can still produce NaN/Infinity
       if (!Number.isFinite(totalQuantity)) totalQuantity = 0;
 
-      // Prefer district rate over base rate; resource analysis writes to baseRate via "Apply to Base Rate".
-      const baseOrDistrictRate = rateItemId
-        ? (districtRateMap.get(rateItemId) ?? rateItem?.baseRate ?? 0)
-        : 0;
+      // Prefer district rate over base rate when the district rate is explicitly > 0.
+      // A district rate of 0 is treated as "not set" (import artefact or missing entry)
+      // so the base rate is used as the fallback.
+      const districtRate = rateItemId ? districtRateMap.get(rateItemId) : undefined;
+      const baseOrDistrictRate = (districtRate !== undefined && districtRate > 0)
+        ? districtRate
+        : (rateItemId ? (rateItem?.baseRate ?? 0) : 0);
       let rate = baseOrDistrictRate ?? 0;
       let isOverridden = false;
       let originalRate: number | null = null;

@@ -9,6 +9,8 @@ import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import { trackEvent } from "@/lib/analytics";
 
+export const maxDuration = 60;
+
 const PROJECT_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {

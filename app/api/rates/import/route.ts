@@ -6,6 +6,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 import { invalidateRatesCache } from "@/lib/rates";
+import { MAX_IMPORT_FILE_BYTES } from "@/lib/cache-constants";
 import * as XLSX from "xlsx";
 
 // POST /api/rates/import
@@ -69,8 +70,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "Only .xlsx files are accepted. Download the template and fill it in." } }, { status: 400 });
     }
 
-    const MAX_IMPORT_SIZE = 5 * 1024 * 1024; // 5 MB
-    if (file.size > MAX_IMPORT_SIZE) {
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
       return NextResponse.json({ error: { message: "File must be under 5 MB." } }, { status: 413 });
     }
 
@@ -168,14 +168,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "No data rows found. Add your rates starting from row 8 of the template." } }, { status: 400 });
     }
 
-    // Deduplicate within the file only (same code can exist in different rate books)
+    // Deduplicate within the file
     const seenCodes = new Set<string>();
-    const toInsert = rows.filter(r => {
+    const deduped = rows.filter(r => {
       if (seenCodes.has(r.code)) return false;
       seenCodes.add(r.code);
       return true;
     });
-    const skipped = rows.length - toInsert.length;
+    const fileSkipped = rows.length - deduped.length;
+
+    // Deduplicate against codes that already exist in this org's rate catalog
+    const existingItems = deduped.length > 0
+      ? await prisma.rateItem.findMany({
+          where: { orgId: token.orgId as string, code: { in: deduped.map(r => r.code) } },
+          select: { code: true },
+        })
+      : [];
+    const existingCodeSet = new Set(existingItems.map(r => r.code));
+    const toInsert = deduped.filter(r => !existingCodeSet.has(r.code));
+    const dbSkipped = deduped.length - toInsert.length;
+    const skipped = fileSkipped + dbSkipped;
 
     // Determine fiscal year from data (use most common value in the file)
     const fyMap = new Map<string, number>();
@@ -248,7 +260,8 @@ export async function POST(req: NextRequest) {
       skipped,
       message:
         `Rate Book "${finalBatchName}" created with ${toInsert.length} rate item${toInsert.length !== 1 ? "s" : ""}.` +
-        (skipped > 0 ? ` ${skipped} duplicate row${skipped !== 1 ? "s" : ""} in the file were skipped.` : ""),
+        (fileSkipped > 0 ? ` ${fileSkipped} in-file duplicate${fileSkipped !== 1 ? "s" : ""} skipped.` : "") +
+        (dbSkipped > 0 ? ` ${dbSkipped} code${dbSkipped !== 1 ? "s" : ""} already exist in this org's rate catalog and were skipped.` : ""),
     });
   } catch (err) {
     console.error("[rates/import] unhandled error:", err);

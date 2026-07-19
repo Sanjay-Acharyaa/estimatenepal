@@ -98,7 +98,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const updated = await prisma.project.update({ where: { id: params.id }, data: parsed.data });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "project.updated",
@@ -129,7 +129,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     // Soft-delete by archiving
     await prisma.project.update({ where: { id: params.id }, data: { status: "ARCHIVED" } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "project.archived",

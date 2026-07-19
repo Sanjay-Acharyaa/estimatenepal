@@ -115,7 +115,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { rateId: s
 
     await prisma.rateItem.delete({ where: { id: params.rateId } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: rate.orgId ?? "system",
       userId: token.id as string,
       event: "rate_item.deleted",

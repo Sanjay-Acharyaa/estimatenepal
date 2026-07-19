@@ -101,22 +101,20 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [lRes, sRes, rRes] = await Promise.all([
+      const [lRes, sRes] = await Promise.all([
         fetch(`/api/rate-analysis-lines?rateItemId=${rate.id}`),
         fetch("/api/orgs/rate-settings"),
-        fetch("/api/resources"),
       ]);
-      if (!lRes.ok || !sRes.ok || !rRes.ok) {
-        const failed = [lRes, sRes, rRes].find(r => !r.ok);
+      if (!lRes.ok || !sRes.ok) {
+        const failed = [lRes, sRes].find(r => !r.ok);
         const d = failed ? await failed.json().catch(() => ({})) : {};
         toast.error(d?.error?.message ?? "Failed to load rate analysis data.");
         setLines([]); setSettings(null);
         return;
       }
-      const [lData, sData, rData] = await Promise.all([lRes.json(), sRes.json(), rRes.json()]);
+      const [lData, sData] = await Promise.all([lRes.json(), sRes.json()]);
       setLines(lData.lines ?? []);
       setSettings(sData.settings ?? null);
-      setAllResources(rData.resources ?? []);
     } catch {
       toast.error("Network error loading rate analysis.");
       setLines([]); setSettings(null);
@@ -124,6 +122,20 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
       setLoading(false);
     }
   }, [rate.id]);
+
+  // Resources are loaded on demand when the user opens the "Add Resource Line" form.
+  const loadResources = useCallback(async () => {
+    if (allResources.length > 0) return;
+    try {
+      const rRes = await fetch("/api/resources");
+      if (rRes.ok) {
+        const rData = await rRes.json();
+        setAllResources(rData.resources ?? []);
+      }
+    } catch {
+      toast.error("Failed to load resource library.");
+    }
+  }, [allResources.length]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -367,12 +379,6 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
             </div>
           ) : (
             <>
-              {allResources.length === 0 && (
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
-                  Your Resource Library is empty. Go to the Resource Library tab and add resources before building a rate analysis.
-                </div>
-              )}
-
               {/* Lines table */}
               {lines.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
@@ -581,9 +587,9 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                     </button>
                   </div>
                 </div>
-              ) : isAdmin && allResources.length > 0 ? (
+              ) : isAdmin ? (
                 <button
-                  onClick={() => setShowAddLine(true)}
+                  onClick={() => { setShowAddLine(true); loadResources(); }}
                   className="w-full py-2 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
                 >
                   + Add Resource Line

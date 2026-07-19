@@ -4,15 +4,22 @@ import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
 import { buildMBExcel } from "@/lib/export";
-import { handleApiError, unauthorized, notFound } from "@/lib/errors";
+import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
+
+export const maxDuration = 60;
+
+const PROJECT_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const ip = getClientIp(req);
     const limited = await checkExportRateLimit(ip);
     if (limited) return limited;
+
+    if (!PROJECT_ID_RE.test(params.id) || params.id.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid project ID.", 400);
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();

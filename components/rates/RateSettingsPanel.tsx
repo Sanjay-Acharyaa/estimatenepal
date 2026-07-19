@@ -91,6 +91,7 @@ export function RateSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const resetToDefaults = () => {
+    if (!window.confirm("Reset all rate settings to DUDBC defaults? You will still need to click Save Settings for the change to take effect.")) return;
     setForm(Object.fromEntries(FIELDS.map(f => [f.key, String(RATE_DEFAULTS[f.key])])));
     setDirty(true);
   };
