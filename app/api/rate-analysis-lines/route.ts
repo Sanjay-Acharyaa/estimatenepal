@@ -8,7 +8,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { LINE_TYPES } from "@/lib/line-types";
-import { CACHE_TTL } from "@/lib/cache-constants";
+import { CACHE_TTL, QTY_PER_UNIT_MAX } from "@/lib/cache-constants";
 
 const LINE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -16,7 +16,7 @@ const createSchema = z.object({
   rateItemId: z.string().min(1),
   resourceId: z.string().min(1),
   lineType: z.enum(LINE_TYPES).default("MATERIAL"),
-  qtyPerUnit: z.number().min(0),
+  qtyPerUnit: z.number().min(0).max(QTY_PER_UNIT_MAX),
   wastagePercent: z.number().min(0).max(100).default(0),
   notes: z.string().max(500).trim().optional().nullable(),
   sortOrder: z.number().int().min(0).default(0),

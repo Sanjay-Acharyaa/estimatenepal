@@ -8,7 +8,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { RATE_DEFAULTS } from "@/lib/rate-defaults";
-import { CACHE_TTL } from "@/lib/cache-constants";
+import { CACHE_TTL, DRY_VOLUME_MAX } from "@/lib/cache-constants";
 
 const updateSchema = z.object({
   overheadPct: z.number().min(0).max(100).optional(),
@@ -16,8 +16,8 @@ const updateSchema = z.object({
   contingencyPct: z.number().min(0).max(100).optional(),
   vatPct: z.number().min(0).max(100).optional(),
   leadLiftPct: z.number().min(0).max(100).optional(),
-  dryVolumeMortar: z.number().min(1).max(2).optional(),
-  dryVolumeConcrete: z.number().min(1).max(2).optional(),
+  dryVolumeMortar: z.number().min(1).max(DRY_VOLUME_MAX).optional(),
+  dryVolumeConcrete: z.number().min(1).max(DRY_VOLUME_MAX).optional(),
 });
 
 function ck(orgId: string) {

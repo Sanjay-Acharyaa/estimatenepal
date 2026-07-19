@@ -12,6 +12,8 @@ export const NEPAL_DISTRICTS = [
   "Terhathum","Udayapur",
 ].sort();
 
+export type NepalDistrict = typeof NEPAL_DISTRICTS[number];
+
 export const COMMON_UNITS: { label: string; value: string }[] = [
   { label: "Cu.m  -  Cubic Metre",         value: "Cu.m"  },
   { label: "Sq.m  -  Square Metre",        value: "Sq.m"  },

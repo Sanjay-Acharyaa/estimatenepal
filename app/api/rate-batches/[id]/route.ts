@@ -7,6 +7,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { invalidateRatesCache } from "@/lib/rates";
+import { redis } from "@/lib/redis";
 
 const BATCH_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -85,11 +86,22 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (!batch) throw notFound("Rate book");
     if (batch.orgId !== (token.orgId as string)) throw forbidden();
 
+    // Collect rate item IDs before deletion so their analysis-line caches can be purged
+    const batchItems = await prisma.rateItem.findMany({
+      where: { batchId: params.id },
+      select: { id: true },
+    });
+
     // Delete all rate items in the batch first, then the batch itself
     await prisma.$transaction([
       prisma.rateItem.deleteMany({ where: { batchId: params.id } }),
       prisma.rateBatch.delete({ where: { id: params.id } }),
     ]);
+
+    // Purge analysis-line caches for all deleted rate items
+    for (const item of batchItems) {
+      redis.del(`analysis-lines:${token.orgId}:${item.id}`).catch(() => {});
+    }
 
     appendAuditLog({
       orgId: token.orgId as string,

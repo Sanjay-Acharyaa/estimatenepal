@@ -174,7 +174,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   const overhead = settings ? directCost * (settings.overheadPct / 100) : 0;
   const profit = settings ? (directCost + overhead) * (settings.profitPct / 100) : 0;
   const contingency = settings ? (directCost + overhead + profit) * (settings.contingencyPct / 100) : 0;
-  const leadLift = settings ? (directCost + overhead) * (settings.leadLiftPct / 100) : 0;
+  const leadLift = settings ? directCost * (settings.leadLiftPct / 100) : 0;
   const preVat = directCost + overhead + profit + contingency + leadLift;
   const vat = settings ? preVat * (settings.vatPct / 100) : 0;
   const totalRate = preVat + vat;
@@ -281,9 +281,16 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
     // Writing totalRate (which includes VAT) would cause VAT to be counted twice in
     // any project that has vatEnabled = true.
     if (preVat <= 0) return;
+    const breakdownParts = [
+      `Direct Cost NRS ${NRS(directCost)}`,
+      settings && overhead > 0 ? `Overhead ${settings.overheadPct}%` : null,
+      settings && profit > 0 ? `Profit ${settings.profitPct}%` : null,
+      settings && contingency > 0 ? `Contingency ${settings.contingencyPct}%` : null,
+      settings && leadLift > 0 ? `Lead and Lift ${settings.leadLiftPct}% (on direct cost)` : null,
+    ].filter(Boolean).join(" + ");
     const ok = await confirm({
       title: "Update Base Rate",
-      message: `Set the base rate of "${rate.code}" to NRS ${NRS(preVat)} (pre-VAT)? VAT is applied separately at the BOQ level. Current rate is NRS ${NRS(rate.baseRate)}.`,
+      message: `Set the base rate of "${rate.code}" to NRS ${NRS(preVat)} (pre-VAT)? Breakdown: ${breakdownParts}. VAT is applied separately at BOQ level. Current rate is NRS ${NRS(rate.baseRate)}.`,
       variant: "default",
       confirmLabel: "Update Rate",
     });
@@ -376,7 +383,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                         <th className="px-3 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 w-20">Type</th>
                         <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Qty/Unit</th>
                         <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Rate</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-20">Wastage</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Wastage / Gross</th>
                         <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Amount</th>
                         {isAdmin && <th className="px-3 py-2.5 w-20" />}
                       </tr>
@@ -420,8 +427,15 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                                 onChange={e => setEditForm(f => ({ ...f, wastagePercent: e.target.value }))}
                                 className="w-16 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 text-right text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
+                            ) : line.wastagePercent > 0 ? (
+                              <div>
+                                <span className="block">{line.wastagePercent}%</span>
+                                <span className="block text-[10px] text-gray-400 dark:text-gray-500">
+                                  {fmtNum(line.qtyPerUnit * (1 + line.wastagePercent / 100), 4)} {line.resource.unit}
+                                </span>
+                              </div>
                             ) : (
-                              <span>{line.wastagePercent}%</span>
+                              <span>0%</span>
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-800 dark:text-gray-100">

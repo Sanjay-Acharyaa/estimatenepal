@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { fmtNum } from "@/lib/format";
 import { COMMON_UNITS, NEPAL_DISTRICTS } from "@/lib/nepal-constants";
+import { CATALOG_SEARCH_LIMIT } from "@/lib/cache-constants";
 
 export interface RateFormData {
   code: string;
@@ -97,7 +98,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
     const t = setTimeout(async () => {
       setCatalogLoading(true);
       try {
-        const res = await fetch(`/api/rates?search=${encodeURIComponent(catalogSearch)}&source=DUDBC&limit=15`);
+        const res = await fetch(`/api/rates?search=${encodeURIComponent(catalogSearch)}&source=DUDBC&limit=${CATALOG_SEARCH_LIMIT}`);
         const d = await res.json();
         setCatalogResults(d.data ?? []);
       } catch { setCatalogResults([]); }
@@ -131,7 +132,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
   const selectCatalogRate = (rate: CatalogRate) => {
     setSelectedCatalog(rate);
     setShowCatalogDropdown(false);
-    setCatalogSearch(rate.code + " — " + rate.description.slice(0, 40));
+    setCatalogSearch(rate.code + ": " + rate.description.slice(0, 40));
     // Auto-fill item details from catalog
     if (!code) setCode(rate.code);
     if (!description) setDescription(rate.description);
@@ -288,7 +289,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                     {([
                       { key: "dudbc" as LinkedSource, label: "DUDBC Rate", desc: "National standard rates" },
                       { key: "district" as LinkedSource, label: "District Rate", desc: "Location-adjusted rates" },
-                      { key: "analysis" as LinkedSource, label: "Rate Analysis", desc: "Legacy flat-input builder", disabled: !projectId && !orgComputedRate },
+                      { key: "analysis" as LinkedSource, label: "Rate Analysis", desc: "Legacy flat-input — does not drive BOQ", disabled: !projectId && !orgComputedRate },
                     ]).map(({ key, label, desc, disabled }) => (
                       <button
                         key={key}

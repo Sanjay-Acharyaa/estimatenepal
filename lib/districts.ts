@@ -1,18 +1,3 @@
-export const NEPAL_DISTRICTS = [
-  "Achham", "Arghakhanchi", "Baglung", "Baitadi", "Bajhang", "Bajura",
-  "Banke", "Bara", "Bardiya", "Bhaktapur", "Bhojpur", "Chitwan",
-  "Dadeldhura", "Dailekh", "Dang", "Darchula", "Dhading", "Dhankuta",
-  "Dhanusa", "Dolakha", "Dolpa", "Doti", "Eastern Rukum", "Gorkha",
-  "Gulmi", "Humla", "Ilam", "Jajarkot", "Jhapa", "Jumla",
-  "Kailali", "Kalikot", "Kanchanpur", "Kapilvastu", "Kaski", "Kathmandu",
-  "Kavrepalanchok", "Khotang", "Lalitpur", "Lamjung", "Mahottari",
-  "Makwanpur", "Manang", "Morang", "Mugu", "Mustang", "Myagdi",
-  "Nawalpur", "Nuwakot", "Okhaldhunga", "Palpa", "Panchthar", "Parbat",
-  "Parsa", "Pyuthan", "Ramechhap", "Rasuwa", "Rautahat", "Rolpa",
-  "Rupandehi", "Salyan", "Sankhuwasabha", "Saptari", "Sarlahi",
-  "Sindhuli", "Sindhupalchok", "Siraha", "Solukhumbu", "Sunsari",
-  "Surkhet", "Syangja", "Tanahu", "Taplejung", "Terhathum",
-  "Udayapur", "Western Rukum",
-] as const;
-
-export type NepalDistrict = typeof NEPAL_DISTRICTS[number];
+// Single source of truth is lib/nepal-constants.ts.
+// This file re-exports so that existing imports continue to work.
+export { NEPAL_DISTRICTS, type NepalDistrict } from "./nepal-constants";

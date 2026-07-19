@@ -6,6 +6,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
+import { invalidateRatesCache } from "@/lib/rates";
 
 const RATE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -81,7 +82,7 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
       data: parsed.data,
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: rate.orgId ?? "system",
       userId: token.id as string,
       event: "rate_item.updated",
@@ -89,6 +90,8 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
       meta: parsed.data as any,
       ipAddress: ip,
     });
+
+    invalidateRatesCache().catch(() => {});
 
     return NextResponse.json(updated);
   } catch (err) {

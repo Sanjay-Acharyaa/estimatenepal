@@ -122,6 +122,9 @@ export function BOQTable({ projectId, isAdmin }: Props) {
             {boq.provisionalSum > 0 && (
               <FinRow label="Provisional Sum" value={boq.provisionalSum} />
             )}
+            {(boq.project.vatEnabled || boq.project.tdsEnabled) && (
+              <FinRow label="Sub-Total (VAT Base)" value={boq.subtotalAfterAdditions} />
+            )}
             {boq.project.vatEnabled && (
               <FinRow label={`VAT (${boq.project.vatRate}%)`} value={boq.vatAmount} />
             )}
@@ -231,20 +234,11 @@ function GroupRows({
           </span>
         )}
         <span>{NRS(grp.rate)}</span>
-        {grp.rateItemId && !isAdmin && (
+        {grp.rateItemId && (
           <button
             onClick={onProposeOverride}
             className="ml-1 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-xs"
-            aria-label="Propose override"
-          >
-            [edit]
-          </button>
-        )}
-        {grp.rateItemId && isAdmin && (
-          <button
-            onClick={onProposeOverride}
-            className="ml-1 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-xs"
-            aria-label="Override rate"
+            aria-label={isAdmin ? "Override rate" : "Propose override"}
           >
             [edit]
           </button>

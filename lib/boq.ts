@@ -67,6 +67,7 @@ export interface BOQDocument {
   grandTotal: number;
   contingencyAmount: number;
   provisionalSum: number;
+  subtotalAfterAdditions: number;
   vatAmount: number;
   tdsAmount: number;
   finalPayable: number;
@@ -207,7 +208,8 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
 
       if (layer.type === "VOLUME") {
         const method = ap?.volumeMethod ?? "area_x_h";
-        const h = ap?.height ? safeNum(ap.height.ft) + safeNum(ap.height.in) / 12 : 0;
+        // null means dimension not configured yet — use factor 1 (neutral), matching per-item effectiveQty
+        const h = ap?.height != null ? safeNum(ap.height.ft) + safeNum(ap.height.in) / 12 : null;
         const rawTotal = layer.items.reduce((s, i) => {
           const isLength = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || !i.shapeType;
           const isArea = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
@@ -220,12 +222,14 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         const itemUnit = layer.items[0]?.unit ?? "ft";
         const isMetric = itemUnit.endsWith("m");
         if (method === "lbh") {
-          const b = ap?.breadth ? safeNum(ap.breadth.ft) + safeNum(ap.breadth.in) / 12 : 0;
-          totalQuantity = rawTotal * b * h * layer.multiplier;
-          unit = b > 0 && h > 0 ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
+          const b = ap?.breadth != null ? safeNum(ap.breadth.ft) + safeNum(ap.breadth.in) / 12 : null;
+          totalQuantity = rawTotal * (b ?? 1) * (h ?? 1) * layer.multiplier;
+          unit = b !== null && b > 0 && h !== null && h > 0
+            ? (isMetric ? "cu m" : "cu ft")
+            : (isMetric ? "sq m" : "sq ft");
         } else {
-          totalQuantity = rawTotal * h * layer.multiplier;
-          unit = h > 0 ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
+          totalQuantity = rawTotal * (h ?? 1) * layer.multiplier;
+          unit = h !== null && h > 0 ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
         }
       } else if (layer.type === "VERTICAL_WALL_AREA") {
         const wallH = ap?.wall ? safeNum(ap.wall.heightFt) + safeNum(ap.wall.heightIn) / 12 : 0;
@@ -408,6 +412,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
     grandTotal,
     contingencyAmount,
     provisionalSum,
+    subtotalAfterAdditions,
     vatAmount,
     tdsAmount,
     finalPayable: subtotalAfterAdditions + vatAmount - tdsAmount,

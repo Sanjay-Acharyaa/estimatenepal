@@ -9,6 +9,8 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound, conflict } from "@/lib/errors";
 import { ResourceCategory } from "@prisma/client";
 
+const RESOURCE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 const VALID_CATEGORIES = Object.values(ResourceCategory);
 
 const updateSchema = z.object({
@@ -34,6 +36,9 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     const ip = getClientIp(req);
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
+
+    if (!RESOURCE_ID_RE.test(params.id) || params.id.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid resource ID.", 400);
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
@@ -105,6 +110,9 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
+    if (!RESOURCE_ID_RE.test(params.id) || params.id.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid resource ID.", 400);
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
     if (!token.orgId) throw forbidden();
@@ -118,16 +126,18 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     });
     if (!existing) throw notFound("Resource");
 
-    const lineCount = await prisma.rateAnalysisLine.count({
-      where: { resourceId: params.id, orgId },
+    // Transaction prevents TOCTOU race between the usage check and the delete.
+    await prisma.$transaction(async (tx) => {
+      const lineCount = await tx.rateAnalysisLine.count({
+        where: { resourceId: params.id, orgId },
+      });
+      if (lineCount > 0) {
+        throw conflict(
+          `Cannot delete: this resource is used in ${lineCount} rate analysis line(s). Remove those lines first.`
+        );
+      }
+      await tx.orgResource.delete({ where: { id: params.id } });
     });
-    if (lineCount > 0) {
-      throw conflict(
-        `Cannot delete: this resource is used in ${lineCount} rate analysis line(s). Remove those lines first.`
-      );
-    }
-
-    await prisma.orgResource.delete({ where: { id: params.id } });
 
     invalidateCache(orgId, existing.category);
 

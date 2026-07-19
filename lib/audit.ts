@@ -1,8 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
-// Non-blocking — fire-and-forget. Audit writes must never add latency to the calling request.
-// Callers should NOT await this function.
+/**
+ * Fire-and-forget audit write. Returns void — callers that `await` this receive
+ * immediate resolution. The DB write happens in the background. Never await or
+ * chain .catch() on the return value.
+ */
 export function appendAuditLog({
   orgId,
   userId,

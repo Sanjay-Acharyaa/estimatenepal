@@ -8,7 +8,9 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
-import { CACHE_TTL } from "@/lib/cache-constants";
+import { CACHE_TTL, RATES_MAX_CACHED_ROWS } from "@/lib/cache-constants";
+
+const BATCH_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 const createSchema = z.object({
   code: z.string().min(1).max(50).trim(),
@@ -36,7 +38,10 @@ export async function GET(req: NextRequest) {
     type ValidSource = typeof VALID_SOURCES[number];
     const rawSource = sp.get("source") ?? "";
     const source: ValidSource | "" = VALID_SOURCES.includes(rawSource as ValidSource) ? rawSource as ValidSource : "";
-    const batchId = sp.get("batchId") ?? "";
+    const rawBatchId = sp.get("batchId") ?? "";
+    const batchId = rawBatchId === "none" || (rawBatchId.length > 0 && rawBatchId.length <= 128 && BATCH_ID_RE.test(rawBatchId))
+      ? rawBatchId
+      : "";
 
     const where = {
       AND: [
@@ -71,7 +76,7 @@ export async function GET(req: NextRequest) {
     // Natural sort: numeric codes sort as numbers (1,2,3,10,100) not strings (1,10,100,2)
     // Cap at 5000 rows to prevent unbounded memory use at scale.
     const [allData, total] = await Promise.all([
-      prisma.rateItem.findMany({ where, take: 5000 }),
+      prisma.rateItem.findMany({ where, take: RATES_MAX_CACHED_ROWS }),
       prisma.rateItem.count({ where }),
     ]);
 
