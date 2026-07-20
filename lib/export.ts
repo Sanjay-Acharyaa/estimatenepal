@@ -1112,10 +1112,10 @@ function addRateAnalysisSheet(
 }
 
 // ─── Sheets 4–6: Procurement Schedules ───────────────────────────────────────
-// Structure: rows = BOQ groups, columns = unique resources of the given type.
-// Formula per cell: =qtyPerUnit*(1+wastage/100)*groupTotalQuantity
-// This is the EXACT same math as: lib/boq.ts → group.totalQuantity × rate
-// and components/rates/ResourceLineAnalysis.tsx procurement quantity.
+// Structure: sub-item rows per BOQ group with dimensions (No./L/B/H/Qty).
+// Resource column formula: =G{rowNum}*qpu*(1+wst/100)
+// G column (Quantity) is a live cell — editing it recalculates all resource cols.
+// No cross-unit "Total" column — each resource is totalled independently at the bottom.
 
 function addProcurementSheet(
   wb: ExcelJS.Workbook,
@@ -1141,10 +1141,10 @@ function addProcurementSheet(
   const resources = Array.from(resourceMap.values());
   if (resources.length === 0) {
     const ws = wb.addWorksheet(sheetName);
-    const noteRow = ws.addRow([`${sheetName.toUpperCase()} — ${boq.project.name.toUpperCase()}`]);
-    ws.mergeCells(`A${noteRow.number}:D${noteRow.number}`);
-    noteRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E3A5F" } };
-    noteRow.getCell(1).alignment = { horizontal: "center" };
+    const emptyTitle = ws.addRow([`${sheetName.toUpperCase()} — ${boq.project.name.toUpperCase()}`]);
+    ws.mergeCells(`A${emptyTitle.number}:D${emptyTitle.number}`);
+    emptyTitle.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E3A5F" } };
+    emptyTitle.getCell(1).alignment = { horizontal: "center" };
     const emptyRow = ws.addRow(["No lines of this resource type were found in the rate analysis for this project."]);
     ws.mergeCells(`A${emptyRow.number}:D${emptyRow.number}`);
     emptyRow.getCell(1).font = { italic: true, size: 10, color: { argb: "FF6B7280" } };
@@ -1156,21 +1156,23 @@ function addProcurementSheet(
 
   const ws = wb.addWorksheet(sheetName);
 
-  // Fixed columns: S.No. | Description | Qty | Unit | [resource cols] | TOTAL
-  const fixedCols = 4;
-  const totalCols = fixedCols + resources.length + 1;
-
-  // Column widths
-  ws.columns = [
-    { key: "sno",  width: 7 },
-    { key: "desc", width: 36 },
-    { key: "qty",  width: 12 },
-    { key: "unit", width: 8 },
-    ...resources.map(() => ({ width: 14 })),
-    { key: "total", width: 14 },
-  ];
-
+  // Fixed columns: S.No.(A) | Description(B) | No.(C) | Length(D) | Breadth(E) | Height(F) | Quantity(G) | Unit(H)
+  const FIXED = 8;
+  const QTY_COL = colLetter(7); // G — live Quantity cell referenced by resource formulas
+  const totalCols = FIXED + resources.length;
   const lastCol = colLetter(totalCols);
+
+  ws.columns = [
+    { key: "sno",     width: 6  },
+    { key: "desc",    width: 42 },
+    { key: "no",      width: 7  },
+    { key: "length",  width: 10 },
+    { key: "breadth", width: 10 },
+    { key: "height",  width: 10 },
+    { key: "qty",     width: 12 },
+    { key: "unit",    width: 8  },
+    ...resources.map(() => ({ width: 15 })),
+  ];
 
   // Title
   const titleRow = ws.addRow([`${sheetName.toUpperCase()} — ${boq.project.name.toUpperCase()}`]);
@@ -1179,213 +1181,212 @@ function addProcurementSheet(
   titleRow.getCell(1).alignment = { horizontal: "center" };
   titleRow.height = 22;
 
-  const noteRow = ws.addRow([
-    `Formula per cell: Qty/Unit × (1 + Wastage%) × BOQ Total Quantity  (DUDBC procurement standard)`
+  const subtitleRow = ws.addRow([
+    `Formula: Qty/Unit × (1 + Wastage%) × Quantity (col G)  |  Edit Quantity → resource columns update automatically  (DUDBC standard)`
   ]);
-  ws.mergeCells(`A${noteRow.number}:${lastCol}${noteRow.number}`);
-  noteRow.getCell(1).font = { size: 9, italic: true, color: { argb: "FF6B7280" } };
-  noteRow.getCell(1).alignment = { horizontal: "center" };
+  ws.mergeCells(`A${subtitleRow.number}:${lastCol}${subtitleRow.number}`);
+  subtitleRow.getCell(1).font = { size: 9, italic: true, color: { argb: "FF6B7280" } };
+  subtitleRow.getCell(1).alignment = { horizontal: "center" };
   ws.addRow([]);
 
-  // Column headers — two rows: resource names then units
+  // Header rows — two rows: resource names + units
   const nameHdr = ws.addRow([
-    "S.No.", "Description", "BOQ Qty", "Unit",
+    "S.No.", "Description", "No.", "Length", "Breadth", "Height", "Quantity", "Unit",
     ...resources.map(r => sanitizeCell(r.name)),
-    "Total",
   ]);
   nameHdr.eachCell(c => applyHeaderStyle(c));
   nameHdr.height = 20;
 
   const unitHdr = ws.addRow([
-    "", "", "", "",
+    "", "", "", "", "", "", "", "",
     ...resources.map(r => `(${r.unit})`),
-    "",
   ]);
   unitHdr.eachCell((c, col) => {
-    if (col > 4) {
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+    if (col > FIXED) {
       c.font = { size: 8, italic: true, color: { argb: "FFCFDEEE" } };
-      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
       c.alignment = { horizontal: "center" };
     }
   });
   unitHdr.height = 14;
 
-  // Data rows
-  const allSubtotalRows: ExcelJS.Row[] = [];
-  let dSno = 1;
+  const allDiscSubRows: ExcelJS.Row[] = [];
+  let grpSno = 1;
+
   for (const disc of boq.disciplines) {
-    // Chapter / discipline header
+    // Discipline band
     const dRow = ws.addRow([sanitizeCell(disc.name.toUpperCase())]);
     ws.mergeCells(`A${dRow.number}:${lastCol}${dRow.number}`);
     dRow.eachCell(c => applyDisciplineStyle(c));
     dRow.height = 16;
 
-    // Track cells in this chapter for subtotal
-    const chapterDataRows: ExcelJS.Row[] = [];
+    const discGrpSubRows: ExcelJS.Row[] = [];
 
     for (const grp of disc.groups) {
       const rateItem = grp.rateItemId ? rateMap.get(grp.rateItemId) : undefined;
+      const linesForType = rateItem ? rateItem.lines.filter(l => l.lineType === lineType) : [];
 
-      // Resource qty cells for this row
-      const resourceCells: (number | null)[] = resources.map(res => {
-        if (!rateItem) return null;
-        const line = rateItem.lines.find(l => l.resource.id === res.id && l.lineType === lineType);
-        if (!line) return null;
-        return line.qtyPerUnit * (1 + line.wastagePercent / 100) * grp.totalQuantity;
-      });
-
-      const hasAnyResource = resourceCells.some(v => v !== null);
-      if (!hasAnyResource) {
-        const noteRow = ws.addRow([
-          "—",
-          `${sanitizeCell(grp.name)} — no ${lineType.toLowerCase()} resources in rate analysis`,
-          grp.totalQuantity,
-          grp.unit,
-          ...resources.map(() => null as null),
-          null,
-        ]);
-        noteRow.eachCell(c => { borderAll(c); c.alignment = { vertical: "middle", horizontal: "right" }; });
-        noteRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-        noteRow.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
-        noteRow.getCell(2).font = { italic: true, size: 9, color: { argb: "FF6B7280" } };
-        noteRow.getCell(3).numFmt = "#,##0.000";
-        noteRow.getCell(4).alignment = { horizontal: "center", vertical: "middle" };
-        continue;
-      }
-
-      const row = ws.addRow([
-        `${dSno}`,
+      // Group header row — bold band, full width
+      const grpHdr = ws.addRow([
+        `${grpSno}`,
         sanitizeCell(grp.name),
-        grp.totalQuantity,
-        grp.unit,
-        ...resourceCells.map(() => null as null), // filled by formulas below
-        null,
+        "", "", "", "", "", grp.unit,
+        ...resources.map(() => ""),
       ]);
+      grpHdr.eachCell(c => {
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F0FE" } };
+        borderAll(c);
+        c.alignment = { vertical: "middle", horizontal: "right" };
+      });
+      grpHdr.getCell(1).font = { bold: true, size: 10 };
+      grpHdr.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+      grpHdr.getCell(2).font = { bold: true, size: 10 };
+      grpHdr.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
+      grpHdr.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
+      grpHdr.height = 16;
 
-      row.getCell(3).numFmt = "#,##0.000";
-      row.eachCell(c => { borderAll(c); c.alignment = { vertical: "middle", horizontal: "right" }; });
-      row.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-      row.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
-      row.getCell(4).alignment = { horizontal: "center", vertical: "middle" };
+      // Sub-item rows
+      const subItemRows: ExcelJS.Row[] = [];
 
-      const resColCells: string[] = [];
-      let rowTotalVal = 0;
-      resources.forEach((res, i) => {
-        const colIdx = fixedCols + 1 + i; // 1-based
-        const line = rateItem?.lines.find(l => l.resource.id === res.id && l.lineType === lineType);
-        const cell = row.getCell(colIdx);
-        if (line) {
+      for (const item of grp.items) {
+        const itemRow = ws.addRow([
+          null,
+          sanitizeCell(item.label),
+          item.multiplier !== 1 ? item.multiplier : null,
+          item.length  ?? null,
+          item.breadth ?? null,
+          item.height  ?? null,
+          item.quantity,
+          item.unit,
+          ...resources.map(() => null as null),
+        ]);
+
+        const rowNum = itemRow.number;
+
+        itemRow.eachCell(c => { borderAll(c); c.alignment = { vertical: "middle", horizontal: "right" }; });
+        itemRow.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
+        itemRow.getCell(3).numFmt  = "#,##0.000";
+        itemRow.getCell(4).numFmt  = "#,##0.000";
+        itemRow.getCell(5).numFmt  = "#,##0.000";
+        itemRow.getCell(6).numFmt  = "#,##0.000";
+        itemRow.getCell(7).numFmt  = "#,##0.000"; // Quantity — live cell
+        itemRow.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
+
+        // Resource formulas — reference the Quantity cell (col G) in THIS row
+        resources.forEach((res, i) => {
+          const colIdx = FIXED + 1 + i;
+          const line = linesForType.find(l => l.resource.id === res.id);
+          if (!line) return;
           const qpu = parseFloat(line.qtyPerUnit.toFixed(3));
           const wst = parseFloat(line.wastagePercent.toFixed(3));
-          const tqt = parseFloat(grp.totalQuantity.toFixed(3));
-          const computed = qpu * (1 + wst / 100) * tqt;
-          cell.value = {
-            formula: `=${qpu}*(1+${wst}/100)*${tqt}`,
-            result: computed,
-          };
+          const computed = parseFloat((qpu * (1 + wst / 100) * item.quantity).toFixed(3));
+          const cell = itemRow.getCell(colIdx);
+          cell.value = { formula: `=${QTY_COL}${rowNum}*${qpu}*(1+${wst}/100)`, result: computed };
           cell.numFmt = "#,##0.000";
-          resColCells.push(colLetter(colIdx) + row.number);
-          rowTotalVal += computed;
-        }
-      });
+          cell.alignment = { horizontal: "right", vertical: "middle" };
+        });
 
-      // Row total: accumulated above — never read back cells by address (ExcelJS throws on full address like "E12")
-      const totalColIdx = fixedCols + resources.length + 1;
-      const totalCell = row.getCell(totalColIdx);
-      if (resColCells.length > 0) {
-        totalCell.value = { formula: `=SUM(${resColCells.join(",")})`, result: rowTotalVal };
-        totalCell.numFmt = "#,##0.000";
-        totalCell.font = { bold: true };
+        subItemRows.push(itemRow);
       }
 
-      chapterDataRows.push(row);
-      dSno++;
+      // Group subtotal row — SUM across sub-item cells
+      const subTotRow = ws.addRow([
+        null,
+        sanitizeCell(grp.name),
+        null, null, null, null,
+        grp.totalQuantity,
+        grp.unit,
+        ...resources.map(() => null as null),
+      ]);
+      ws.mergeCells(`A${subTotRow.number}:B${subTotRow.number}`);
+      subTotRow.getCell(1).value = sanitizeCell(grp.name); // A holds value after merge
+      subTotRow.eachCell(c => { applyTotalStyle(c); c.alignment = { horizontal: "right", vertical: "middle" }; });
+      subTotRow.getCell(1).font = { bold: true, size: 10 };
+      subTotRow.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
+      subTotRow.getCell(7).numFmt = "#,##0.000";
+      subTotRow.getCell(7).font = { bold: true };
+      subTotRow.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
+
+      resources.forEach((_, i) => {
+        const colIdx = FIXED + 1 + i;
+        const refs = subItemRows.map(r => `${colLetter(colIdx)}${r.number}`).join(",");
+        const sumVal = parseFloat(subItemRows.reduce((s, r) => {
+          const v = r.getCell(colIdx).value;
+          return s + (v && typeof v === "object" && "result" in v ? (v as { result: number }).result : ((v as number) ?? 0));
+        }, 0).toFixed(3));
+        const cell = subTotRow.getCell(colIdx);
+        cell.value = { formula: `=SUM(${refs})`, result: sumVal };
+        cell.numFmt = "#,##0.000";
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+      });
+
+      discGrpSubRows.push(subTotRow);
+      ws.addRow([]); // blank row between groups
+      grpSno++;
     }
 
-    if (chapterDataRows.length === 0) continue;
+    if (discGrpSubRows.length === 0) continue;
 
-    // Chapter subtotal row
-    const subRow = ws.addRow([
-      `${disc.name} — Sub-Total`, "", "", "",
+    // Discipline subtotal row
+    const discSubRow = ws.addRow([
+      `${sanitizeCell(disc.name)} — Sub-Total`,
+      "", "", "", "", "", "", "",
       ...resources.map(() => null as null),
-      null,
     ]);
-    ws.mergeCells(`A${subRow.number}:D${subRow.number}`);
-    subRow.getCell(1).font = { bold: true };
-    subRow.getCell(1).alignment = { horizontal: "right" };
-    subRow.eachCell(c => applyTotalStyle(c));
+    ws.mergeCells(`A${discSubRow.number}:H${discSubRow.number}`);
+    discSubRow.eachCell(c => applyTotalStyle(c));
+    discSubRow.getCell(1).font = { bold: true, size: 10 };
+    discSubRow.getCell(1).alignment = { horizontal: "right", vertical: "middle" };
 
-    let chapterTotalVal = 0;
     resources.forEach((_, i) => {
-      const colIdx = fixedCols + 1 + i;
-      const dataRefs = chapterDataRows.map(r => `${colLetter(colIdx)}${r.number}`);
-      const cell = subRow.getCell(colIdx);
-      const sumVal = chapterDataRows.reduce((s, r) => {
+      const colIdx = FIXED + 1 + i;
+      const refs = discGrpSubRows.map(r => `${colLetter(colIdx)}${r.number}`).join(",");
+      const sumVal = parseFloat(discGrpSubRows.reduce((s, r) => {
         const v = r.getCell(colIdx).value;
-        if (v && typeof v === "object" && "result" in v) return s + (v as { result: number }).result;
-        return s + ((v as number) ?? 0);
-      }, 0);
-      cell.value = { formula: `=SUM(${dataRefs.join(",")})`, result: sumVal };
+        return s + (v && typeof v === "object" && "result" in v ? (v as { result: number }).result : ((v as number) ?? 0));
+      }, 0).toFixed(3));
+      const cell = discSubRow.getCell(colIdx);
+      cell.value = { formula: `=SUM(${refs})`, result: sumVal };
       cell.numFmt = "#,##0.000";
       cell.font = { bold: true };
-      cell.alignment = { horizontal: "right" };
-      chapterTotalVal += sumVal;
+      cell.alignment = { horizontal: "right", vertical: "middle" };
     });
 
-    // Fill Total column of subtotal row
-    const subTotalColIdx = fixedCols + resources.length + 1;
-    const subTotalDataRefs = chapterDataRows.map(r => `${colLetter(subTotalColIdx)}${r.number}`);
-    const subTotalCell = subRow.getCell(subTotalColIdx);
-    subTotalCell.value = { formula: `=SUM(${subTotalDataRefs.join(",")})`, result: chapterTotalVal };
-    subTotalCell.numFmt = "#,##0.000";
-    subTotalCell.font = { bold: true };
-    subTotalCell.alignment = { horizontal: "right" };
-    applyTotalStyle(subTotalCell);
-
-    allSubtotalRows.push(subRow);
+    allDiscSubRows.push(discSubRow);
     ws.addRow([]);
   }
 
-  // Grand total row across all chapters
-  if (allSubtotalRows.length > 0) {
+  // Grand Total — sums all discipline subtotals per resource column independently
+  if (allDiscSubRows.length > 0) {
     const gtRow = ws.addRow([
-      "GRAND TOTAL", "", "", "",
+      "GRAND TOTAL", "", "", "", "", "", "", "",
       ...resources.map(() => null as null),
-      null,
     ]);
-    ws.mergeCells(`A${gtRow.number}:D${gtRow.number}`);
+    ws.mergeCells(`A${gtRow.number}:H${gtRow.number}`);
     gtRow.eachCell(c => {
       c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
       c.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
       c.border = { top: { style: "medium" }, bottom: { style: "medium" }, left: { style: "thin" }, right: { style: "thin" } };
       c.alignment = { horizontal: "right", vertical: "middle" };
     });
-    gtRow.getCell(1).alignment = { horizontal: "right", vertical: "middle" };
     gtRow.height = 20;
 
     resources.forEach((_, i) => {
-      const colIdx = fixedCols + 1 + i;
-      const subRefs = allSubtotalRows.map(r => `${colLetter(colIdx)}${r.number}`);
-      const cell = gtRow.getCell(colIdx);
-      const gtVal = allSubtotalRows.reduce((s, r) => {
+      const colIdx = FIXED + 1 + i;
+      const refs = allDiscSubRows.map(r => `${colLetter(colIdx)}${r.number}`).join(",");
+      const gtVal = parseFloat(allDiscSubRows.reduce((s, r) => {
         const v = r.getCell(colIdx).value;
-        if (v && typeof v === "object" && "result" in v) return s + (v as { result: number }).result;
-        return s + ((v as number) ?? 0);
-      }, 0);
-      cell.value = { formula: `=SUM(${subRefs.join(",")})`, result: gtVal };
+        return s + (v && typeof v === "object" && "result" in v ? (v as { result: number }).result : ((v as number) ?? 0));
+      }, 0).toFixed(3));
+      const cell = gtRow.getCell(colIdx);
+      cell.value = { formula: `=SUM(${refs})`, result: gtVal };
       cell.numFmt = "#,##0.000";
+      cell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+      cell.border = { top: { style: "medium" }, bottom: { style: "medium" }, left: { style: "thin" }, right: { style: "thin" } };
+      cell.alignment = { horizontal: "right", vertical: "middle" };
     });
-
-    const gtTotalColIdx = fixedCols + resources.length + 1;
-    const gtTotalSubRefs = allSubtotalRows.map(r => `${colLetter(gtTotalColIdx)}${r.number}`);
-    const gtTotalCell = gtRow.getCell(gtTotalColIdx);
-    const gtTotalVal = allSubtotalRows.reduce((s, r) => {
-      const v = r.getCell(gtTotalColIdx).value;
-      if (v && typeof v === "object" && "result" in v) return s + (v as { result: number }).result;
-      return s + ((v as number) ?? 0);
-    }, 0);
-    gtTotalCell.value = { formula: `=SUM(${gtTotalSubRefs.join(",")})`, result: gtTotalVal };
-    gtTotalCell.numFmt = "#,##0.000";
   }
 }
 
