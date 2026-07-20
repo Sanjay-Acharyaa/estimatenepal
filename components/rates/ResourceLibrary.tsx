@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useId } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { fmtNum } from "@/lib/format";
@@ -45,15 +45,21 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
 
   const [search, setSearch] = useState("");
 
-  // When category changes on a NEW resource form (not edit), auto-update unit and wastage defaults.
+  const formDialogRef = useRef<HTMLDivElement>(null);
+  const formTitleId = useId();
+  const unitSelectId = useId();
+
+  // Auto-focus first focusable element when form dialog opens
   useEffect(() => {
-    if (editTarget) return;
-    setForm(f => ({
-      ...f,
-      unit: CATEGORY_DEFAULT_UNIT[f.category] ?? "unit",
-      wastagePercent: CATEGORY_DEFAULT_WASTAGE[f.category] ?? "0",
-    }));
-  }, [form.category, editTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!showForm) return;
+    const timer = setTimeout(() => {
+      const el = formDialogRef.current?.querySelector<HTMLElement>(
+        "input, select, button, textarea, [tabindex]:not([tabindex='-1'])"
+      );
+      el?.focus();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [showForm]);
 
   // Always fetch all resources once; category filtering happens client-side.
   // This eliminates a new API round-trip on every filter pill click.
@@ -110,7 +116,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
       const payload = {
         name: form.name.trim(),
         category: form.category,
-        unit: form.unit.trim(),
+        unit: form.unit,
         unitRate,
         wastagePercent,
         notes: form.notes.trim() || null,
@@ -217,6 +223,10 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
     return "text-gray-400";
   }
 
+  // Computed before return so JSX stays free of IIFE / inline logic
+  const unitOptions = RESOURCE_UNITS[form.category] ?? ["unit"];
+  const hasCustomUnit = !!form.unit && !unitOptions.includes(form.unit);
+
   return (
     <div className="space-y-4">
       {confirmDialog}
@@ -266,6 +276,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by name or notes..."
+          aria-label="Search resources by name or notes"
           className="w-full max-w-sm text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       )}
@@ -394,11 +405,30 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
-          onKeyDown={e => { if (e.key === "Escape") setShowForm(false); }}
+          aria-labelledby={formTitleId}
+          onKeyDown={e => {
+            if (e.key === "Escape") { setShowForm(false); return; }
+            if (e.key !== "Tab") return;
+            const focusable = formDialogRef.current?.querySelectorAll<HTMLElement>(
+              "input, select, button, textarea, [tabindex]:not([tabindex='-1'])"
+            );
+            if (!focusable || focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey) {
+              if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+            } else {
+              if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+            }
+          }}
         >
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg border border-gray-200 dark:border-gray-700">
+          <div
+            ref={formDialogRef}
+            tabIndex={-1}
+            className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg border border-gray-200 dark:border-gray-700 outline-none"
+          >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+              <h3 id={formTitleId} className="font-semibold text-gray-900 dark:text-gray-100">
                 {editTarget ? "Edit Resource" : "Add Resource"}
               </h3>
               <button onClick={() => setShowForm(false)} className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm font-medium px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Close</button>
@@ -422,7 +452,15 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                   </label>
                   <select
                     value={form.category}
-                    onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                    onChange={e => {
+                      const newCat = e.target.value;
+                      setForm(f => {
+                        const allowed = RESOURCE_UNITS[newCat] ?? ["unit"];
+                        const unit = allowed.includes(f.unit) ? f.unit : (CATEGORY_DEFAULT_UNIT[newCat] ?? "unit");
+                        const wastagePercent = editTarget ? f.wastagePercent : (CATEGORY_DEFAULT_WASTAGE[newCat] ?? "0");
+                        return { ...f, category: newCat, unit, wastagePercent };
+                      });
+                    }}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {RESOURCE_CATEGORIES.map(c => (
@@ -431,26 +469,20 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="resource-unit-select">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor={unitSelectId}>
                     Unit <span className="text-red-500">*</span>
                   </label>
-                  {(() => {
-                    const options = RESOURCE_UNITS[form.category] ?? ["unit"];
-                    const hasCustom = form.unit && !options.includes(form.unit);
-                    return (
-                      <select
-                        id="resource-unit-select"
-                        value={form.unit}
-                        onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {hasCustom && <option value={form.unit}>{form.unit}</option>}
-                        {options.map(u => (
-                          <option key={u} value={u}>{u}</option>
-                        ))}
-                      </select>
-                    );
-                  })()}
+                  <select
+                    id={unitSelectId}
+                    value={form.unit}
+                    onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {hasCustomUnit && <option value={form.unit}>{form.unit}</option>}
+                    {unitOptions.map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

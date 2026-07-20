@@ -9,6 +9,7 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound, conflict } from "@/lib/errors";
 import { ResourceCategory } from "@prisma/client";
 import { UNIT_RATE_MAX } from "@/lib/cache-constants";
+import { RESOURCE_UNITS } from "@/lib/resource-constants";
 
 const RESOURCE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -59,6 +60,16 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
 
     const data = parsed.data;
+
+    // Validate unit against RESOURCE_UNITS using the effective category after this update
+    if (data.unit !== undefined) {
+      const effectiveCategory = (data.category ?? existing.category) as string;
+      const allowed = RESOURCE_UNITS[effectiveCategory];
+      if (allowed && !allowed.includes(data.unit)) {
+        return apiError("VALIDATION_ERROR", `Unit "${data.unit}" is not valid for this category. Allowed: ${allowed.join(", ")}`, 400);
+      }
+    }
+
     const priceChanged = data.unitRate !== undefined && data.unitRate !== existing.unitRate;
 
     const resource = await prisma.orgResource.update({

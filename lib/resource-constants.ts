@@ -36,12 +36,12 @@ export const RESOURCE_UNITS: Record<string, string[]> = {
   CEMENT:           ["bag", "kg"],
   FINE_AGGREGATE:   ["cft", "m3", "kg"],
   COARSE_AGGREGATE: ["cft", "m3", "kg"],
-  MASONRY:          ["nos", "kg"],
+  MASONRY:          ["nos", "kg", "cft"],           // cft: Stone (Rubble)
   STEEL:            ["kg", "ton", "m"],
   TIMBER:           ["cft", "m3", "m", "nos"],
   LABOUR_SKILLED:   ["day", "hour"],
   LABOUR_UNSKILLED: ["day", "hour"],
-  EQUIPMENT:        ["hour", "day", "shift"],
+  EQUIPMENT:        ["hour", "day", "shift", "cft", "sqft"], // cft: Scaffolding; sqft: Form Work
   OTHER:            ["unit", "nos", "kg", "m", "m2", "m3", "cft", "sqft", "rft"],
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId } from "react";
 import { toast } from "sonner";
 import { fmtNum } from "@/lib/format";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -56,6 +56,7 @@ const NRS = (n: number) => fmtNum(n, 2);
 export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const qtyInputId = useId();
   const loadAllControllerRef = useRef<AbortController | null>(null);
   const loadLinesControllerRef = useRef<AbortController | null>(null);
   const loadResourcesControllerRef = useRef<AbortController | null>(null);
@@ -362,6 +363,11 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
     }
   };
 
+  // Hoisted so JSX qty-label section needs no IIFE
+  const selRes = addForm.resourceId
+    ? allResources.find(r => r.id === addForm.resourceId)
+    : undefined;
+
   return (
     <div
       ref={dialogRef}
@@ -598,36 +604,29 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                       </select>
                     </div>
                     <div>
-                      {(() => {
-                        const selRes = allResources.find(r => r.id === addForm.resourceId);
-                        return (
-                          <>
-                            <label htmlFor="add-line-qty" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Qty per {rate.unit || "unit"}
-                              {selRes && (
-                                <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">
-                                  in {selRes.unit}
-                                </span>
-                              )}
-                            </label>
-                            <input
-                              id="add-line-qty"
-                              type="number"
-                              min="0"
-                              step="0.001"
-                              value={addForm.qtyPerUnit}
-                              onChange={e => setAddForm(f => ({ ...f, qtyPerUnit: e.target.value }))}
-                              placeholder="0.000"
-                              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            {selRes && (
-                              <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
-                                e.g. how many {selRes.unit} of {selRes.name} are needed per {rate.unit} of this work
-                              </p>
-                            )}
-                          </>
-                        );
-                      })()}
+                      <label htmlFor={qtyInputId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Qty per {rate.unit || "unit"}
+                        {selRes && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">
+                            in {selRes.unit}
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        id={qtyInputId}
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={addForm.qtyPerUnit}
+                        onChange={e => setAddForm(f => ({ ...f, qtyPerUnit: e.target.value }))}
+                        placeholder="0.000"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {selRes && (
+                        <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                          e.g. how many {selRes.unit} of {selRes.name} are needed per {rate.unit} of this work
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Wastage %</label>

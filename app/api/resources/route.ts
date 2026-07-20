@@ -9,6 +9,7 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { ResourceCategory } from "@prisma/client";
 import { CACHE_TTL, RESOURCES_FETCH_LIMIT, UNIT_RATE_MAX } from "@/lib/cache-constants";
+import { RESOURCE_UNITS } from "@/lib/resource-constants";
 const VALID_CATEGORIES = Object.values(ResourceCategory);
 
 const createSchema = z.object({
@@ -18,6 +19,15 @@ const createSchema = z.object({
   unitRate: z.number().min(0).max(UNIT_RATE_MAX),
   wastagePercent: z.number().min(0).max(100).default(0),
   notes: z.string().max(500).trim().optional().nullable(),
+}).superRefine((data, ctx) => {
+  const allowed = RESOURCE_UNITS[data.category];
+  if (allowed && !allowed.includes(data.unit)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["unit"],
+      message: `Unit "${data.unit}" is not valid for category "${data.category}". Allowed: ${allowed.join(", ")}`,
+    });
+  }
 });
 
 function ck(orgId: string, category?: string) {
