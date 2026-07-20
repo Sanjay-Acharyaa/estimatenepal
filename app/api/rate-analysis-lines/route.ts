@@ -19,10 +19,9 @@ const createSchema = z.object({
   qtyPerUnit: z.number().min(0).max(QTY_PER_UNIT_MAX),
   wastagePercent: z.number().min(0).max(100).default(0),
   notes: z.string().max(500).trim().optional().nullable(),
-  sortOrder: z.number().int().min(0).default(0),
 });
 
-function ck(orgId: string, rateItemId: string) {
+export function ck(orgId: string, rateItemId: string) {
   return `analysis-lines:${orgId}:${rateItemId}`;
 }
 
@@ -60,6 +59,7 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: { sortOrder: "asc" },
+      take: 200,
     });
 
     const payload = { lines };
@@ -100,6 +100,14 @@ export async function POST(req: NextRequest) {
     });
     if (!rateItem) throw notFound("Rate item");
 
+    // Compute sort order server-side to avoid race conditions from concurrent adds
+    const maxLine = await prisma.rateAnalysisLine.findFirst({
+      where: { orgId, rateItemId: data.rateItemId },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true },
+    });
+    const sortOrder = (maxLine?.sortOrder ?? -1) + 1;
+
     const line = await prisma.rateAnalysisLine.create({
       data: {
         orgId,
@@ -109,7 +117,7 @@ export async function POST(req: NextRequest) {
         qtyPerUnit: data.qtyPerUnit,
         wastagePercent: data.wastagePercent,
         notes: data.notes ?? null,
-        sortOrder: data.sortOrder,
+        sortOrder,
       },
       include: {
         resource: {
@@ -125,7 +133,7 @@ export async function POST(req: NextRequest) {
       userId: token.id as string,
       event: "analysis_line.create",
       resourceId: line.id,
-      meta: { rateItemId: data.rateItemId, resourceName: resource.name } as any,
+      meta: { rateItemId: data.rateItemId, resourceName: resource.name } as import("@prisma/client").Prisma.InputJsonValue,
       ipAddress: ip,
     });
 

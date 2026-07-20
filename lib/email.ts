@@ -24,8 +24,6 @@ function safeUrl(url: string): string {
   }
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function sendEmail({
   to,
   subject,
@@ -37,6 +35,8 @@ export async function sendEmail({
 }): Promise<string | null> {
   const from = process.env.EMAIL_FROM;
   if (!from) throw new Error("EMAIL_FROM env var is not set");
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
 
   // Timeout after 10 seconds — prevents a slow Resend API from stalling the cron
   const sendPromise = resend.emails.send({ from, to, subject, html });

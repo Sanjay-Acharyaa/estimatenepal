@@ -4,14 +4,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { RateForm } from "./RateForm";
-import { RateAnalysisBuilder } from "./RateAnalysisBuilder";
 import { ResourceLibrary } from "./ResourceLibrary";
 import { ResourceLineAnalysis } from "./ResourceLineAnalysis";
 import { RateSettingsPanel } from "./RateSettingsPanel";
 import { fmtNum } from "@/lib/format";
 import { ASSEMBLY_CATEGORIES } from "@/lib/nepal-constants";
 import { PAGE_SIZE, DEFAULT_ASSEMBLY_COLOUR } from "@/lib/cache-constants";
-import { SOURCE_BADGE } from "@/lib/resource-constants";
 
 type CatalogTab = "rates" | "resources" | "settings";
 
@@ -45,7 +43,6 @@ interface Pagination {
 
 interface Props {
   isAdmin: boolean;
-  projectId?: string;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -60,7 +57,7 @@ function nepalFY(): string {
   return `${fyStart}/${String(fyStart + 1).slice(2)}`;
 }
 
-export function RateCatalog({ isAdmin, projectId }: Props) {
+export function RateCatalog({ isAdmin }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [activeTab, setActiveTab] = useState<CatalogTab>("rates");
   const [batches, setBatches] = useState<RateBatch[]>([]);
@@ -72,7 +69,6 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<RateItem | null>(null);
-  const [analysisTarget, setAnalysisTarget] = useState<RateItem | null>(null);
   const [resourceAnalysisTarget, setResourceAnalysisTarget] = useState<RateItem | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -166,7 +162,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       const res = await fetch("/api/rates/import", { method: "POST", body: form });
 
       // Parse JSON safely — server may return HTML on 502/session-expiry
-      let data: any = {};
+      let data: unknown = {};
       try { data = await res.json(); } catch {
         setImportError(`Server returned an unexpected response (HTTP ${res.status}). Please refresh the page and try again.`);
         return;
@@ -174,18 +170,21 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
 
       if (!res.ok) {
         // data.error may be a string (rate-limit) or an object with .message + .errors
-        const msg = typeof data.error === "string"
-          ? data.error
-          : (data.error?.message ?? `Import failed (HTTP ${res.status}).`);
-        const errs = data.error?.errors as string[] | undefined;
+        const errData = data as { error?: string | { message?: string; errors?: string[] } };
+        const errorObj = typeof errData.error === "object" ? errData.error : null;
+        const msg = typeof errData.error === "string"
+          ? errData.error
+          : (errorObj?.message ?? `Import failed (HTTP ${res.status}).`);
+        const errs = errorObj?.errors;
         setImportError(msg + (errs?.length ? "\n" + errs.slice(0, 5).join("\n") : ""));
       } else {
-        setImportResult(data);
+        const ok = data as { created: number; batchName: string; message: string; batchId?: string };
+        setImportResult(ok);
         setShowImportDialog(false);
         setImportFile(null);
         setImportBatchName("");
         loadBatches();
-        setSelectedBatchId(data.batchId ?? "all");
+        setSelectedBatchId(ok.batchId ?? "all");
         loadRates();
       }
     } catch (err) {
@@ -259,7 +258,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     }
   };
 
-  const createRate = async (data: any) => {
+  const createRate = async (data: import("./RateForm").RateFormData) => {
     const res = await fetch("/api/rates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -274,7 +273,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
     loadBatches();
   };
 
-  const updateRate = async (data: any) => {
+  const updateRate = async (data: import("./RateForm").RateFormData) => {
     if (!editTarget) return;
     const res = await fetch(`/api/rates/${editTarget.id}`, {
       method: "PUT",
@@ -699,14 +698,14 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
         {importResult && (
           <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-4 py-3 text-sm text-green-800 dark:text-green-300">
             <span>{importResult.message}</span>
-            <button onClick={() => setImportResult(null)} className="text-green-600 dark:text-green-400 ml-4 text-xs">x</button>
+            <button onClick={() => setImportResult(null)} aria-label="Dismiss" className="text-green-600 dark:text-green-400 ml-4 text-xs">&times;</button>
           </div>
         )}
         {importError && (
           <div role="alert" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg px-4 py-3 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">
             <div className="flex items-start justify-between gap-3">
               <div>{importError}</div>
-              <button onClick={() => setImportError("")} className="flex-shrink-0 text-red-400 dark:text-red-500">x</button>
+              <button onClick={() => setImportError("")} aria-label="Dismiss" className="flex-shrink-0 text-red-400 dark:text-red-500">&times;</button>
             </div>
             <p className="text-xs text-red-600 dark:text-red-400 mt-2">
               <a href="/api/rates/template" download className="underline">Download Template →</a>
@@ -768,7 +767,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                         className="rounded"
                         aria-label={`Select rate ${rate.code} — ${rate.description.slice(0, 40)}`}
                         checked={selectedRateIds.has(rate.id)}
-                        onChange={e => setSelectedRateIds(prev => { const s = new Map(prev); e.target.checked ? s.set(rate.id, rate) : s.delete(rate.id); return s; })}
+                        onChange={e => setSelectedRateIds(prev => { const s = new Map(prev); if (e.target.checked) { s.set(rate.id, rate); } else { s.delete(rate.id); } return s; })}
                       />
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs text-gray-600 dark:text-gray-400">{rate.code}</td>
@@ -784,12 +783,6 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
                           className="px-2 py-1 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded border border-purple-200 dark:border-purple-700" title="Resource analysis">
                           Resource Analysis
                         </button>
-                        {projectId && (
-                          <button onClick={() => setAnalysisTarget(rate)}
-                            className="px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded border border-blue-200 dark:border-blue-700" title="Rate analysis">
-                            Analysis
-                          </button>
-                        )}
                         {isAdmin && rate.source === "CUSTOM" && (
                           <>
                             <button onClick={() => setEditTarget(rate)}
@@ -870,7 +863,7 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
               {importFile && (
                 <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
                   <span className="text-sm text-gray-700 dark:text-gray-200 flex-1 truncate">{importFile.name}</span>
-                  <button onClick={() => setImportFile(null)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">x</button>
+                  <button onClick={() => setImportFile(null)} aria-label="Remove file" className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">&times;</button>
                 </div>
               )}
 
@@ -988,9 +981,6 @@ export function RateCatalog({ isAdmin, projectId }: Props) {
       )}
       {editTarget && (
         <RateForm title="Edit Rate Item" initial={editTarget} onSave={updateRate} onCancel={() => setEditTarget(null)} />
-      )}
-      {analysisTarget && projectId && (
-        <RateAnalysisBuilder rate={analysisTarget} projectId={projectId} onClose={() => setAnalysisTarget(null)} />
       )}
       {resourceAnalysisTarget && (
         <ResourceLineAnalysis

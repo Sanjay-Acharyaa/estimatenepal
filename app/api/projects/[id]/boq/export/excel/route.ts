@@ -3,11 +3,12 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { withTenantGuard } from "@/lib/auth";
 import { generateBOQ } from "@/lib/boq";
-import { buildBOQExcel, ExportColConfig } from "@/lib/export";
+import { buildBOQExcel, ExportColConfig, ProcurementExportData } from "@/lib/export";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import { trackEvent } from "@/lib/analytics";
+import { RATE_DEFAULTS } from "@/lib/rate-defaults";
 
 export const maxDuration = 60;
 
@@ -31,11 +32,77 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
-    trackEvent("excel_export", { orgId: project.orgId, userId: token.id as string, meta: { projectId: params.id } });
 
     const boq = await generateBOQ(params.id);
 
-    // Merge saved config with query-param overrides (query takes precedence for one-off exports)
+    // Collect all rateItemIds used in this BOQ
+    const rateItemIds = boq.disciplines
+      .flatMap(d => d.groups)
+      .map(g => g.rateItemId)
+      .filter((id): id is string => id !== null);
+
+    // Fetch rate analysis lines + org settings in parallel
+    const [analysisLines, orgSettings] = await Promise.all([
+      rateItemIds.length > 0
+        ? prisma.rateAnalysisLine.findMany({
+            where: {
+              rateItemId: { in: rateItemIds },
+              orgId: project.orgId,
+            },
+            include: {
+              resource: {
+                select: { id: true, name: true, unit: true, unitRate: true, category: true },
+              },
+              rateItem: {
+                select: { id: true, code: true, description: true, unit: true, baseRate: true },
+              },
+            },
+            orderBy: [{ rateItemId: "asc" }, { sortOrder: "asc" }],
+          })
+        : Promise.resolve([]),
+      prisma.orgRateSettings.findUnique({ where: { orgId: project.orgId } }),
+    ]);
+
+    // Build lookup: rateItemId → RateItemForExport
+    const rateItemMap = new Map<string, ProcurementExportData["rateItems"][number]>();
+    for (const line of analysisLines) {
+      const rid = line.rateItemId;
+      if (!rateItemMap.has(rid)) {
+        rateItemMap.set(rid, {
+          rateItemId: rid,
+          code: line.rateItem.code,
+          description: line.rateItem.description,
+          unit: line.rateItem.unit,
+          currentBaseRate: Number(line.rateItem.baseRate),
+          lines: [],
+        });
+      }
+      rateItemMap.get(rid)!.lines.push({
+        lineType: line.lineType,
+        qtyPerUnit: Number(line.qtyPerUnit),
+        wastagePercent: Number(line.wastagePercent),
+        resource: {
+          id: line.resource.id,
+          name: line.resource.name,
+          unit: line.resource.unit,
+          unitRate: Number(line.resource.unitRate),
+          category: line.resource.category,
+        },
+      });
+    }
+
+    const procurement: ProcurementExportData = {
+      rateItems: Array.from(rateItemMap.values()),
+      settings: {
+        overheadPct:    Number(orgSettings?.overheadPct    ?? RATE_DEFAULTS.overheadPct),
+        profitPct:      Number(orgSettings?.profitPct      ?? RATE_DEFAULTS.profitPct),
+        contingencyPct: Number(orgSettings?.contingencyPct ?? RATE_DEFAULTS.contingencyPct),
+        leadLiftPct:    Number(orgSettings?.leadLiftPct    ?? RATE_DEFAULTS.leadLiftPct),
+      },
+      settingsAreDefaults: !orgSettings,
+    };
+
+    // Merge saved config with query-param overrides
     const saved = (project.exportConfig ?? {}) as Record<string, unknown>;
     const qp = req.nextUrl.searchParams;
 
@@ -54,7 +121,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     };
 
     const result = await withSemaphore("excel", 5, async () => {
-      const buffer = await buildBOQExcel(boq, colConfig);
+      const buffer = await buildBOQExcel(boq, colConfig, procurement);
+      trackEvent("excel_export", { orgId: project.orgId, userId: token.id as string, meta: { projectId: params.id } });
       const filename = `BOQ_${project.name.replace(/[^a-z0-9]/gi, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       return new Response(new Uint8Array(buffer), {
         status: 200,

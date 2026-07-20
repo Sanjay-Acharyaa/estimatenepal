@@ -9,6 +9,7 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { LINE_TYPES } from "@/lib/line-types";
 import { QTY_PER_UNIT_MAX } from "@/lib/cache-constants";
+import { ck } from "../route";
 
 const LINE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -17,7 +18,6 @@ const updateSchema = z.object({
   qtyPerUnit: z.number().min(0).max(QTY_PER_UNIT_MAX).optional(),
   wastagePercent: z.number().min(0).max(100).optional(),
   notes: z.string().max(500).trim().nullable().optional(),
-  sortOrder: z.number().int().min(0).optional(),
 });
 
 type RouteContext = { params: { id: string } };
@@ -60,14 +60,14 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       },
     });
 
-    redis.del(`analysis-lines:${orgId}:${existing.rateItemId}`).catch(() => {});
+    redis.del(ck(orgId, existing.rateItemId)).catch(() => {});
 
     await appendAuditLog({
       orgId,
       userId: token.id as string,
       event: "analysis_line.update",
       resourceId: params.id,
-      meta: { rateItemId: existing.rateItemId } as any,
+      meta: { rateItemId: existing.rateItemId } as import("@prisma/client").Prisma.InputJsonValue,
       ipAddress: ip,
     });
 
@@ -100,14 +100,14 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
     await prisma.rateAnalysisLine.delete({ where: { id: params.id } });
 
-    redis.del(`analysis-lines:${orgId}:${existing.rateItemId}`).catch(() => {});
+    redis.del(ck(orgId, existing.rateItemId)).catch(() => {});
 
     await appendAuditLog({
       orgId,
       userId: token.id as string,
       event: "analysis_line.delete",
       resourceId: params.id,
-      meta: { rateItemId: existing.rateItemId } as any,
+      meta: { rateItemId: existing.rateItemId } as import("@prisma/client").Prisma.InputJsonValue,
       ipAddress: ip,
     });
 

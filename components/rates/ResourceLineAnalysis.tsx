@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { fmtNum } from "@/lib/format";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -51,18 +51,22 @@ interface Props {
 }
 
 
-
-
 const NRS = (n: number) => fmtNum(n, 2);
 
 export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const loadAllControllerRef = useRef<AbortController | null>(null);
+  const loadLinesControllerRef = useRef<AbortController | null>(null);
+  const loadResourcesControllerRef = useRef<AbortController | null>(null);
+  const [displayBaseRate, setDisplayBaseRate] = useState(rate.baseRate);
 
   const [lines, setLines] = useState<AnalysisLine[]>([]);
   const [settings, setSettings] = useState<RateSettings | null>(null);
   const [allResources, setAllResources] = useState<Resource[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [loadingResources, setLoadingResources] = useState(false);
   const [updatingRate, setUpdatingRate] = useState(false);
 
   // Add line form
@@ -84,8 +88,12 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   const [deletingLine, setDeletingLine] = useState<string | null>(null);
 
   const loadLines = useCallback(async () => {
+    loadLinesControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadLinesControllerRef.current = controller;
     try {
-      const res = await fetch(`/api/rate-analysis-lines?rateItemId=${rate.id}`);
+      const res = await fetch(`/api/rate-analysis-lines?rateItemId=${encodeURIComponent(rate.id)}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         toast.error(d?.error?.message ?? "Failed to reload lines.");
@@ -93,18 +101,23 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
       }
       const data = await res.json();
       setLines(data.lines ?? []);
-    } catch {
+    } catch (e: unknown) {
+      if ((e as Error).name === "AbortError") return;
       toast.error("Network error reloading lines.");
     }
   }, [rate.id]);
 
   const loadAll = useCallback(async () => {
+    loadAllControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadAllControllerRef.current = controller;
     setLoading(true);
     try {
       const [lRes, sRes] = await Promise.all([
-        fetch(`/api/rate-analysis-lines?rateItemId=${rate.id}`),
-        fetch("/api/orgs/rate-settings"),
+        fetch(`/api/rate-analysis-lines?rateItemId=${encodeURIComponent(rate.id)}`, { signal: controller.signal }),
+        fetch("/api/orgs/rate-settings", { signal: controller.signal }),
       ]);
+      if (controller.signal.aborted) return;
       if (!lRes.ok || !sRes.ok) {
         const failed = [lRes, sRes].find(r => !r.ok);
         const d = failed ? await failed.json().catch(() => ({})) : {};
@@ -115,29 +128,51 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
       const [lData, sData] = await Promise.all([lRes.json(), sRes.json()]);
       setLines(lData.lines ?? []);
       setSettings(sData.settings ?? null);
-    } catch {
+    } catch (e: unknown) {
+      if ((e as Error).name === "AbortError") return;
       toast.error("Network error loading rate analysis.");
       setLines([]); setSettings(null);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [rate.id]);
 
-  // Resources are loaded on demand when the user opens the "Add Resource Line" form.
+  // Resources are loaded each time the "Add Resource Line" form opens so new
+  // resources added in another tab are always visible.
   const loadResources = useCallback(async () => {
-    if (allResources.length > 0) return;
+    loadResourcesControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadResourcesControllerRef.current = controller;
+    setLoadingResources(true);
     try {
-      const rRes = await fetch("/api/resources");
+      const rRes = await fetch("/api/resources", { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (rRes.ok) {
         const rData = await rRes.json();
         setAllResources(rData.resources ?? []);
+      } else {
+        toast.error("Failed to load resource library. Please try again.");
       }
-    } catch {
+    } catch (e: unknown) {
+      if ((e as Error).name === "AbortError") return;
       toast.error("Failed to load resource library.");
+    } finally {
+      if (!controller.signal.aborted) setLoadingResources(false);
     }
-  }, [allResources.length]);
+  }, []);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    loadAll();
+    return () => { loadAllControllerRef.current?.abort(); };
+  }, [loadAll]);
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const first = el.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    (first ?? el).focus();
+  }, []);
 
   // Pre-fill wastage when resource is selected.
   // Prefer the resource library's own wastagePercent. If it is 0, fall back to the
@@ -196,7 +231,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
     const wastage = parseFloat(addForm.wastagePercent);
     if (!addForm.resourceId) { setAddError("Select a resource."); return; }
     if (isNaN(qty) || qty < 0) { setAddError("Valid quantity is required."); return; }
-    if (isNaN(wastage)) { setAddError("Valid wastage % is required."); return; }
+    if (isNaN(wastage) || wastage < 0) { setAddError("Wastage % must be 0 or more."); return; }
 
     setAddSaving(true); setAddError("");
     try {
@@ -210,7 +245,6 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
           qtyPerUnit: qty,
           wastagePercent: wastage,
           notes: addForm.notes.trim() || null,
-          sortOrder: lines.length,
         }),
       });
       if (!res.ok) {
@@ -221,8 +255,8 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
       setShowAddLine(false);
       setAddForm({ resourceId: "", lineType: "MATERIAL", qtyPerUnit: "", wastagePercent: "", notes: "" });
       loadLines();
-    } catch (e: any) {
-      setAddError(e.message ?? "Failed.");
+    } catch (e: unknown) {
+      setAddError(e instanceof Error ? e.message : "Failed.");
     } finally {
       setAddSaving(false);
     }
@@ -240,7 +274,8 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   const saveEdit = async (lineId: string) => {
     const qty = parseFloat(editForm.qtyPerUnit);
     const wastage = parseFloat(editForm.wastagePercent);
-    if (isNaN(qty) || qty < 0 || isNaN(wastage)) return;
+    if (isNaN(qty) || qty < 0) { toast.error("Enter a valid quantity (≥ 0)."); return; }
+    if (isNaN(wastage) || wastage < 0) { toast.error("Enter a valid wastage % (≥ 0)."); return; }
     setEditSaving(true);
     try {
       const res = await fetch(`/api/rate-analysis-lines/${lineId}`, {
@@ -302,20 +337,21 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
     ].filter(Boolean).join(" + ");
     const ok = await confirm({
       title: "Update Base Rate",
-      message: `Set the base rate of "${rate.code}" to NRS ${NRS(preVat)} (pre-VAT)? Breakdown: ${breakdownParts}. VAT is applied separately at BOQ level. Current rate is NRS ${NRS(rate.baseRate)}.`,
+      message: `Set the base rate of "${rate.code}" to NRS ${NRS(preVat)} (pre-VAT)? Breakdown: ${breakdownParts}. VAT is applied separately at BOQ level. Current rate is NRS ${NRS(displayBaseRate)}.`,
       variant: "default",
       confirmLabel: "Update Rate",
     });
     if (!ok) return;
     setUpdatingRate(true);
     try {
-      const res = await fetch(`/api/rates/${rate.id}`, {
+      const res = await fetch(`/api/rates/${encodeURIComponent(rate.id)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ baseRate: preVat }),
       });
       if (res.ok) {
         toast.success(`Base rate updated to NRS ${NRS(preVat)} (pre-VAT).`);
+        setDisplayBaseRate(preVat);
         onRateUpdated?.(preVat);
       } else {
         const d = await res.json().catch(() => ({}));
@@ -327,7 +363,32 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rla-title"
+      onKeyDown={e => {
+        if (e.key === "Escape") { onClose(); return; }
+        if (e.key === "Tab") {
+          const focusable = Array.from(
+            dialogRef.current?.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            ) ?? []
+          );
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey) {
+            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+          } else {
+            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+          }
+        }
+      }}
+    >
       {confirmDialog}
       <div
         className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-700"
@@ -338,10 +399,10 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{rate.code}</span>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{rate.description.slice(0, 80)}</h2>
+              <h2 id="rla-title" className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{rate.description.slice(0, 80)}</h2>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Resource-based analysis per {rate.unit} &middot; Current base rate: NRS {NRS(rate.baseRate)}
+              Resource-based analysis per {rate.unit} &middot; Current base rate: NRS {NRS(displayBaseRate)}
             </p>
           </div>
           <button onClick={onClose} className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm font-medium flex-shrink-0 ml-3 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Close</button>
@@ -385,13 +446,13 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                       <tr>
-                        <th className="px-3 py-2.5 text-left font-semibold text-gray-500 dark:text-gray-400">Resource</th>
-                        <th className="px-3 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 w-20">Type</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Qty/Unit</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Rate</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Wastage / Gross</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Amount</th>
-                        {isAdmin && <th className="px-3 py-2.5 w-20" />}
+                        <th scope="col" className="px-3 py-2.5 text-left font-semibold text-gray-500 dark:text-gray-400">Resource</th>
+                        <th scope="col" className="px-3 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 w-20">Type</th>
+                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Qty/Unit</th>
+                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Rate</th>
+                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Wastage / Gross</th>
+                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Amount</th>
+                        {isAdmin && <th scope="col" aria-label="Actions" className="px-3 py-2.5 w-20" />}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -499,15 +560,16 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
               {isAdmin && showAddLine ? (
                 <div className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 space-y-3">
                   <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">Add Resource Line</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Resource</label>
                       <select
                         value={addForm.resourceId}
+                        disabled={loadingResources}
                         onChange={e => setAddForm(f => ({ ...f, resourceId: e.target.value }))}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                       >
-                        <option value="">Select resource…</option>
+                        <option value="">{loadingResources ? "Loading resources…" : "Select resource…"}</option>
                         {RESOURCE_CATEGORIES.map(({ value, label }) => {
                           const catResources = allResources.filter(r => r.category === value);
                           if (catResources.length === 0) return null;
@@ -553,7 +615,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                         type="number"
                         min="0"
                         max="100"
-                        step="0.5"
+                        step="0.001"
                         value={addForm.wastagePercent}
                         onChange={e => setAddForm(f => ({ ...f, wastagePercent: e.target.value }))}
                         placeholder="0"
@@ -690,7 +752,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
               "Add resource lines to compute the rate"
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {isAdmin && lines.length > 0 && settings && preVat <= 0 && (
               <span className="text-xs text-amber-600 dark:text-amber-400">
                 Rate is zero — add quantities to resource lines to enable applying the rate.

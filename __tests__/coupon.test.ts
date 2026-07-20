@@ -36,9 +36,9 @@ describe("generateCouponCode", () => {
     }
   });
 
-  it("produces codes of exactly 11 characters", () => {
+  it("produces codes of exactly 12 characters", () => {
     const bytes = Buffer.from([10, 20, 30, 40, 50, 60, 70, 80]);
-    expect(generateCouponCode(bytes)).toHaveLength(11);
+    expect(generateCouponCode(bytes)).toHaveLength(12); // NE-XXXX-XXXX = 2+1+4+1+4
   });
 
   it("different bytes produce different codes", () => {

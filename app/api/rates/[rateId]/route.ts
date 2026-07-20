@@ -18,7 +18,7 @@ const updateSchema = z.object({
   fiscalYear: z.string().min(4).max(10).trim().optional(),
 });
 
-async function getRateAndGuard(rateId: string, token: any) {
+async function getRateAndGuard(rateId: string, token: Record<string, unknown>) {
   const rate = await prisma.rateItem.findUnique({ where: { id: rateId } });
   if (!rate) throw notFound("Rate item");
   // DUDBC rates (orgId=null) are read-only for non-super-admins
@@ -87,7 +87,7 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
       userId: token.id as string,
       event: "rate_item.updated",
       resourceId: rate.id,
-      meta: parsed.data as any,
+      meta: parsed.data as import("@prisma/client").Prisma.InputJsonValue,
       ipAddress: ip,
     });
 
@@ -120,7 +120,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { rateId: s
       userId: token.id as string,
       event: "rate_item.deleted",
       resourceId: rate.id,
-      meta: { code: rate.code } as any,
+      meta: { code: rate.code },
       ipAddress: ip,
     });
 

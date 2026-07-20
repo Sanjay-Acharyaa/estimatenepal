@@ -14,7 +14,7 @@ export interface RateFormData {
 }
 
 type RateMode = "manual" | "linked";
-type LinkedSource = "dudbc" | "district" | "analysis";
+type LinkedSource = "dudbc" | "district";
 
 interface CatalogRate {
   id: string;
@@ -36,18 +36,30 @@ interface Props {
   onSave: (data: RateFormData) => Promise<void>;
   onCancel: () => void;
   title: string;
-  projectId?: string;        // needed for Rate Analysis source
-  orgComputedRate?: number;  // pre-loaded from Rate Analysis if available
 }
 
-const currentFY = (() => {
-  const y = new Date().getFullYear();
-  return `${y}/${String(y + 1).slice(2)}`;
-})();
+function currentNepalFY(): string {
+  const now = new Date();
+  const isAfterShrawan = now.getMonth() > 6 || (now.getMonth() === 6 && now.getDate() >= 17);
+  const fyStart = now.getFullYear() + (isAfterShrawan ? 57 : 56);
+  return `${fyStart}/${String(fyStart + 1).slice(2)}`;
+}
+
+const currentFY = currentNepalFY();
 
 const NRS = (n: number) => fmtNum(n, 2);
 
-export function RateForm({ initial, onSave, onCancel, title, projectId, orgComputedRate }: Props) {
+export function RateForm({ initial, onSave, onCancel, title }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const first = el.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    (first ?? el).focus();
+  }, []);
+
   // Item details
   const [code, setCode] = useState(initial?.code ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -88,7 +100,6 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
       const dr = districtRates.find(d => d.district === selectedDistrict);
       return dr?.rate ?? selectedCatalog?.baseRate ?? null;
     }
-    if (linkedSource === "analysis") return orgComputedRate ?? null;
     return null;
   })();
 
@@ -116,7 +127,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
       .then(d => setDistrictRates(d?.districtRates ?? []))
       .catch(() => setDistrictRates([]))
       .finally(() => setDistrictRateLoading(false));
-  }, [selectedCatalog?.id, selectedDistrict, linkedSource]);
+  }, [selectedCatalog, selectedDistrict, linkedSource]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -162,21 +173,46 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
         baseRate: effectiveRate,
         fiscalYear: fiscalYear.trim(),
       });
-    } catch (e: any) {
-      setError(e.message ?? "Failed to save.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to save.");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rate-form-title"
+      onKeyDown={e => {
+        if (e.key === "Escape") { onCancel(); return; }
+        if (e.key === "Tab") {
+          const focusable = Array.from(
+            dialogRef.current?.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            ) ?? []
+          );
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey) {
+            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+          } else {
+            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+          }
+        }
+      }}
+    >
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">x</button>
+          <h2 id="rate-form-title" className="font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+          <button onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">&times;</button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -184,7 +220,7 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
           {/* ── Item Details ── */}
           <div>
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Item Details</p>
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   S.N / Item Code <span className="text-red-500">*</span>
@@ -289,13 +325,11 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                     {([
                       { key: "dudbc" as LinkedSource, label: "DUDBC Rate", desc: "National standard rates" },
                       { key: "district" as LinkedSource, label: "District Rate", desc: "Location-adjusted rates" },
-                      { key: "analysis" as LinkedSource, label: "Rate Analysis", desc: "Legacy flat-input — does not drive BOQ", disabled: !projectId && !orgComputedRate },
-                    ]).map(({ key, label, desc, disabled }) => (
+                    ]).map(({ key, label, desc }) => (
                       <button
                         key={key}
-                        onClick={() => !disabled && setLinkedSource(key)}
-                        disabled={disabled}
-                        className={`flex-1 text-left px-3 py-2.5 rounded-lg border-2 transition text-xs disabled:opacity-40 disabled:cursor-not-allowed ${
+                        onClick={() => setLinkedSource(key)}
+                        className={`flex-1 text-left px-3 py-2.5 rounded-lg border-2 transition text-xs ${
                           linkedSource === key
                             ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
                             : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
@@ -329,8 +363,8 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                         )}
                         {!catalogLoading && catalogResults.length === 0 && (
                           <div className="py-4 px-3 text-center">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">No DUDBC rates found.</p>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">DUDBC catalog is added in Phase 8. You can still enter a manual rate.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">No DUDBC rates found for this search.</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Try a different code or description, or switch to Manual entry to type a rate directly.</p>
                           </div>
                         )}
                         {catalogResults.map(r => (
@@ -360,7 +394,8 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                           <span className="text-green-600 dark:text-green-400 ml-2">DUDBC rate: NRS {NRS(selectedCatalog.baseRate)} / {selectedCatalog.unit}</span>
                         </div>
                         <button onClick={() => { setSelectedCatalog(null); setCatalogSearch(""); }}
-                          className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-sm ml-1">x</button>
+                          aria-label="Clear selection"
+                          className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-sm ml-1">&times;</button>
                       </div>
                     )}
                   </div>
@@ -398,28 +433,6 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                   </div>
                 )}
 
-                {/* Rate Analysis source */}
-                {linkedSource === "analysis" && (
-                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-3">
-                    {orgComputedRate !== undefined ? (
-                      <div>
-                        <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
-                          Legacy flat-input rate analysis: <span className="text-lg font-bold text-purple-900 dark:text-purple-200">NRS {NRS(orgComputedRate)}</span>
-                        </p>
-                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                          This is the legacy analysis builder. For live BOQ rates, use Resource Analysis instead.
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-xs text-purple-700 dark:text-purple-300">No legacy rate analysis found for this project.</p>
-                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                          Open the Rate Catalog, find this rate item, and click "Resource Analysis" to build one first.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* Effective rate display */}
                 {effectiveRate !== null && !manualOverride && (
@@ -435,10 +448,9 @@ export function RateForm({ initial, onSave, onCancel, title, projectId, orgCompu
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Source</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         linkedSource === "dudbc" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                        linkedSource === "district" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                        "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                        "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
                       }`}>
-                        {linkedSource === "dudbc" ? "DUDBC" : linkedSource === "district" ? `District (${selectedDistrict || "n/a"})` : "Rate Analysis"}
+                        {linkedSource === "dudbc" ? "DUDBC" : `District (${selectedDistrict || "n/a"})`}
                       </span>
                     </div>
                   </div>
