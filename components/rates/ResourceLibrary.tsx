@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { fmtNum } from "@/lib/format";
-import { RESOURCE_CATEGORIES, CAT_COLORS, CATEGORY_DEFAULT_UNIT, CATEGORY_DEFAULT_WASTAGE } from "@/lib/resource-constants";
+import { RESOURCE_CATEGORIES, CAT_COLORS, CATEGORY_DEFAULT_UNIT, CATEGORY_DEFAULT_WASTAGE, RESOURCE_UNITS } from "@/lib/resource-constants";
 import { UNIT_RATE_MAX } from "@/lib/cache-constants";
 
 interface OrgResource {
@@ -130,8 +130,8 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
       toast.success(editTarget ? "Resource updated." : "Resource added.");
       setShowForm(false);
       load();
-    } catch (e: any) {
-      setFormError(e.message ?? "Failed to save.");
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Failed to save.");
     } finally {
       setSaving(false);
     }
@@ -226,7 +226,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
         <div>
           <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Resource Library</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Manage your organisation's standard materials, labour, and equipment rates used in rate analysis.
+            Manage your organisation&apos;s standard materials, labour, and equipment rates used in rate analysis.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -431,15 +431,26 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="resource-unit-select">
                     Unit <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    value={form.unit}
-                    onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
-                    placeholder="e.g. bag, kg, day, cft"
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  {(() => {
+                    const options = RESOURCE_UNITS[form.category] ?? ["unit"];
+                    const hasCustom = form.unit && !options.includes(form.unit);
+                    return (
+                      <select
+                        id="resource-unit-select"
+                        value={form.unit}
+                        onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {hasCustom && <option value={form.unit}>{form.unit}</option>}
+                        {options.map(u => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

@@ -987,8 +987,8 @@ function addRateAnalysisSheet(
     itemHdr.getCell(7).alignment = { horizontal: "right" };
     itemHdr.height = 18;
 
-    // Column headers
-    const colHdr = ws.addRow(["Resource / Material", "Type", "Unit", "Qty/Unit", "Wastage%", "Unit Rate (NRS)", "Line Cost (NRS)"]);
+    // Column headers — "Qty per Cu.m." (or whichever BOQ unit) makes the cross-unit context explicit
+    const colHdr = ws.addRow(["Resource / Material", "Type", "Unit", `Qty per ${item.unit || "unit"}`, "Wastage%", "Unit Rate (NRS)", "Line Cost (NRS)"]);
     colHdr.eachCell(c => applyHeaderStyle(c));
     colHdr.height = 18;
 

@@ -30,6 +30,21 @@ export const CAT_COLORS: Record<string, string> = {
 export const catLabel = (cat: string): string =>
   RESOURCE_CATEGORIES.find((c) => c.value === cat)?.label ?? cat;
 
+// Allowed units per category — drives the unit <select> in ResourceLibrary.
+// Keep in sync with CATEGORY_DEFAULT_UNIT below (default must appear in this list).
+export const RESOURCE_UNITS: Record<string, string[]> = {
+  CEMENT:           ["bag", "kg"],
+  FINE_AGGREGATE:   ["cft", "m3", "kg"],
+  COARSE_AGGREGATE: ["cft", "m3", "kg"],
+  MASONRY:          ["nos", "kg"],
+  STEEL:            ["kg", "ton", "m"],
+  TIMBER:           ["cft", "m3", "m", "nos"],
+  LABOUR_SKILLED:   ["day", "hour"],
+  LABOUR_UNSKILLED: ["day", "hour"],
+  EQUIPMENT:        ["hour", "day", "shift"],
+  OTHER:            ["unit", "nos", "kg", "m", "m2", "m3", "cft", "sqft", "rft"],
+};
+
 // Default units per category — used by ResourceLibrary form when creating a new resource.
 export const CATEGORY_DEFAULT_UNIT: Record<string, string> = {
   CEMENT:           "bag",
