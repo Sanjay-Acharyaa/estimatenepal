@@ -1310,12 +1310,18 @@ function addProcurementSheet(
       resources.forEach((_, i) => {
         const colIdx = FIXED + 1 + i;
         const refs = subItemRows.map(r => `${colLetter(colIdx)}${r.number}`).join(",");
-        const sumVal = parseFloat(subItemRows.reduce((s, r) => {
+        const sumVal = subItemRows.reduce((s, r) => {
           const v = r.getCell(colIdx).value;
-          return s + (v && typeof v === "object" && "result" in v ? (v as { result: number }).result : ((v as number) ?? 0));
-        }, 0).toFixed(3));
+          if (v === null || v === undefined) return s;
+          if (typeof v === "number") return s + v;
+          if (typeof v === "object" && "result" in v) {
+            const res = (v as { result: unknown }).result;
+            return s + (typeof res === "number" ? res : 0);
+          }
+          return s;
+        }, 0);
         const cell = subTotRow.getCell(colIdx);
-        cell.value = { formula: `=SUM(${refs})`, result: sumVal };
+        cell.value = refs ? { formula: `=SUM(${refs})`, result: sumVal } : sumVal;
         cell.numFmt = "#,##0.000";
         cell.font = { bold: true };
         cell.alignment = { horizontal: "right", vertical: "middle" };
@@ -1342,10 +1348,16 @@ function addProcurementSheet(
     resources.forEach((_, i) => {
       const colIdx = FIXED + 1 + i;
       const refs = discGrpSubRows.map(r => `${colLetter(colIdx)}${r.number}`).join(",");
-      const sumVal = parseFloat(discGrpSubRows.reduce((s, r) => {
+      const sumVal = discGrpSubRows.reduce((s, r) => {
         const v = r.getCell(colIdx).value;
-        return s + (v && typeof v === "object" && "result" in v ? (v as { result: number }).result : ((v as number) ?? 0));
-      }, 0).toFixed(3));
+        if (v === null || v === undefined) return s;
+        if (typeof v === "number") return s + v;
+        if (typeof v === "object" && "result" in v) {
+          const res = (v as { result: unknown }).result;
+          return s + (typeof res === "number" ? res : 0);
+        }
+        return s;
+      }, 0);
       const cell = discSubRow.getCell(colIdx);
       cell.value = { formula: `=SUM(${refs})`, result: sumVal };
       cell.numFmt = "#,##0.000";
@@ -1375,10 +1387,16 @@ function addProcurementSheet(
     resources.forEach((_, i) => {
       const colIdx = FIXED + 1 + i;
       const refs = allDiscSubRows.map(r => `${colLetter(colIdx)}${r.number}`).join(",");
-      const gtVal = parseFloat(allDiscSubRows.reduce((s, r) => {
+      const gtVal = allDiscSubRows.reduce((s, r) => {
         const v = r.getCell(colIdx).value;
-        return s + (v && typeof v === "object" && "result" in v ? (v as { result: number }).result : ((v as number) ?? 0));
-      }, 0).toFixed(3));
+        if (v === null || v === undefined) return s;
+        if (typeof v === "number") return s + v;
+        if (typeof v === "object" && "result" in v) {
+          const res = (v as { result: unknown }).result;
+          return s + (typeof res === "number" ? res : 0);
+        }
+        return s;
+      }, 0);
       const cell = gtRow.getCell(colIdx);
       cell.value = { formula: `=SUM(${refs})`, result: gtVal };
       cell.numFmt = "#,##0.000";
