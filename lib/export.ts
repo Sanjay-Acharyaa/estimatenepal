@@ -1164,14 +1164,17 @@ function addProcurementSheet(
 
   ws.columns = [
     { key: "sno",     width: 6  },
-    { key: "desc",    width: 42 },
+    { key: "desc",    width: 48 },
     { key: "no",      width: 7  },
     { key: "length",  width: 10 },
     { key: "breadth", width: 10 },
     { key: "height",  width: 10 },
     { key: "qty",     width: 12 },
     { key: "unit",    width: 8  },
-    ...resources.map(() => ({ width: 15 })),
+    ...resources.map(r => ({
+      width: Math.max(14, Math.ceil(r.name.length * 1.3) + 2),
+      bestFit: true,
+    })),
   ];
 
   // Title
