@@ -178,6 +178,8 @@ export async function buildBOQExcel(
     dRow.eachCell((c) => applyDisciplineStyle(c));
     dRow.height = 18;
 
+    let firstGrpRowNum: number | null = null;
+    let lastGrpRowNum: number | null = null;
     let dSno = 1;
     for (const grp of disc.groups) {
       const qtyValue = grp.conversionFactor !== 1
@@ -185,6 +187,10 @@ export async function buildBOQExcel(
         : grp.totalQuantity;
       const gRow = summary.addRow([`${sno}.${dSno}`, sanitizeCell(grp.name), grp.unit, qtyValue, grp.rate, grp.amount]);
       gRow.eachCell((c) => { applyGroupStyle(c); borderAll(c); });
+
+      // Track for SUM formula
+      if (firstGrpRowNum === null) firstGrpRowNum = gRow.number;
+      lastGrpRowNum = gRow.number;
 
       // Yellow for overridden rate
       if (grp.isOverridden) {
@@ -198,15 +204,22 @@ export async function buildBOQExcel(
       gRow.getCell(5).numFmt = '#,##0.000';
       gRow.getCell(4).numFmt = '#,##0.000';
 
+      // Amount formula (overwrites the literal grp.amount)
+      gRow.getCell(6).value = { formula: `=D${gRow.number}*E${gRow.number}`, result: grp.amount };
+
       if (grp.conversionFactor !== 1) {
-        gRow.getCell(4).note = `Measured: ${grp.originalQuantity.toFixed(3)} ${grp.originalUnit}\nConversion: 1 ${grp.originalUnit} = ${grp.conversionFactor} ${grp.unit}`;
+        gRow.getCell(4).note = `Measured: ${grp.originalQuantity.toFixed(3)} ${grp.originalUnit}\nConverted: ${grp.totalQuantity.toFixed(3)} ${grp.unit}\n1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+        gRow.getCell(3).note = `Converted from ${grp.originalUnit} → ${grp.unit}\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
       }
 
       dSno++;
     }
 
     // Discipline subtotal
-    const stRow = summary.addRow([`${disc.name} Sub-Total`, "", "", "", "", disc.subtotal]);
+    const subtotalValue = firstGrpRowNum !== null && lastGrpRowNum !== null
+      ? { formula: `=SUM(F${firstGrpRowNum}:F${lastGrpRowNum})`, result: disc.subtotal }
+      : disc.subtotal;
+    const stRow = summary.addRow([`${disc.name} Sub-Total`, "", "", "", "", subtotalValue]);
     summary.mergeCells(`A${stRow.number}:E${stRow.number}`);
     stRow.eachCell((c) => applyTotalStyle(c));
     stRow.getCell(6).numFmt = '#,##0.000';
@@ -306,8 +319,11 @@ export async function buildBOQExcel(
       const totalQtyValue = grp.conversionFactor !== 1
         ? { formula: `=${safeOrig.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: safeTotal }
         : safeTotal;
+      const totalLabel = grp.conversionFactor !== 1
+        ? `Total — ${sanitizeCell(grp.name)}  [${grp.originalUnit} → ${grp.unit}]`
+        : `Total — ${sanitizeCell(grp.name)}`;
       const tRow = ws.addRow([
-        "", `Total — ${sanitizeCell(grp.name)}`, "", "", "", "",
+        "", totalLabel, "", "", "", "",
         totalQtyValue, grp.unit, grp.rate, grp.amount,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
@@ -315,6 +331,17 @@ export async function buildBOQExcel(
       tRow.getCell(9).numFmt = '#,##0.000';
       tRow.getCell(10).numFmt = '#,##0.000';
       if (grp.isOverridden) applyOverrideStyle(tRow.getCell(9));
+
+      // Amount formula
+      const tRowNum = tRow.number;
+      tRow.getCell(10).value = { formula: `=G${tRowNum}*I${tRowNum}`, result: grp.amount };
+      tRow.getCell(10).numFmt = '#,##0.000';
+      tRow.getCell(10).alignment = { horizontal: "right" };
+
+      // Unit note for clarity
+      if (grp.conversionFactor !== 1) {
+        tRow.getCell(8).note = `Unit after conversion: ${grp.unit}\nOriginal measurement unit: ${grp.originalUnit}\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      }
 
       ws.addRow([]);
       lineNo++;
@@ -416,11 +443,17 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       const mbQtyValue = grp.conversionFactor !== 1
         ? { formula: `=${safeOrigMB.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: safeTotalMB }
         : safeTotalMB;
+      const mbTotalLabel = grp.conversionFactor !== 1
+        ? `Total — ${grp.name}  [${grp.originalUnit} → ${grp.unit}]`
+        : `Total — ${grp.name}`;
       const tRow = ws.addRow([
-        "", `Total — ${grp.name}`, "", "", "", "", mbQtyValue, grp.unit,
+        "", mbTotalLabel, "", "", "", "", mbQtyValue, grp.unit,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
       tRow.getCell(7).numFmt = '#,##0.000';
+      if (grp.conversionFactor !== 1) {
+        tRow.getCell(8).note = `Unit after conversion: ${grp.unit}\nOriginal measurement unit: ${grp.originalUnit}\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      }
       ws.addRow([]);
       lineNo++;
     }
@@ -786,31 +819,48 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
 
     for (const grp of disc.groups) {
       // Group row
-      const gRow = ws.addRow([`${sno}.`, sanitizeCell(grp.name), sanitizeCell(grp.unit), "", NRS(grp.rate), NRS(grp.amount)]);
+      const gRow = ws.addRow([`${sno}.`, sanitizeCell(grp.name), sanitizeCell(grp.unit), "", grp.rate, grp.amount]);
       gRow.eachCell((c) => applyGovtGroupRow(c));
       gRow.getCell(1).alignment = { horizontal: "center" };
       gRow.getCell(4).alignment = { horizontal: "right" };
       gRow.getCell(5).alignment = { horizontal: "right" };
       gRow.getCell(6).alignment = { horizontal: "right" };
       gRow.height = 16;
+      gRow.getCell(5).numFmt = '#,##0.000';
+      gRow.getCell(6).numFmt = '#,##0.000';
+      gRow.getCell(6).value = { formula: `=${grp.totalQuantity.toFixed(6)}*${grp.rate.toFixed(6)}`, result: grp.amount };
+      if (grp.conversionFactor !== 1) {
+        gRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      }
 
       // Sub-items (measurement lines)
       for (const item of grp.items) {
-        const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(item.unit || grp.originalUnit || grp.unit), item.quantity.toFixed(3), "", ""]);
+        const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(item.unit || grp.originalUnit || grp.unit), item.quantity, "", ""]);
         iRow.eachCell((c) => applyGovtItemRow(c));
         iRow.getCell(4).alignment = { horizontal: "right" };
+        iRow.getCell(4).numFmt = '#,##0.000';
       }
 
       // Group total
       const govtQtyValue = grp.conversionFactor !== 1
         ? { formula: `=${grp.originalQuantity.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: grp.totalQuantity }
         : grp.totalQuantity;
-      const tRow = ws.addRow(["", "जम्मा / Total", sanitizeCell(grp.unit), govtQtyValue, NRS(grp.rate), NRS(grp.amount)]);
+      const govtTotalLabel = grp.conversionFactor !== 1
+        ? `जम्मा / Total  [${grp.originalUnit} → ${grp.unit}]`
+        : "जम्मा / Total";
+      const tRow = ws.addRow(["", govtTotalLabel, sanitizeCell(grp.unit), govtQtyValue, grp.rate, grp.amount]);
       tRow.eachCell((c) => applyGovtTotalRow(c));
       tRow.getCell(2).alignment = { horizontal: "right" };
       tRow.getCell(4).alignment = { horizontal: "right" };
       tRow.getCell(5).alignment = { horizontal: "right" };
       tRow.getCell(6).alignment = { horizontal: "right" };
+      tRow.getCell(5).numFmt = '#,##0.000';
+      const tRowNum = tRow.number;
+      tRow.getCell(6).value = { formula: `=D${tRowNum}*E${tRowNum}`, result: grp.amount };
+      tRow.getCell(6).numFmt = '#,##0.000';
+      if (grp.conversionFactor !== 1) {
+        tRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      }
 
       sno++;
     }
@@ -1300,7 +1350,7 @@ function addProcurementSheet(
           if (!line) return;
           const qpu = parseFloat(line.qtyPerUnit.toFixed(3));
           const wst = parseFloat(line.wastagePercent.toFixed(3));
-          const cf  = grp.conversionFactor !== 1 ? grp.conversionFactor : 1;
+          const cf = grp.conversionFactor;
           // item.quantity is in the original takeoff unit (e.g. sq ft)
           // qpu is per rate unit (e.g. per Cu.m.)
           // so we must apply the conversion factor before multiplying

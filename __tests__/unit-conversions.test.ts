@@ -90,3 +90,18 @@ describe("getConversionFactor", () => {
     expect(100 * fl).toBeCloseTo(328.08, 1);
   });
 });
+
+describe("edge cases", () => {
+  it("normalizeUnit handles empty string", () => {
+    expect(normalizeUnit("")).toBe("");
+  });
+
+  it("normalizeUnit handles whitespace-only string", () => {
+    expect(normalizeUnit("   ")).toBe("");
+  });
+
+  it("getConversionFactor returns null for empty string units", () => {
+    expect(getConversionFactor("", "Cu.m.")).toBeNull();
+    expect(getConversionFactor("cu ft", "")).toBeNull();
+  });
+});

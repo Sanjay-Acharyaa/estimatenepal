@@ -5,6 +5,22 @@
  * Conversion happens at BOQ compute time — rates are never altered.
  */
 
+const UNIT_ALIAS_MAP: Record<string, string> = {
+  cum: "cum", m3: "cum",
+  cuft: "cuft", cft: "cuft",
+  sqm: "sqm", m2: "sqm",
+  sqft: "sqft", sft: "sqft",
+  rm: "rm", rmt: "rm",
+  m: "rm",
+  ft: "ft", lft: "ft", rft: "ft", feet: "ft",
+  nos: "ea", no: "ea", ea: "ea", each: "ea", pcs: "ea",
+  kg: "kg",
+  ton: "ton", mt: "ton", tonne: "ton",
+  hr: "hr", hour: "hr", hrs: "hr",
+  day: "day",
+  bag: "bag",
+};
+
 export function normalizeUnit(u: string): string {
   const s = u
     .toLowerCase()
@@ -13,30 +29,7 @@ export function normalizeUnit(u: string): string {
     .replace(/\./g, "")        // Cu.m. → cum, Rm. → rm
     .replace(/\s+/g, "");      // "cu m" → "cum", "sq ft" → "sqft"
 
-  const MAP: Record<string, string> = {
-    // Volume
-    cum: "cum", m3: "cum",
-    cuft: "cuft", cft: "cuft",
-    // Area
-    sqm: "sqm", m2: "sqm",
-    sqft: "sqft", sft: "sqft",
-    // Linear
-    rm: "rm", rmt: "rm",
-    m: "rm",           // bare "m" = linear metre
-    ft: "ft", lft: "ft", rft: "ft", feet: "ft",
-    // Count
-    nos: "ea", no: "ea", ea: "ea", each: "ea", pcs: "ea",
-    // Mass
-    kg: "kg",
-    ton: "ton", mt: "ton", tonne: "ton",
-    // Time
-    hr: "hr", hour: "hr", hrs: "hr",
-    day: "day",
-    // Other
-    bag: "bag",
-  };
-
-  return MAP[s] ?? s;
+  return UNIT_ALIAS_MAP[s] ?? s;
 }
 
 // SI-exact conversion factors. Key = "fromNorm:toNorm".
