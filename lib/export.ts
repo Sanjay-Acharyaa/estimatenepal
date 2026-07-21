@@ -169,6 +169,7 @@ export async function buildBOQExcel(
   hdr.eachCell((c) => applyHeaderStyle(c));
   hdr.height = 20;
 
+  const subtotalRowNums: number[] = [];
   let sno = 1;
 
   for (const disc of boq.disciplines) {
@@ -224,6 +225,7 @@ export async function buildBOQExcel(
     stRow.eachCell((c) => applyTotalStyle(c));
     stRow.getCell(6).numFmt = '#,##0.000';
     stRow.getCell(6).alignment = { horizontal: "right" };
+    subtotalRowNums.push(stRow.number);
 
     summary.addRow([]);
     sno++;
@@ -242,20 +244,77 @@ export async function buildBOQExcel(
     return r;
   };
 
-  addFinRow("Grand Total", boq.grandTotal, true);
+  // Grand Total = SUM of all discipline subtotals
+  const grandTotalRow = addFinRow("Grand Total", boq.grandTotal, true);
+  if (subtotalRowNums.length > 0) {
+    const refs = subtotalRowNums.map(n => `F${n}`).join("+");
+    grandTotalRow.getCell(6).value = { formula: `=${refs}`, result: boq.grandTotal };
+  }
+  const gtRowNum = grandTotalRow.number;
+
+  // Track row numbers for building base formula
+  let contingencyRowNum: number | null = null;
+  let provisionalRowNum: number | null = null;
+  let vatRowNum: number | null = null;
+  let tdsRowNum: number | null = null;
+
+  // Contingency = Grand Total × pct%
   if (boq.project.contingencyPct > 0) {
-    addFinRow(`Contingency (${boq.project.contingencyPct}%)`, boq.contingencyAmount);
+    const contRow = addFinRow(
+      `Contingency (${boq.project.contingencyPct}%)`,
+      boq.contingencyAmount,
+    );
+    contingencyRowNum = contRow.number;
+    contRow.getCell(6).value = {
+      formula: `=F${gtRowNum}*${boq.project.contingencyPct}/100`,
+      result: boq.contingencyAmount,
+    };
   }
+
+  // Provisional Sum — user-configured value, no formula needed
   if (boq.provisionalSum > 0) {
-    addFinRow("Provisional Sum", boq.provisionalSum);
+    const provRow = addFinRow("Provisional Sum", boq.provisionalSum);
+    provisionalRowNum = provRow.number;
   }
+
+  // Build "subtotalAfterAdditions" cell reference list (grand total + contingency + provisional)
+  // System: subtotalAfterAdditions = grandTotal + contingencyAmount + provisionalSum
+  const saaRefs = ([gtRowNum, contingencyRowNum, provisionalRowNum] as (number | null)[])
+    .filter((n): n is number => n !== null)
+    .map(n => `F${n}`)
+    .join("+");
+
+  // VAT = subtotalAfterAdditions × vatRate%
   if (boq.project.vatEnabled) {
-    addFinRow(`VAT (${boq.project.vatRate}%)`, boq.vatAmount);
+    const vatRow = addFinRow(`VAT (${boq.project.vatRate}%)`, boq.vatAmount);
+    vatRowNum = vatRow.number;
+    vatRow.getCell(6).value = {
+      formula: `=(${saaRefs})*${boq.project.vatRate}/100`,
+      result: boq.vatAmount,
+    };
   }
+
+  // TDS = subtotalAfterAdditions × tdsRate% (shown as deduction — negative)
   if (boq.project.tdsEnabled) {
-    addFinRow(`TDS (${boq.project.tdsRate}%)`, -boq.tdsAmount);
+    const tdsRow = addFinRow(`TDS (${boq.project.tdsRate}%)`, -boq.tdsAmount);
+    tdsRowNum = tdsRow.number;
+    tdsRow.getCell(6).value = {
+      formula: `=-(${saaRefs})*${boq.project.tdsRate}/100`,
+      result: -boq.tdsAmount,
+    };
   }
-  addFinRow("FINAL PAYABLE (NRS)", boq.finalPayable, true);
+
+  // Final Payable = subtotalAfterAdditions + vatAmount - tdsAmount
+  // Since tds row already has negative value, summing all rows gives the correct result
+  const finalRefs = ([gtRowNum, contingencyRowNum, provisionalRowNum, vatRowNum, tdsRowNum] as (number | null)[])
+    .filter((n): n is number => n !== null)
+    .map(n => `F${n}`)
+    .join("+");
+  const finalPayableRow = addFinRow("FINAL PAYABLE (NRS)", boq.finalPayable, true);
+  finalPayableRow.getCell(6).value = {
+    formula: `=${finalRefs}`,
+    result: boq.finalPayable,
+  };
 
   // ── Detail Sheets (one per discipline) ────────────────────────────────────
   for (const disc of boq.disciplines) {
@@ -335,8 +394,6 @@ export async function buildBOQExcel(
       // Amount formula
       const tRowNum = tRow.number;
       tRow.getCell(10).value = { formula: `=G${tRowNum}*I${tRowNum}`, result: grp.amount };
-      tRow.getCell(10).numFmt = '#,##0.000';
-      tRow.getCell(10).alignment = { horizontal: "right" };
 
       // Unit note for clarity
       if (grp.conversionFactor !== 1) {

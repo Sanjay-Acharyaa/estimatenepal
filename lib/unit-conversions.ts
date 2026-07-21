@@ -21,6 +21,12 @@ const UNIT_ALIAS_MAP: Record<string, string> = {
   bag: "bag",
 };
 
+/** Valid normalized unit pair keys used in CONVERSION_FACTORS. Format: "fromNorm:toNorm". */
+export type ConversionPair =
+  | "cuft:cum" | "cum:cuft"
+  | "sqft:sqm" | "sqm:sqft"
+  | "ft:rm"    | "rm:ft";
+
 export function normalizeUnit(u: string): string {
   const s = u
     .toLowerCase()

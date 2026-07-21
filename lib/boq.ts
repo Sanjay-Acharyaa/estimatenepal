@@ -81,11 +81,11 @@ export interface BOQDocument {
 // BOQ_CACHE_TTL and BOQ_MAX_CACHE_BYTES are imported from cache-constants
 
 export async function invalidateBOQCache(projectId: string): Promise<void> {
-  redis.del(`boq:${projectId}`).catch(() => {});
+  redis.del(`boq:v2:${projectId}`).catch(() => {});
 }
 
 export async function generateBOQ(projectId: string): Promise<BOQDocument> {
-  const cacheKey = `boq:${projectId}`;
+  const cacheKey = `boq:v2:${projectId}`;
   try {
     const hit = await redis.get(cacheKey);
     if (hit) return JSON.parse(hit) as BOQDocument;

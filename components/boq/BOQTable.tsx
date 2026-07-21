@@ -273,7 +273,11 @@ function GroupRows({
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Code: {grp.rateCode}</div>
               )}
               {grp.conversionFactor !== 1 && grp.totalQuantity > 0 && (
-                <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 font-normal">
+                <div
+                  className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5 font-normal"
+                  title={`Unit conversion: ${grp.originalQuantity.toFixed(3)} ${grp.originalUnit} × ${grp.conversionFactor.toFixed(6)} = ${grp.totalQuantity.toFixed(3)} ${grp.unit}`}
+                  aria-label={`Unit converted from ${grp.originalUnit} to ${grp.unit}`}
+                >
                   {qty(grp.originalQuantity)} {grp.originalUnit} → {qty(grp.totalQuantity)} {grp.unit}
                   <span className="ml-1 opacity-70">(×{grp.conversionFactor.toFixed(6)})</span>
                 </div>
@@ -333,7 +337,10 @@ function GroupRows({
           <td className="px-3 py-1 text-right font-semibold text-blue-800 dark:text-blue-300">
             <div>{qty(grp.totalQuantity, grp.type === "COUNT")}</div>
             {grp.conversionFactor !== 1 && grp.totalQuantity > 0 && (
-              <div className="text-[10px] text-amber-500 dark:text-amber-400 font-normal whitespace-nowrap">
+              <div
+                className="text-[10px] text-amber-700 dark:text-amber-300 font-normal whitespace-nowrap"
+                title={`Original measurement before unit conversion: ${grp.originalQuantity.toFixed(3)} ${grp.originalUnit}`}
+              >
                 {qty(grp.originalQuantity)} {grp.originalUnit}
               </div>
             )}
