@@ -337,6 +337,7 @@ export async function buildBOQExcel(
     dHdr.height = 20;
 
     let lineNo = 1;
+    const grpAmtRowNums: number[] = [];  // for discipline subtotal SUM formula
     for (const grp of disc.groups) {
       // Group header
       const ghRow = ws.addRow([`${lineNo}`, sanitizeCell(grp.name)]);
@@ -348,12 +349,15 @@ export async function buildBOQExcel(
         pRow.getCell(2).font = { italic: true, size: 9, color: { argb: "FF6B7280" } };
       }
 
-      // Item sub-rows
+      // Item sub-rows — always write multiplier as a number (1 instead of null) so qty formula
+      // can reference col C. Formula: =No.*Length*Breadth*Height (only present dims included).
+      let firstItemRowNum: number | null = null;
+      let lastItemRowNum: number | null = null;
       for (const item of grp.items) {
         const iRow = ws.addRow([
           "",
           `  ${item.label}`,
-          item.multiplier !== 1 ? item.multiplier : null,
+          item.multiplier,             // always numeric (shows "1" instead of blank)
           item.length ?? null,
           item.breadth ?? null,
           item.height ?? null,
@@ -370,15 +374,35 @@ export async function buildBOQExcel(
         }
         iRow.getCell(2).alignment = { horizontal: "left" };
         iRow.getCell(7).numFmt = '#,##0.000';
+
+        // Qty formula — references No./L/B/H columns so editing dimensions auto-updates qty
+        const rn = iRow.number;
+        if (item.length != null && item.breadth != null && item.height != null) {
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}*F${rn}`, result: item.quantity };
+        } else if (item.length != null && item.breadth != null) {
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}`, result: item.quantity };
+        } else if (item.length != null) {
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}`, result: item.quantity };
+        }
+
+        if (firstItemRowNum === null) firstItemRowNum = rn;
+        lastItemRowNum = rn;
       }
 
-      // Group total row
+      // Group total row — qty is SUM of item qty cells (then ×cf when unit conversion applies)
       const safeTotal = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
-      const safeOrig  = Number.isFinite(grp.originalQuantity) ? grp.originalQuantity : 0;
-      const totalQtyValue = grp.conversionFactor !== 1
-        ? { formula: `=${safeOrig.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: safeTotal }
-        : safeTotal;
-      const totalLabel = grp.conversionFactor !== 1
+      const cf = grp.conversionFactor;
+      let totalQtyValue: number | { formula: string; result: number };
+      if (firstItemRowNum !== null && lastItemRowNum !== null) {
+        const sumExpr = `SUM(G${firstItemRowNum}:G${lastItemRowNum})`;
+        totalQtyValue = cf !== 1
+          ? { formula: `=${sumExpr}*${cf.toFixed(9)}`, result: safeTotal }
+          : { formula: `=${sumExpr}`, result: safeTotal };
+      } else {
+        totalQtyValue = safeTotal;
+      }
+
+      const totalLabel = cf !== 1
         ? `Total — ${sanitizeCell(grp.name)}  [${grp.originalUnit} → ${grp.unit}]`
         : `Total — ${sanitizeCell(grp.name)}`;
       const tRow = ws.addRow([
@@ -394,22 +418,29 @@ export async function buildBOQExcel(
       // Amount formula
       const tRowNum = tRow.number;
       tRow.getCell(10).value = { formula: `=G${tRowNum}*I${tRowNum}`, result: grp.amount };
+      grpAmtRowNums.push(tRowNum);
 
       // Unit note for clarity
-      if (grp.conversionFactor !== 1) {
-        tRow.getCell(8).note = `Unit after conversion: ${grp.unit}\nOriginal measurement unit: ${grp.originalUnit}\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      if (cf !== 1) {
+        tRow.getCell(8).note = `Unit after conversion: ${grp.unit}\nOriginal measurement unit: ${grp.originalUnit}\nFactor: 1 ${grp.originalUnit} = ${cf.toFixed(6)} ${grp.unit}`;
       }
 
       ws.addRow([]);
       lineNo++;
     }
 
-    // Discipline subtotal
+    // Discipline subtotal — formula references each group total's amount cell (col J)
     const stRow = ws.addRow([`${sanitizeCell(disc.name)} — Sub-Total`, "", "", "", "", "", "", "", "", disc.subtotal]);
     ws.mergeCells(`A${stRow.number}:I${stRow.number}`);
     stRow.eachCell((c) => applyTotalStyle(c));
     stRow.getCell(10).numFmt = '#,##0.000';
     stRow.getCell(10).alignment = { horizontal: "right" };
+    if (grpAmtRowNums.length > 0) {
+      stRow.getCell(10).value = {
+        formula: `=${grpAmtRowNums.map(n => `J${n}`).join("+")}`,
+        result: disc.subtotal,
+      };
+    }
   }
 
   // ── Sheets 3–6: Rate Analysis + Procurement Schedules ────────────────────
@@ -469,11 +500,14 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       ws.mergeCells(`B${ghRow.number}:K${ghRow.number}`);
       ghRow.eachCell((c) => applyGroupStyle(c));
 
+      // Item rows — always write multiplier as number so qty formula can reference col C
+      let mbFirstItemRow: number | null = null;
+      let mbLastItemRow: number | null = null;
       for (const item of grp.items) {
         const iRow = ws.addRow([
           "",
           `  ${item.label}`,
-          item.multiplier !== 1 ? item.multiplier : null,
+          item.multiplier,             // always numeric
           item.length ?? null,
           item.breadth ?? null,
           item.height ?? null,
@@ -493,14 +527,34 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
         iRow.getCell(9).alignment = { horizontal: "left" };
         iRow.getCell(11).alignment = { horizontal: "left", wrapText: true };
         iRow.getCell(7).numFmt = '#,##0.000';
+
+        // Qty formula: =No.*Length*Breadth*Height (only dimensions that are present)
+        const rn = iRow.number;
+        if (item.length != null && item.breadth != null && item.height != null) {
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}*F${rn}`, result: item.quantity };
+        } else if (item.length != null && item.breadth != null) {
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}`, result: item.quantity };
+        } else if (item.length != null) {
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}`, result: item.quantity };
+        }
+
+        if (mbFirstItemRow === null) mbFirstItemRow = rn;
+        mbLastItemRow = rn;
       }
 
       const safeTotalMB = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
-      const safeOrigMB  = Number.isFinite(grp.originalQuantity) ? grp.originalQuantity : 0;
-      const mbQtyValue = grp.conversionFactor !== 1
-        ? { formula: `=${safeOrigMB.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: safeTotalMB }
-        : safeTotalMB;
-      const mbTotalLabel = grp.conversionFactor !== 1
+      const cfMB = grp.conversionFactor;
+      let mbQtyValue: number | { formula: string; result: number };
+      if (mbFirstItemRow !== null && mbLastItemRow !== null) {
+        const sumExpr = `SUM(G${mbFirstItemRow}:G${mbLastItemRow})`;
+        mbQtyValue = cfMB !== 1
+          ? { formula: `=${sumExpr}*${cfMB.toFixed(9)}`, result: safeTotalMB }
+          : { formula: `=${sumExpr}`, result: safeTotalMB };
+      } else {
+        mbQtyValue = safeTotalMB;
+      }
+
+      const mbTotalLabel = cfMB !== 1
         ? `Total — ${grp.name}  [${grp.originalUnit} → ${grp.unit}]`
         : `Total — ${grp.name}`;
       const tRow = ws.addRow([
@@ -508,8 +562,8 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
       tRow.getCell(7).numFmt = '#,##0.000';
-      if (grp.conversionFactor !== 1) {
-        tRow.getCell(8).note = `Unit after conversion: ${grp.unit}\nOriginal measurement unit: ${grp.originalUnit}\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      if (cfMB !== 1) {
+        tRow.getCell(8).note = `Unit after conversion: ${grp.unit}\nOriginal measurement unit: ${grp.originalUnit}\nFactor: 1 ${grp.originalUnit} = ${cfMB.toFixed(6)} ${grp.unit}`;
       }
       ws.addRow([]);
       lineNo++;
@@ -866,6 +920,7 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
 
   // ── BOQ Items ────────────────────────────────────────────────────────────
   let sno = 1;
+  const govtDiscSubRowNums: number[] = [];  // for grand total SUM formula
 
   for (const disc of boq.disciplines) {
     // Discipline row
@@ -874,8 +929,12 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
     dRow.eachCell((c) => applyGovtGroupRow(c));
     dRow.height = 16;
 
+    const govtGrpTotalRowNums: number[] = [];  // for discipline subtotal SUM formula
+
     for (const grp of disc.groups) {
-      // Group row
+      const cfGovt = grp.conversionFactor;
+
+      // Group header row — amount placeholder; updated to =F{tRowNum} after total row is created
       const gRow = ws.addRow([`${sno}.`, sanitizeCell(grp.name), sanitizeCell(grp.unit), "", grp.rate, grp.amount]);
       gRow.eachCell((c) => applyGovtGroupRow(c));
       gRow.getCell(1).alignment = { horizontal: "center" };
@@ -885,24 +944,36 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
       gRow.height = 16;
       gRow.getCell(5).numFmt = '#,##0.000';
       gRow.getCell(6).numFmt = '#,##0.000';
-      gRow.getCell(6).value = { formula: `=${grp.totalQuantity.toFixed(6)}*${grp.rate.toFixed(6)}`, result: grp.amount };
-      if (grp.conversionFactor !== 1) {
-        gRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      if (cfGovt !== 1) {
+        gRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${cfGovt.toFixed(6)} ${grp.unit}`;
       }
 
-      // Sub-items (measurement lines)
+      // Sub-items — track rows for group total SUM (qty in col D)
+      let firstGovtItemRow: number | null = null;
+      let lastGovtItemRow: number | null = null;
       for (const item of grp.items) {
         const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(item.unit || grp.originalUnit || grp.unit), item.quantity, "", ""]);
         iRow.eachCell((c) => applyGovtItemRow(c));
         iRow.getCell(4).alignment = { horizontal: "right" };
         iRow.getCell(4).numFmt = '#,##0.000';
+        if (firstGovtItemRow === null) firstGovtItemRow = iRow.number;
+        lastGovtItemRow = iRow.number;
       }
 
-      // Group total
-      const govtQtyValue = grp.conversionFactor !== 1
-        ? { formula: `=${grp.originalQuantity.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: grp.totalQuantity }
-        : grp.totalQuantity;
-      const govtTotalLabel = grp.conversionFactor !== 1
+      // Group total — qty is SUM of item D cells (×cf when unit conversion applies)
+      let govtQtyValue: number | { formula: string; result: number };
+      if (firstGovtItemRow !== null && lastGovtItemRow !== null) {
+        const sumExpr = `SUM(D${firstGovtItemRow}:D${lastGovtItemRow})`;
+        govtQtyValue = cfGovt !== 1
+          ? { formula: `=${sumExpr}*${cfGovt.toFixed(9)}`, result: grp.totalQuantity }
+          : { formula: `=${sumExpr}`, result: grp.totalQuantity };
+      } else {
+        govtQtyValue = cfGovt !== 1
+          ? { formula: `=${grp.originalQuantity.toFixed(6)}*${cfGovt.toFixed(9)}`, result: grp.totalQuantity }
+          : grp.totalQuantity;
+      }
+
+      const govtTotalLabel = cfGovt !== 1
         ? `जम्मा / Total  [${grp.originalUnit} → ${grp.unit}]`
         : "जम्मा / Total";
       const tRow = ws.addRow(["", govtTotalLabel, sanitizeCell(grp.unit), govtQtyValue, grp.rate, grp.amount]);
@@ -915,26 +986,41 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
       const tRowNum = tRow.number;
       tRow.getCell(6).value = { formula: `=D${tRowNum}*E${tRowNum}`, result: grp.amount };
       tRow.getCell(6).numFmt = '#,##0.000';
-      if (grp.conversionFactor !== 1) {
-        tRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${grp.conversionFactor.toFixed(6)} ${grp.unit}`;
+      if (cfGovt !== 1) {
+        tRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${cfGovt.toFixed(6)} ${grp.unit}`;
       }
+
+      // Update group header amount to reference total row (forward reference)
+      gRow.getCell(6).value = { formula: `=F${tRowNum}`, result: grp.amount };
+      govtGrpTotalRowNums.push(tRowNum);
 
       sno++;
     }
 
-    // Discipline subtotal
-    const stRow = ws.addRow([`उप-जम्मा / Sub-total — ${sanitizeCell(disc.name)}`, "", "", "", "", NRS(disc.subtotal)]);
+    // Discipline subtotal — formula references each group total row's amount (col F)
+    const stRow = ws.addRow([`उप-जम्मा / Sub-total — ${sanitizeCell(disc.name)}`, "", "", "", "", 0]);
     ws.mergeCells(`A${stRow.number}:E${stRow.number}`);
     stRow.eachCell((c) => applyGovtTotalRow(c));
     stRow.getCell(1).alignment = { horizontal: "right" };
     stRow.getCell(6).alignment = { horizontal: "right" };
+    stRow.getCell(6).numFmt = '#,##0.000';
+    if (govtGrpTotalRowNums.length > 0) {
+      stRow.getCell(6).value = {
+        formula: `=${govtGrpTotalRowNums.map(n => `F${n}`).join("+")}`,
+        result: disc.subtotal,
+      };
+    } else {
+      stRow.getCell(6).value = disc.subtotal;
+    }
+    govtDiscSubRowNums.push(stRow.number);
   }
 
   // ── Totals Section ───────────────────────────────────────────────────────
   ws.addRow([]);
 
-  const addSummaryRow = (label: string, value: string, isBold = false) => {
-    const r = ws.addRow(["", "", "", "", label, value]);
+  // Helper: writes a numeric formula row (not a string) so Excel can compute on it
+  const addGovtNumericRow = (label: string, isBold = false) => {
+    const r = ws.addRow(["", "", "", "", label, 0]);
     ws.mergeCells(`A${r.number}:D${r.number}`);
     r.getCell(5).font = { bold: isBold, size: 10 };
     r.getCell(5).border = { top: { style: "hair" }, left: { style: "hair" }, bottom: { style: "hair" }, right: { style: "hair" } };
@@ -942,27 +1028,59 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
     r.getCell(6).font = { bold: isBold, size: 10 };
     r.getCell(6).border = { top: { style: "hair" }, left: { style: "hair" }, bottom: { style: "hair" }, right: { style: "hair" } };
     r.getCell(6).alignment = { horizontal: "right" };
+    r.getCell(6).numFmt = '#,##0.00';
+    return r;
   };
 
-  addSummaryRow("कुल जम्मा / Grand Total", NRS(boq.grandTotal));
+  // Grand Total — sums all discipline subtotal rows
+  const govtGTRow = addGovtNumericRow("कुल जम्मा / Grand Total");
+  const govtGTFormula = govtDiscSubRowNums.length > 0
+    ? `=${govtDiscSubRowNums.map(n => `F${n}`).join("+")}`
+    : `=${boq.grandTotal.toFixed(2)}`;
+  govtGTRow.getCell(6).value = { formula: govtGTFormula, result: boq.grandTotal };
+  const govtGTRowNum = govtGTRow.number;
+
+  let govtContRowNum: number | null = null;
+  let govtProvRowNum: number | null = null;
+  let govtVatRowNum: number | null = null;
 
   if (boq.contingencyAmount > 0) {
-    addSummaryRow(`आकस्मिक खर्च / Contingency (${boq.project.contingencyPct ?? 0}%)`, NRS(boq.contingencyAmount));
+    const cRow = addGovtNumericRow(`आकस्मिक खर्च / Contingency (${boq.project.contingencyPct ?? 0}%)`);
+    cRow.getCell(6).value = {
+      formula: `=F${govtGTRowNum}*${boq.project.contingencyPct ?? 0}/100`,
+      result: boq.contingencyAmount,
+    };
+    govtContRowNum = cRow.number;
   }
   if (boq.provisionalSum > 0) {
-    addSummaryRow("अनुमानित योग / Provisional Sum", NRS(boq.provisionalSum));
+    const pRow = addGovtNumericRow("अनुमानित योग / Provisional Sum");
+    pRow.getCell(6).value = boq.provisionalSum;
+    govtProvRowNum = pRow.number;
   }
 
   const vatRate = boq.project.vatRate ?? 13;
   const vatAmount = boq.vatAmount > 0 ? boq.vatAmount : 0;
   if (vatAmount > 0) {
-    addSummaryRow(`मूल्य अभिवृद्धि कर / VAT (${vatRate}%)`, NRS(vatAmount));
+    const govtSaaRefs = ([govtGTRowNum, govtContRowNum, govtProvRowNum] as (number | null)[])
+      .filter((n): n is number => n !== null)
+      .map(n => `F${n}`)
+      .join("+");
+    const vRow = addGovtNumericRow(`मूल्य अभिवृद्धि कर / VAT (${vatRate}%)`);
+    vRow.getCell(6).value = { formula: `=(${govtSaaRefs})*${vatRate}/100`, result: vatAmount };
+    govtVatRowNum = vRow.number;
   }
 
-  const finalRow = ws.addRow(["", "", "", "", "जम्मा भुक्तानी / Total Payable", NRS(boq.finalPayable)]);
+  // Final Payable — sums grand total + contingency + provisional + VAT
+  const govtFinalRefs = ([govtGTRowNum, govtContRowNum, govtProvRowNum, govtVatRowNum] as (number | null)[])
+    .filter((n): n is number => n !== null)
+    .map(n => `F${n}`)
+    .join("+");
+  const finalRow = ws.addRow(["", "", "", "", "जम्मा भुक्तानी / Total Payable", 0]);
   ws.mergeCells(`A${finalRow.number}:D${finalRow.number}`);
   applyGovtGrandTotal(finalRow.getCell(5));
   applyGovtGrandTotal(finalRow.getCell(6));
+  finalRow.getCell(6).numFmt = '#,##0.00';
+  finalRow.getCell(6).value = { formula: `=${govtFinalRefs}`, result: boq.finalPayable };
   finalRow.height = 20;
 
   // ── Signature Block ──────────────────────────────────────────────────────
@@ -1373,14 +1491,14 @@ function addProcurementSheet(
       grpHdr.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
       grpHdr.height = 16;
 
-      // Sub-item rows
+      // Sub-item rows — multiplier always numeric so qty formula can reference col C
       const subItemRows: ExcelJS.Row[] = [];
 
       for (const item of grp.items) {
         const itemRow = ws.addRow([
           null,
           sanitizeCell(item.label),
-          item.multiplier !== 1 ? item.multiplier : null,
+          item.multiplier,             // always numeric
           item.length  ?? null,
           item.breadth ?? null,
           item.height  ?? null,
@@ -1399,6 +1517,15 @@ function addProcurementSheet(
         itemRow.getCell(6).numFmt  = "#,##0.000";
         itemRow.getCell(7).numFmt  = "#,##0.000"; // Quantity — live cell
         itemRow.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
+
+        // Qty formula: =No.*Length*Breadth*Height (only dimensions that are present)
+        if (item.length != null && item.breadth != null && item.height != null) {
+          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*E${rowNum}*F${rowNum}`, result: item.quantity };
+        } else if (item.length != null && item.breadth != null) {
+          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*E${rowNum}`, result: item.quantity };
+        } else if (item.length != null) {
+          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}`, result: item.quantity };
+        }
 
         // Resource formulas — reference the Quantity cell (col G) in THIS row
         resources.forEach((res, i) => {
@@ -1424,12 +1551,26 @@ function addProcurementSheet(
         subItemRows.push(itemRow);
       }
 
+      // Group subtotal qty — SUM of item G cells (×cf when unit conversion applies)
+      const procCf = grp.conversionFactor;
+      let procGrpQtyValue: number | { formula: string; result: number };
+      if (subItemRows.length > 0) {
+        const firstRn = subItemRows[0].number;
+        const lastRn  = subItemRows[subItemRows.length - 1].number;
+        const sumExpr = `SUM(G${firstRn}:G${lastRn})`;
+        procGrpQtyValue = procCf !== 1
+          ? { formula: `=${sumExpr}*${procCf.toFixed(9)}`, result: grp.totalQuantity }
+          : { formula: `=${sumExpr}`, result: grp.totalQuantity };
+      } else {
+        procGrpQtyValue = grp.totalQuantity;
+      }
+
       // Group subtotal row — SUM across sub-item cells
       const subTotRow = ws.addRow([
         null,
         sanitizeCell(grp.name),
         null, null, null, null,
-        grp.totalQuantity,
+        procGrpQtyValue,
         grp.unit,
         ...resources.map(() => null as null),
       ]);
