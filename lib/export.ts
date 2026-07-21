@@ -381,6 +381,9 @@ export async function buildBOQExcel(
           iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}*F${rn}`, result: item.quantity };
         } else if (item.length != null && item.breadth != null) {
           iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}`, result: item.quantity };
+        } else if (item.length != null && item.height != null) {
+          // L + H without breadth — VERTICAL_WALL_AREA (perimeter × height) and VOLUME area_x_h
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*F${rn}`, result: item.quantity };
         } else if (item.length != null) {
           iRow.getCell(7).value = { formula: `=C${rn}*D${rn}`, result: item.quantity };
         }
@@ -389,15 +392,18 @@ export async function buildBOQExcel(
         lastItemRowNum = rn;
       }
 
-      // Group total row — qty is SUM of item qty cells (then ×cf when unit conversion applies)
+      // Group total row — SUM of item qty cells × groupMultiplier × unit conversion factor
       const safeTotal = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
       const cf = grp.conversionFactor;
+      const gm = grp.groupMultiplier;
       let totalQtyValue: number | { formula: string; result: number };
       if (firstItemRowNum !== null && lastItemRowNum !== null) {
         const sumExpr = `SUM(G${firstItemRowNum}:G${lastItemRowNum})`;
-        totalQtyValue = cf !== 1
-          ? { formula: `=${sumExpr}*${cf.toFixed(9)}`, result: safeTotal }
-          : { formula: `=${sumExpr}`, result: safeTotal };
+        const factors: string[] = [];
+        if (gm !== 1) factors.push(`${gm}`);
+        if (cf !== 1) factors.push(cf.toFixed(9));
+        const factorStr = factors.length > 0 ? `*${factors.join("*")}` : "";
+        totalQtyValue = { formula: `=${sumExpr}${factorStr}`, result: safeTotal };
       } else {
         totalQtyValue = safeTotal;
       }
@@ -534,6 +540,9 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
           iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}*F${rn}`, result: item.quantity };
         } else if (item.length != null && item.breadth != null) {
           iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}`, result: item.quantity };
+        } else if (item.length != null && item.height != null) {
+          // L + H without breadth — VERTICAL_WALL_AREA and VOLUME area_x_h
+          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*F${rn}`, result: item.quantity };
         } else if (item.length != null) {
           iRow.getCell(7).value = { formula: `=C${rn}*D${rn}`, result: item.quantity };
         }
@@ -544,12 +553,15 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
 
       const safeTotalMB = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
       const cfMB = grp.conversionFactor;
+      const gmMB = grp.groupMultiplier;
       let mbQtyValue: number | { formula: string; result: number };
       if (mbFirstItemRow !== null && mbLastItemRow !== null) {
         const sumExpr = `SUM(G${mbFirstItemRow}:G${mbLastItemRow})`;
-        mbQtyValue = cfMB !== 1
-          ? { formula: `=${sumExpr}*${cfMB.toFixed(9)}`, result: safeTotalMB }
-          : { formula: `=${sumExpr}`, result: safeTotalMB };
+        const factors: string[] = [];
+        if (gmMB !== 1) factors.push(`${gmMB}`);
+        if (cfMB !== 1) factors.push(cfMB.toFixed(9));
+        const factorStr = factors.length > 0 ? `*${factors.join("*")}` : "";
+        mbQtyValue = { formula: `=${sumExpr}${factorStr}`, result: safeTotalMB };
       } else {
         mbQtyValue = safeTotalMB;
       }
@@ -1003,7 +1015,7 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
     stRow.eachCell((c) => applyGovtTotalRow(c));
     stRow.getCell(1).alignment = { horizontal: "right" };
     stRow.getCell(6).alignment = { horizontal: "right" };
-    stRow.getCell(6).numFmt = '#,##0.000';
+    stRow.getCell(6).numFmt = '#,##0.00';
     if (govtGrpTotalRowNums.length > 0) {
       stRow.getCell(6).value = {
         formula: `=${govtGrpTotalRowNums.map(n => `F${n}`).join("+")}`,
@@ -1523,6 +1535,9 @@ function addProcurementSheet(
           itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*E${rowNum}*F${rowNum}`, result: item.quantity };
         } else if (item.length != null && item.breadth != null) {
           itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*E${rowNum}`, result: item.quantity };
+        } else if (item.length != null && item.height != null) {
+          // L + H without breadth — VERTICAL_WALL_AREA and VOLUME area_x_h
+          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*F${rowNum}`, result: item.quantity };
         } else if (item.length != null) {
           itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}`, result: item.quantity };
         }
@@ -1551,16 +1566,19 @@ function addProcurementSheet(
         subItemRows.push(itemRow);
       }
 
-      // Group subtotal qty — SUM of item G cells (×cf when unit conversion applies)
+      // Group subtotal qty — SUM of item G cells × groupMultiplier × unit conversion factor
       const procCf = grp.conversionFactor;
+      const procGm = grp.groupMultiplier;
       let procGrpQtyValue: number | { formula: string; result: number };
       if (subItemRows.length > 0) {
         const firstRn = subItemRows[0].number;
         const lastRn  = subItemRows[subItemRows.length - 1].number;
         const sumExpr = `SUM(G${firstRn}:G${lastRn})`;
-        procGrpQtyValue = procCf !== 1
-          ? { formula: `=${sumExpr}*${procCf.toFixed(9)}`, result: grp.totalQuantity }
-          : { formula: `=${sumExpr}`, result: grp.totalQuantity };
+        const factors: string[] = [];
+        if (procGm !== 1) factors.push(`${procGm}`);
+        if (procCf !== 1) factors.push(procCf.toFixed(9));
+        const factorStr = factors.length > 0 ? `*${factors.join("*")}` : "";
+        procGrpQtyValue = { formula: `=${sumExpr}${factorStr}`, result: grp.totalQuantity };
       } else {
         procGrpQtyValue = grp.totalQuantity;
       }
