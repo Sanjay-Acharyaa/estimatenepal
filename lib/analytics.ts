@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import type { Prisma } from "@prisma/client";
 
 export type AnalyticsEventName =
   | "user_login"
@@ -24,7 +25,7 @@ export type AnalyticsEventName =
  */
 export function trackEvent(
   event: AnalyticsEventName,
-  data: { orgId?: string | null; userId?: string | null; meta?: Record<string, unknown> }
+  data: { orgId?: string | null; userId?: string | null; meta?: Prisma.InputJsonObject }
 ): void {
   prisma.analyticsEvent
     .create({
@@ -32,7 +33,7 @@ export function trackEvent(
         event,
         orgId: data.orgId ?? null,
         userId: data.userId ?? null,
-        meta: (data.meta as any) ?? undefined,
+        meta: data.meta,
       },
     })
     .catch(() => {});

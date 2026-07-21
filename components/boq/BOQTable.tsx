@@ -257,7 +257,6 @@ function GroupRows({
         onClick={onToggle}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         tabIndex={0}
-        role="button"
         aria-expanded={expanded}
         aria-label={`${grp.name} — click to ${expanded ? "collapse" : "expand"}`}
       >
@@ -273,14 +272,14 @@ function GroupRows({
               {grp.rateCode && (
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Code: {grp.rateCode}</div>
               )}
-              {grp.conversionFactor !== 1 && grp.totalQuantity > 0 && (
+              {grp.conversionFactor !== 1 && (
                 <div
                   className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5 font-normal"
-                  title={`Unit conversion: ${grp.originalQuantity.toFixed(3)} ${grp.originalUnit} × ${grp.conversionFactor.toFixed(6)} = ${grp.totalQuantity.toFixed(3)} ${grp.unit}`}
+                  title={`Unit conversion: ${grp.originalQuantity.toFixed(3)} ${grp.originalUnit} × ${grp.conversionFactor} = ${grp.totalQuantity.toFixed(3)} ${grp.unit}`}
                   aria-label={`Unit converted from ${grp.originalUnit} to ${grp.unit}`}
                 >
                   {qty(grp.originalQuantity)} {grp.originalUnit} → {qty(grp.totalQuantity)} {grp.unit}
-                  <span className="ml-1 opacity-70">(×{grp.conversionFactor.toFixed(6)})</span>
+                  <span className="ml-1 opacity-70">(×{grp.conversionFactor})</span>
                 </div>
               )}
             </div>

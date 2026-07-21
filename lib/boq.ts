@@ -368,7 +368,12 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           return {
             id: item.id,
             label: item.label,
-            multiplier: item.multiplier,
+            // For items with dimensions (VERTICAL_WALL_AREA / VOLUME), the qty formula
+            // =C*D*F uses the multiplier to carry the sign for deductions. Without this,
+            // the formula always produces a positive value and Excel recalculation flips
+            // deductions to additions. COUNT/LINEAR/AREA items have no formula so the
+            // negative sign lives in effectiveQty directly — their multiplier stays positive.
+            multiplier: (item.isNegative && mbLength !== null) ? -item.multiplier : item.multiplier,
             length: mbLength,
             breadth: mbBreadth,
             height: mbHeight,

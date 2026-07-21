@@ -11,6 +11,7 @@ const UNIT_ALIAS_MAP: Record<string, string> = {
   sqm: "sqm", m2: "sqm",
   sqft: "sqft", sft: "sqft",
   rm: "rm", rmt: "rm",
+  // "m" alone is linear metre (running metre) — NOT square/cubic; DUDBC uses "Rm." for running metre
   m: "rm",
   ft: "ft", lft: "ft", rft: "ft", feet: "ft",
   nos: "ea", no: "ea", ea: "ea", each: "ea", pcs: "ea",
@@ -25,7 +26,8 @@ const UNIT_ALIAS_MAP: Record<string, string> = {
 export type ConversionPair =
   | "cuft:cum" | "cum:cuft"
   | "sqft:sqm" | "sqm:sqft"
-  | "ft:rm"    | "rm:ft";
+  | "ft:rm"    | "rm:ft"
+  | "kg:ton"   | "ton:kg";
 
 export function normalizeUnit(u: string): string {
   const s = u
@@ -46,6 +48,8 @@ export const CONVERSION_FACTORS: Record<string, number> = {
   "sqm:sqft":  10.7639104167,    // 1 m² = 10.7639104167 sq ft
   "ft:rm":     0.3048,           // 1 ft = 0.3048 m (exact SI)
   "rm:ft":     3.28083989501,    // 1 m = 3.28083989501 ft
+  "kg:ton":    0.001,            // 1 kg = 0.001 metric ton
+  "ton:kg":    1000,             // 1 metric ton = 1000 kg
 };
 
 /**

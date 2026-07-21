@@ -49,6 +49,7 @@ const EXPORTS: { type: ExportType; label: string; desc: string; icon: string; co
 
 function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const titleId = useId();
+  const inputIdPrefix = useId();
   const panelRef = useRef<HTMLDivElement>(null);
 
   const [fields, setFields] = useState({
@@ -108,17 +109,21 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
     }
   }
 
-  const input = (label: string, k: keyof typeof fields, placeholder = "") => (
-    <div key={k}>
-      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>
-      <input
-        value={fields[k]}
-        onChange={set(k)}
-        placeholder={placeholder}
-        className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-    </div>
-  );
+  const input = (label: string, k: keyof typeof fields, placeholder = "") => {
+    const id = `${inputIdPrefix}-${k}`;
+    return (
+      <div key={k}>
+        <label htmlFor={id} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>
+        <input
+          id={id}
+          value={fields[k]}
+          onChange={set(k)}
+          placeholder={placeholder}
+          className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+    );
+  };
 
   return (
     <div

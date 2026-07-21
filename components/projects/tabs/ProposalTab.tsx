@@ -144,12 +144,21 @@ export function ProposalTab({ projectId, userRole }: Props) {
   }
 
   async function handleStatusChange(id: string, status: string) {
-    await fetch(`/api/projects/${projectId}/quotes/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    loadQuotes();
+    try {
+      const res = await fetch(`/api/projects/${projectId}/quotes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error?.message ?? "Failed to update status.");
+        return;
+      }
+      loadQuotes();
+    } catch {
+      toast.error("Network error. Status not updated.");
+    }
   }
 
   const acceptedQuote = quotes.find(q => q.status === "ACCEPTED");
@@ -160,7 +169,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
 
       {/* Export Documents */}
       <section>
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Export Documents</h2>
+        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-4">Export Documents</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
             { key: "tender", icon: "📋", label: "Tender Bundle", sub: "Cover + Scope + BOQ + Rates", accent: "border-indigo-200 hover:border-indigo-400" },
@@ -184,11 +193,15 @@ export function ProposalTab({ projectId, userRole }: Props) {
 
       {/* Client Approval */}
       <section>
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Client Approval</h2>
+        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-4">Client Approval</h2>
         <div className="space-y-3">
           {shareLinks.map(link => {
             const url = `${typeof window !== "undefined" ? window.location.origin : ""}/share/${link.token}`;
-            const statusColor = link.approvalStatus === "APPROVED" ? "bg-green-50 border-green-200" : link.approvalStatus === "REJECTED" ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200";
+            const statusColor = link.approvalStatus === "APPROVED"
+              ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+              : link.approvalStatus === "REJECTED"
+              ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+              : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700";
             return (
               <div key={link.id} className={`border rounded-xl p-4 ${statusColor}`}>
                 <div className="flex items-start justify-between gap-4">
@@ -198,19 +211,21 @@ export function ProposalTab({ projectId, userRole }: Props) {
                       {link.approvalStatus === "REJECTED" && <span className="text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">✕ Rejected by {link.clientName}</span>}
                       {!link.approvalStatus && <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">Awaiting response · {link.viewCount} view{link.viewCount !== 1 ? "s" : ""}</span>}
                     </div>
-                    {link.approvalNote && <p className="text-xs text-gray-600 italic mb-1">"{link.approvalNote}"</p>}
+                    {link.approvalNote && <p className="text-xs text-gray-600 italic mb-1">&quot;{link.approvalNote}&quot;</p>}
                     {link.approvedAt && <p className="text-xs text-gray-600">{new Date(link.approvedAt).toLocaleString()}</p>}
                     <div className="flex items-center gap-2 mt-2">
-                      <input readOnly value={url} className="flex-1 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600 min-w-0" />
+                      <input readOnly value={url} aria-label="Share link URL" className="flex-1 text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-600 dark:text-gray-300 min-w-0" />
                       <button onClick={() => { navigator.clipboard.writeText(url); toast.success("Link copied!"); }}
-                        className="text-xs px-2.5 py-1 border border-gray-300 rounded hover:bg-gray-50 flex-shrink-0">Copy</button>
+                        aria-label="Copy share link to clipboard"
+                        className="text-xs px-2.5 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0">Copy</button>
                     </div>
                     {canEdit && !link.approvalStatus && (
                       <div className="flex items-center gap-2 mt-2">
                         <input value={sendEmailInput[link.id] ?? link.clientEmail ?? ""}
                           onChange={e => setSendEmailInput(prev => ({ ...prev, [link.id]: e.target.value }))}
+                          aria-label="Client email address to send proposal"
                           placeholder="Client email address"
-                          className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          className="flex-1 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                         <button disabled={sendingEmail === link.id} onClick={async () => {
                           const email = sendEmailInput[link.id] ?? link.clientEmail ?? "";
                           if (!email) { toast.error("Enter client email."); return; }
@@ -235,8 +250,9 @@ export function ProposalTab({ projectId, userRole }: Props) {
           {canEdit && (
             <div className="flex gap-2">
               <input value={clientEmailInput} onChange={e => setClientEmailInput(e.target.value)}
+                aria-label="Client email address (optional) for new share link"
                 placeholder="Client email (optional)"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
               <button onClick={createShareLink} disabled={creatingLink}
                 className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50 flex-shrink-0">
                 {creatingLink ? "Creating…" : "Generate Share Link"}
@@ -250,8 +266,8 @@ export function ProposalTab({ projectId, userRole }: Props) {
       <section>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-800">Quote Comparison</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Compare subcontractor quotes against your estimate</p>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Quote Comparison</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Compare subcontractor quotes against your estimate</p>
           </div>
           {canEdit && (
             <button onClick={() => { setShowAddQuote(true); setEditId(null); setForm({ vendor: "", amount: "", discipline: "", notes: "", status: "RECEIVED", validUntil: "" }); setFormError(""); }}
@@ -375,8 +391,8 @@ export function ProposalTab({ projectId, userRole }: Props) {
           <section>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-base font-semibold text-gray-800">Comparative Statement of Bids</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Formal comparison for bid evaluation and decision</p>
+                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Comparative Statement of Bids</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Formal comparison for bid evaluation and decision</p>
               </div>
               <button
                 onClick={() => handleDownload("comparative")}
@@ -417,7 +433,7 @@ export function ProposalTab({ projectId, userRole }: Props) {
                     <>
                       <tr className="bg-gray-50">
                         <td className="px-4 py-3 text-gray-500 text-xs">2</td>
-                        <td className="px-4 py-3 font-medium text-gray-700">Engineer's Estimate (NRS)</td>
+                        <td className="px-4 py-3 font-medium text-gray-700">Engineer&apos;s Estimate (NRS)</td>
                         {sorted.map(q => (
                           <td key={q.id} className="px-4 py-3 text-center text-gray-500">{NRS(estimateTotal)}</td>
                         ))}
@@ -438,12 +454,11 @@ export function ProposalTab({ projectId, userRole }: Props) {
                   )}
 
                   {hasDisciplines && disciplines.map((disc, di) => {
-                    const discQuotes = sorted.map(q => quotes.find(x => x.id === q.id && x.discipline === disc));
                     return (
                       <tr key={disc} className={di % 2 === 0 ? "bg-gray-50" : "bg-white"}>
                         <td className="px-4 py-3 text-gray-500 text-xs">{(estimateTotal > 0 ? 4 : 2) + di}</td>
                         <td className="px-4 py-3 text-gray-600 pl-8 italic text-xs">{disc}</td>
-                        {sorted.map((q, i) => {
+                        {sorted.map((q) => {
                           const match = quotes.find(x => x.id === q.id);
                           return (
                             <td key={q.id} className="px-4 py-3 text-center text-gray-500 text-xs">

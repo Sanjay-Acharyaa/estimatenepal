@@ -100,30 +100,33 @@ export async function POST(req: NextRequest) {
     });
     if (!rateItem) throw notFound("Rate item");
 
-    // Compute sort order server-side to avoid race conditions from concurrent adds
-    const maxLine = await prisma.rateAnalysisLine.findFirst({
-      where: { orgId, rateItemId: data.rateItemId },
-      orderBy: { sortOrder: "desc" },
-      select: { sortOrder: true },
-    });
-    const sortOrder = (maxLine?.sortOrder ?? -1) + 1;
+    // Atomic read-then-write inside a transaction so concurrent POSTs never
+    // produce duplicate sortOrder values for the same rate item.
+    const line = await prisma.$transaction(async (tx) => {
+      const maxLine = await tx.rateAnalysisLine.findFirst({
+        where: { orgId, rateItemId: data.rateItemId },
+        orderBy: { sortOrder: "desc" },
+        select: { sortOrder: true },
+      });
+      const sortOrder = (maxLine?.sortOrder ?? -1) + 1;
 
-    const line = await prisma.rateAnalysisLine.create({
-      data: {
-        orgId,
-        rateItemId: data.rateItemId,
-        resourceId: data.resourceId,
-        lineType: data.lineType,
-        qtyPerUnit: data.qtyPerUnit,
-        wastagePercent: data.wastagePercent,
-        notes: data.notes ?? null,
-        sortOrder,
-      },
-      include: {
-        resource: {
-          select: { id: true, name: true, category: true, unit: true, unitRate: true, wastagePercent: true },
+      return tx.rateAnalysisLine.create({
+        data: {
+          orgId,
+          rateItemId: data.rateItemId,
+          resourceId: data.resourceId,
+          lineType: data.lineType,
+          qtyPerUnit: data.qtyPerUnit,
+          wastagePercent: data.wastagePercent,
+          notes: data.notes ?? null,
+          sortOrder,
         },
-      },
+        include: {
+          resource: {
+            select: { id: true, name: true, category: true, unit: true, unitRate: true, wastagePercent: true },
+          },
+        },
+      });
     });
 
     redis.del(ck(orgId, data.rateItemId)).catch(() => {});

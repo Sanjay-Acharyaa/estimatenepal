@@ -58,6 +58,10 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const qtyInputId = useId();
+  const resourceSelectId = useId();
+  const lineTypeSelectId = useId();
+  const wastageInputId = useId();
+  const notesInputId = useId();
   const loadAllControllerRef = useRef<AbortController | null>(null);
   const loadLinesControllerRef = useRef<AbortController | null>(null);
   const loadResourcesControllerRef = useRef<AbortController | null>(null);
@@ -458,9 +462,9 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                         <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">
                           Qty / {rate.unit}
                         </th>
-                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Rate</th>
+                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-24">Rate (NRS)</th>
                         <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Wastage / Gross</th>
-                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Amount</th>
+                        <th scope="col" className="px-3 py-2.5 text-right font-semibold text-gray-500 dark:text-gray-400 w-28">Line Cost (NRS)</th>
                         {isAdmin && <th scope="col" aria-label="Actions" className="px-3 py-2.5 w-20" />}
                       </tr>
                     </thead>
@@ -571,8 +575,9 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                   <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">Add Resource Line</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Resource</label>
+                      <label htmlFor={resourceSelectId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Resource</label>
                       <select
+                        id={resourceSelectId}
                         value={addForm.resourceId}
                         disabled={loadingResources}
                         onChange={e => setAddForm(f => ({ ...f, resourceId: e.target.value }))}
@@ -595,8 +600,9 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Line Type</label>
+                      <label htmlFor={lineTypeSelectId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Line Type</label>
                       <select
+                        id={lineTypeSelectId}
                         value={addForm.lineType}
                         onChange={e => setAddForm(f => ({ ...f, lineType: e.target.value as typeof LINE_TYPES[number] }))}
                         className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -630,8 +636,9 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Wastage %</label>
+                      <label htmlFor={wastageInputId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Wastage %</label>
                       <input
+                        id={wastageInputId}
                         type="number"
                         min="0"
                         max="100"
@@ -643,8 +650,9 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
+                      <label htmlFor={notesInputId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
                       <input
+                        id={notesInputId}
                         value={addForm.notes}
                         onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
                         placeholder="e.g. for 1:4 mortar"

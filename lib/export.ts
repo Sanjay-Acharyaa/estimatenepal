@@ -591,8 +591,8 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       }
 
       const mbTotalLabel = cfMB !== 1
-        ? `Total — ${grp.name}  [${grp.originalUnit} → ${grp.unit}]`
-        : `Total — ${grp.name}`;
+        ? `Total — ${sanitizeCell(grp.name)}  [${grp.originalUnit} → ${grp.unit}]`
+        : `Total — ${sanitizeCell(grp.name)}`;
       const tRow = ws.addRow([
         "", mbTotalLabel, "", "", "", "", mbQtyValue, grp.unit,
       ]);
@@ -1357,15 +1357,18 @@ function addRateAnalysisSheet(
     const contRef = `G${contRow.number}`;
 
     const leadLiftVal = directCostVal * (settings.leadLiftPct / 100);
-    const leadRow = ws.addRow([`Lead & Lift (${settings.leadLiftPct}%)`, "", "", "", "", "", null]);
-    ws.mergeCells(`A${leadRow.number}:F${leadRow.number}`);
-    leadRow.getCell(1).alignment = { horizontal: "right" };
-    const leadCell = leadRow.getCell(7);
-    leadCell.value = { formula: `=${directRef}*${settings.leadLiftPct}/100`, result: leadLiftVal };
-    leadCell.numFmt = "#,##0.000";
-    leadCell.alignment = { horizontal: "right" };
-    borderAll(leadCell);
-    const leadRef = `G${leadRow.number}`;
+    let leadRef = "";
+    if (settings.leadLiftPct > 0) {
+      const leadRow = ws.addRow([`Lead & Lift (${settings.leadLiftPct}%)`, "", "", "", "", "", null]);
+      ws.mergeCells(`A${leadRow.number}:F${leadRow.number}`);
+      leadRow.getCell(1).alignment = { horizontal: "right" };
+      const leadCell = leadRow.getCell(7);
+      leadCell.value = { formula: `=${directRef}*${settings.leadLiftPct}/100`, result: leadLiftVal };
+      leadCell.numFmt = "#,##0.000";
+      leadCell.alignment = { horizontal: "right" };
+      borderAll(leadCell);
+      leadRef = `G${leadRow.number}`;
+    }
 
     const preVatVal = directCostVal + overheadVal + profitVal + contingencyVal + leadLiftVal;
     const preVatRow = ws.addRow(["Pre-VAT Rate (written to Base Rate)", "", "", "", "", "", null]);
@@ -1373,7 +1376,8 @@ function addRateAnalysisSheet(
     preVatRow.getCell(1).font = { bold: true, size: 10 };
     preVatRow.getCell(1).alignment = { horizontal: "right" };
     const preVatCell = preVatRow.getCell(7);
-    preVatCell.value = { formula: `=${directRef}+${overheadRef}+${profitRef}+${contRef}+${leadRef}`, result: preVatVal };
+    const preVatParts = [directRef, overheadRef, profitRef, contRef, leadRef].filter(Boolean);
+    preVatCell.value = { formula: `=${preVatParts.join("+")}`, result: preVatVal };
     preVatCell.numFmt = "#,##0.000";
     preVatCell.font = { bold: true, size: 10, color: { argb: "FF1E3A5F" } };
     preVatCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };

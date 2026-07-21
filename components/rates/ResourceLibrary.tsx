@@ -46,8 +46,13 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
   const [search, setSearch] = useState("");
 
   const formDialogRef = useRef<HTMLDivElement>(null);
-  const formTitleId = useId();
-  const unitSelectId = useId();
+  const formTitleId     = useId();
+  const nameInputId     = useId();
+  const categorySelectId = useId();
+  const unitSelectId    = useId();
+  const unitRateInputId = useId();
+  const wastageInputId  = useId();
+  const notesInputId    = useId();
 
   // Auto-focus first focusable element when form dialog opens
   useEffect(() => {
@@ -435,10 +440,11 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor={nameInputId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Name <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id={nameInputId}
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. PPC Cement (Bag 50kg)"
@@ -447,10 +453,11 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor={categorySelectId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Category <span className="text-red-500">*</span>
                   </label>
                   <select
+                    id={categorySelectId}
                     value={form.category}
                     onChange={e => {
                       const newCat = e.target.value;
@@ -487,10 +494,11 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor={unitRateInputId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Unit Rate (NRS) <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id={unitRateInputId}
                     type="number"
                     min="0"
                     max={UNIT_RATE_MAX}
@@ -502,8 +510,9 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Wastage %</label>
+                  <label htmlFor={wastageInputId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Wastage %</label>
                   <input
+                    id={wastageInputId}
                     type="number"
                     min="0"
                     max="100"
@@ -516,8 +525,9 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
+                <label htmlFor={notesInputId} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
                 <input
+                  id={notesInputId}
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="e.g. Grade, brand, supplier note…"

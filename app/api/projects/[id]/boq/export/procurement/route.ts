@@ -9,6 +9,8 @@ import { withSemaphore } from "@/lib/semaphore";
 import ExcelJS from "exceljs";
 import { trackEvent } from "@/lib/analytics";
 
+export const maxDuration = 60;
+
 const PROJECT_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 // GET /api/projects/[id]/boq/export/procurement
@@ -126,9 +128,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       const boqQtyNum = parseFloat((boqTotalsMap.get(grp.id) ?? 0).toFixed(3));
       const rateNum   = parseFloat(Number(grp.rateItem?.baseRate ?? 0).toFixed(2));
 
-      // Computed values used as formula result seeds (ExcelJS `result` is the initial display value;
-      // Excel recalculates from the formula string on open).
-      const orderQtyComputed    = boqQtyNum * (1 + avgWastage / 100);
+      // Round wastage to 1dp before using it — seed and formula must use the same value
+      // so that Excel recalculation produces the same result as the initial display.
+      const roundedWastage      = parseFloat(avgWastage.toFixed(1));
+      const orderQtyComputed    = boqQtyNum * (1 + roundedWastage / 100);
       const orderAmountComputed = orderQtyComputed * rateNum;
       totalOrderAmount += orderAmountComputed;
 
@@ -138,7 +141,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         item:       grp.name,
         unit:       grp.rateItem?.unit ?? "",
         boqQty:     boqQtyNum,
-        wastagePct: parseFloat(avgWastage.toFixed(1)),
+        wastagePct: roundedWastage,
         orderQty:   null,   // set to formula below
         rate:       rateNum,
         amount:     null,   // set to formula below

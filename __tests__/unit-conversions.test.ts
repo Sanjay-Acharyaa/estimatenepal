@@ -66,8 +66,13 @@ describe("getConversionFactor", () => {
     expect(fwd * inv).toBeCloseTo(1, 9);
   });
 
+  it("converts kg to metric ton and back", () => {
+    expect(getConversionFactor("kg", "ton")).toBe(0.001);
+    expect(getConversionFactor("ton", "kg")).toBe(1000);
+    expect(getConversionFactor("kg", "tonne")).toBe(0.001);
+  });
+
   it("returns null for unknown unit pairs", () => {
-    expect(getConversionFactor("kg", "ton")).toBeNull();
     expect(getConversionFactor("bag", "kg")).toBeNull();
     expect(getConversionFactor("hr", "day")).toBeNull();
   });
