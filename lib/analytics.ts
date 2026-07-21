@@ -15,7 +15,8 @@ export type AnalyticsEventName =
   | "coupon_redeemed"
   | "rate_imported"
   | "share_link_created"
-  | "takeoff_item_created";
+  | "takeoff_item_created"
+  | "comparative_export";
 
 /**
  * Fire-and-forget analytics event. Never throws, never blocks the calling request.

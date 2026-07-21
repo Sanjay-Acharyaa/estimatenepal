@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
-import { handleApiError, unauthorized, notFound } from "@/lib/errors";
+import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import { fmtNum } from "@/lib/format";
 import { generateBOQ } from "@/lib/boq";
+import { trackEvent } from "@/lib/analytics";
 
 export const maxDuration = 60;
+
+const PROJECT_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 function esc(s: string | null | undefined) {
   return (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -21,6 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const limited = await checkExportRateLimit(ip);
     if (limited) return limited;
 
+    if (!PROJECT_ID_RE.test(params.id) || params.id.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid project ID.", 400);
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
 
@@ -30,6 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
+    trackEvent("comparative_export", { orgId: project.orgId, userId: token.id as string, meta: { projectId: params.id } });
 
     const quotes = await prisma.subcontractorQuote.findMany({
       where: { projectId: params.id },
@@ -184,22 +191,28 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 </body>
 </html>`;
 
+    // Wrap Puppeteer in try/finally so the browser process is always closed even if pdf() throws
     const result = await withSemaphore("pdf", 3, async () => {
       const puppeteer = await import("puppeteer");
-      const browser = await puppeteer.default.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-      const page = await browser.newPage();
-      await page.setJavaScriptEnabled(false);
-      await page.setContent(html, { waitUntil: "domcontentloaded" });
-      const pdfBytes = await page.pdf({ format: "A4", printBackground: true, margin: { top: "10mm", bottom: "10mm" } });
-      await browser.close();
-
-      const filename = `${project.name.replace(/[^a-z0-9]/gi, "_")}_Comparative_Statement.pdf`;
-      return new NextResponse(new Uint8Array(pdfBytes), {
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="${filename}"`,
-        },
+      const browser = await puppeteer.default.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });
+      try {
+        const page = await browser.newPage();
+        await page.setJavaScriptEnabled(false);
+        await page.setContent(html, { waitUntil: "domcontentloaded" });
+        const pdfBytes = await page.pdf({ format: "A4", printBackground: true, margin: { top: "10mm", bottom: "10mm" } });
+        const filename = `${project.name.replace(/[^a-z0-9]/gi, "_")}_Comparative_Statement.pdf`;
+        return new NextResponse(new Uint8Array(pdfBytes), {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="${filename}"`,
+          },
+        });
+      } finally {
+        await browser.close();
+      }
     });
     return result as NextResponse;
   } catch (err) {

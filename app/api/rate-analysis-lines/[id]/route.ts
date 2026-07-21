@@ -67,7 +67,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       userId: token.id as string,
       event: "analysis_line.update",
       resourceId: params.id,
-      meta: { rateItemId: existing.rateItemId } as import("@prisma/client").Prisma.InputJsonValue,
+      meta: { rateItemId: existing.rateItemId },
       ipAddress: ip,
     });
 
@@ -107,7 +107,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
       userId: token.id as string,
       event: "analysis_line.delete",
       resourceId: params.id,
-      meta: { rateItemId: existing.rateItemId } as import("@prisma/client").Prisma.InputJsonValue,
+      meta: { rateItemId: existing.rateItemId },
       ipAddress: ip,
     });
 

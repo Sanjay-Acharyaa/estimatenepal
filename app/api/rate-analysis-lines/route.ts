@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
       userId: token.id as string,
       event: "analysis_line.create",
       resourceId: line.id,
-      meta: { rateItemId: data.rateItemId, resourceName: resource.name } as import("@prisma/client").Prisma.InputJsonValue,
+      meta: { rateItemId: data.rateItemId, resourceName: resource.name },
       ipAddress: ip,
     });
 
