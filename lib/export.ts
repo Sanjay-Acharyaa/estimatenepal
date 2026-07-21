@@ -55,7 +55,7 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-function sanitizeCell(s: string): string {
+export function sanitizeCell(s: string): string {
   return /^[=+\-@\t\r]/.test(s) ? " " + s : s;
 }
 
@@ -103,6 +103,44 @@ function borderAll(cell: ExcelJS.Cell) {
     bottom: { style: "hair" },
     right: { style: "hair" },
   };
+}
+
+// ─── Excel formula helpers (exported for testing) ────────────────────────────
+
+/**
+ * Returns the Excel qty formula for a single measurement-book item row.
+ * Column layout across all sheets: C=No., D=Length, E=Breadth, F=Height.
+ * Returns null when no dimensions are present (COUNT, AREA items, etc.).
+ */
+export function itemQtyFormula(
+  rowNum: number,
+  hasLength: boolean,
+  hasBreadth: boolean,
+  hasHeight: boolean,
+): string | null {
+  if (hasLength && hasBreadth && hasHeight) return `=C${rowNum}*D${rowNum}*E${rowNum}*F${rowNum}`;
+  if (hasLength && hasBreadth)              return `=C${rowNum}*D${rowNum}*E${rowNum}`;
+  if (hasLength && hasHeight)               return `=C${rowNum}*D${rowNum}*F${rowNum}`;
+  if (hasLength)                            return `=C${rowNum}*D${rowNum}`;
+  return null;
+}
+
+/**
+ * Returns the group-total qty formula: =SUM(col{first}:col{last}) × groupMultiplier × conversionFactor.
+ * `qtyCol` is the column letter holding item quantities (G for Detail/MB/Procurement, D for Govt format).
+ */
+export function groupQtyFormula(
+  firstRow: number,
+  lastRow: number,
+  qtyCol: string,
+  groupMultiplier: number,
+  conversionFactor: number,
+): string {
+  const sumExpr = `SUM(${qtyCol}${firstRow}:${qtyCol}${lastRow})`;
+  const factors: string[] = [];
+  if (groupMultiplier !== 1) factors.push(`${groupMultiplier}`);
+  if (conversionFactor !== 1) factors.push(conversionFactor.toFixed(9));
+  return `=${sumExpr}${factors.length > 0 ? `*${factors.join("*")}` : ""}`;
 }
 
 // ─── BOQ Excel Export ─────────────────────────────────────────────────────────
@@ -238,7 +276,7 @@ export async function buildBOQExcel(
     summary.mergeCells(`A${r.number}:E${r.number}`);
     r.getCell(1).font = { bold, size: 10 };
     r.getCell(1).alignment = { horizontal: "right" };
-    r.getCell(6).numFmt = '#,##0.000';
+    r.getCell(6).numFmt = '#,##0.00';
     r.getCell(6).alignment = { horizontal: "right" };
     r.getCell(6).font = { bold };
     return r;
@@ -317,6 +355,9 @@ export async function buildBOQExcel(
   };
 
   // ── Detail Sheets (one per discipline) ────────────────────────────────────
+  // Drawing unit is the linear unit used for L/B/H dimension columns (ft for imperial, m for metric).
+  const drawingUnit = (boq.project.unitSystem ?? "imperial").toLowerCase().includes("metric") ? "m" : "ft";
+
   for (const disc of boq.disciplines) {
     const ws = wb.addWorksheet(disc.name.substring(0, 31));
     ws.columns = [
@@ -332,7 +373,7 @@ export async function buildBOQExcel(
       { key: "amount", width: 16 },
     ];
 
-    const dHdr = ws.addRow(["S.No.", "Description", "No.", "Length", "Breadth", "Height", "Quantity", "Unit", "Rate (NRS)", "Amount (NRS)"]);
+    const dHdr = ws.addRow(["S.No.", "Description", "No.", `Length (${drawingUnit})`, `Breadth (${drawingUnit})`, `Height (${drawingUnit})`, "Quantity", "Unit", "Rate (NRS)", "Amount (NRS)"]);
     dHdr.eachCell((c) => applyHeaderStyle(c));
     dHdr.height = 20;
 
@@ -373,20 +414,16 @@ export async function buildBOQExcel(
           borderAll(c);
         }
         iRow.getCell(2).alignment = { horizontal: "left" };
-        iRow.getCell(7).numFmt = '#,##0.000';
+        iRow.getCell(3).numFmt = '#,##0.###';  // No. — suppress trailing zeros on integers
+        iRow.getCell(4).numFmt = '#,##0.000';  // Length
+        iRow.getCell(5).numFmt = '#,##0.000';  // Breadth
+        iRow.getCell(6).numFmt = '#,##0.000';  // Height
+        iRow.getCell(7).numFmt = '#,##0.000';  // Quantity
 
-        // Qty formula — references No./L/B/H columns so editing dimensions auto-updates qty
+        // Qty formula — C=No., D=Length, E=Breadth, F=Height; only factors present are included
         const rn = iRow.number;
-        if (item.length != null && item.breadth != null && item.height != null) {
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}*F${rn}`, result: item.quantity };
-        } else if (item.length != null && item.breadth != null) {
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}`, result: item.quantity };
-        } else if (item.length != null && item.height != null) {
-          // L + H without breadth — VERTICAL_WALL_AREA (perimeter × height) and VOLUME area_x_h
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*F${rn}`, result: item.quantity };
-        } else if (item.length != null) {
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}`, result: item.quantity };
-        }
+        const qtyFml = itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null);
+        if (qtyFml) iRow.getCell(7).value = { formula: qtyFml, result: item.quantity };
 
         if (firstItemRowNum === null) firstItemRowNum = rn;
         lastItemRowNum = rn;
@@ -398,12 +435,7 @@ export async function buildBOQExcel(
       const gm = grp.groupMultiplier;
       let totalQtyValue: number | { formula: string; result: number };
       if (firstItemRowNum !== null && lastItemRowNum !== null) {
-        const sumExpr = `SUM(G${firstItemRowNum}:G${lastItemRowNum})`;
-        const factors: string[] = [];
-        if (gm !== 1) factors.push(`${gm}`);
-        if (cf !== 1) factors.push(cf.toFixed(9));
-        const factorStr = factors.length > 0 ? `*${factors.join("*")}` : "";
-        totalQtyValue = { formula: `=${sumExpr}${factorStr}`, result: safeTotal };
+        totalQtyValue = { formula: groupQtyFormula(firstItemRowNum, lastItemRowNum, "G", gm, cf), result: safeTotal };
       } else {
         totalQtyValue = safeTotal;
       }
@@ -491,7 +523,8 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
   titleRow.height = 22;
   ws.addRow([]);
 
-  const hdr = ws.addRow(["S.No.", "Description", "No.", "Length", "Breadth", "Height", "Quantity", "Unit", "Site Location", "Measured Date", "Remarks"]);
+  const mbDrawingUnit = (boq.project.unitSystem ?? "imperial").toLowerCase().includes("metric") ? "m" : "ft";
+  const hdr = ws.addRow(["S.No.", "Description", "No.", `Length (${mbDrawingUnit})`, `Breadth (${mbDrawingUnit})`, `Height (${mbDrawingUnit})`, "Quantity", "Unit", "Site Location", "Measured Date", "Remarks"]);
   hdr.eachCell((c) => applyHeaderStyle(c));
   hdr.height = 20;
 
@@ -532,20 +565,16 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
         iRow.getCell(2).alignment = { horizontal: "left", wrapText: true };
         iRow.getCell(9).alignment = { horizontal: "left" };
         iRow.getCell(11).alignment = { horizontal: "left", wrapText: true };
-        iRow.getCell(7).numFmt = '#,##0.000';
+        iRow.getCell(3).numFmt = '#,##0.###';  // No. — suppress trailing zeros
+        iRow.getCell(4).numFmt = '#,##0.000';  // Length
+        iRow.getCell(5).numFmt = '#,##0.000';  // Breadth
+        iRow.getCell(6).numFmt = '#,##0.000';  // Height
+        iRow.getCell(7).numFmt = '#,##0.000';  // Quantity
 
-        // Qty formula: =No.*Length*Breadth*Height (only dimensions that are present)
+        // Qty formula: C=No., D=Length, E=Breadth, F=Height
         const rn = iRow.number;
-        if (item.length != null && item.breadth != null && item.height != null) {
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}*F${rn}`, result: item.quantity };
-        } else if (item.length != null && item.breadth != null) {
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*E${rn}`, result: item.quantity };
-        } else if (item.length != null && item.height != null) {
-          // L + H without breadth — VERTICAL_WALL_AREA and VOLUME area_x_h
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}*F${rn}`, result: item.quantity };
-        } else if (item.length != null) {
-          iRow.getCell(7).value = { formula: `=C${rn}*D${rn}`, result: item.quantity };
-        }
+        const mbQtyFml = itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null);
+        if (mbQtyFml) iRow.getCell(7).value = { formula: mbQtyFml, result: item.quantity };
 
         if (mbFirstItemRow === null) mbFirstItemRow = rn;
         mbLastItemRow = rn;
@@ -556,12 +585,7 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       const gmMB = grp.groupMultiplier;
       let mbQtyValue: number | { formula: string; result: number };
       if (mbFirstItemRow !== null && mbLastItemRow !== null) {
-        const sumExpr = `SUM(G${mbFirstItemRow}:G${mbLastItemRow})`;
-        const factors: string[] = [];
-        if (gmMB !== 1) factors.push(`${gmMB}`);
-        if (cfMB !== 1) factors.push(cfMB.toFixed(9));
-        const factorStr = factors.length > 0 ? `*${factors.join("*")}` : "";
-        mbQtyValue = { formula: `=${sumExpr}${factorStr}`, result: safeTotalMB };
+        mbQtyValue = { formula: groupQtyFormula(mbFirstItemRow, mbLastItemRow, "G", gmMB, cfMB), result: safeTotalMB };
       } else {
         mbQtyValue = safeTotalMB;
       }
@@ -594,6 +618,7 @@ export function buildBOQHtml(boq: BOQDocument): string {
     month: "long",
     day: "numeric",
   });
+  const htmlDrawingUnit = (boq.project.unitSystem ?? "imperial").toLowerCase().includes("metric") ? "m" : "ft";
 
   const groupRows = (grp: BOQGroup, sno: string) => {
     const overrideTip = grp.isOverridden
@@ -720,16 +745,16 @@ export function buildBOQHtml(boq: BOQDocument): string {
   <table>
     <thead>
       <tr>
-        <th style="width:6%">S.No.</th>
-        <th style="width:30%">Description of Work</th>
-        <th style="width:5%">No.</th>
-        <th style="width:8%">Length</th>
-        <th style="width:8%">Breadth</th>
-        <th style="width:8%">Height</th>
-        <th style="width:9%">Quantity</th>
-        <th style="width:6%">Unit</th>
-        <th style="width:10%">Rate (NRS)</th>
-        <th style="width:10%">Amount (NRS)</th>
+        <th scope="col" style="width:6%">S.No.</th>
+        <th scope="col" style="width:30%">Description of Work</th>
+        <th scope="col" style="width:5%">No.</th>
+        <th scope="col" style="width:8%">Length (${htmlDrawingUnit})</th>
+        <th scope="col" style="width:8%">Breadth (${htmlDrawingUnit})</th>
+        <th scope="col" style="width:8%">Height (${htmlDrawingUnit})</th>
+        <th scope="col" style="width:9%">Quantity</th>
+        <th scope="col" style="width:6%">Unit</th>
+        <th scope="col" style="width:10%">Rate (NRS)</th>
+        <th scope="col" style="width:10%">Amount (NRS)</th>
       </tr>
     </thead>
     <tbody>
@@ -972,14 +997,13 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
         lastGovtItemRow = iRow.number;
       }
 
-      // Group total — qty is SUM of item D cells (×cf when unit conversion applies)
+      // Group total — SUM of item D cells × groupMultiplier × unit conversion factor
+      const gmGovt = grp.groupMultiplier;
       let govtQtyValue: number | { formula: string; result: number };
       if (firstGovtItemRow !== null && lastGovtItemRow !== null) {
-        const sumExpr = `SUM(D${firstGovtItemRow}:D${lastGovtItemRow})`;
-        govtQtyValue = cfGovt !== 1
-          ? { formula: `=${sumExpr}*${cfGovt.toFixed(9)}`, result: grp.totalQuantity }
-          : { formula: `=${sumExpr}`, result: grp.totalQuantity };
+        govtQtyValue = { formula: groupQtyFormula(firstGovtItemRow, lastGovtItemRow, "D", gmGovt, cfGovt), result: grp.totalQuantity };
       } else {
+        // No items — originalQuantity already includes groupMultiplier; only cf remains
         govtQtyValue = cfGovt !== 1
           ? { formula: `=${grp.originalQuantity.toFixed(6)}*${cfGovt.toFixed(9)}`, result: grp.totalQuantity }
           : grp.totalQuantity;
@@ -1092,7 +1116,10 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
   applyGovtGrandTotal(finalRow.getCell(5));
   applyGovtGrandTotal(finalRow.getCell(6));
   finalRow.getCell(6).numFmt = '#,##0.00';
-  finalRow.getCell(6).value = { formula: `=${govtFinalRefs}`, result: boq.finalPayable };
+  // Govt format does not deduct TDS (that is withheld by the paying authority separately).
+  // result must match what the formula computes: GT + contingency + provisional + VAT.
+  const govtFinalPayable = boq.subtotalAfterAdditions + boq.vatAmount;
+  finalRow.getCell(6).value = { formula: `=${govtFinalRefs}`, result: govtFinalPayable };
   finalRow.height = 20;
 
   // ── Signature Block ──────────────────────────────────────────────────────
@@ -1145,7 +1172,8 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
   ws.mergeCells(`A${disclaimer.number}:F${disclaimer.number}`);
   disclaimer.getCell(1).font = { size: 9, italic: true, color: { argb: "FF6B7280" } };
 
-  return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
+  const govtBuf = await wb.xlsx.writeBuffer();
+  return Buffer.from(govtBuf);
 }
 
 // ─── Sheet 3: Rate Analysis Schedule ─────────────────────────────────────────
@@ -1408,6 +1436,7 @@ function addProcurementSheet(
   }
 
   const rateMap = new Map(procurement.rateItems.map(r => [r.rateItemId, r]));
+  const procDrawingUnit = (boq.project.unitSystem ?? "imperial").toLowerCase().includes("metric") ? "m" : "ft";
 
   const ws = wb.addWorksheet(sheetName);
 
@@ -1449,7 +1478,7 @@ function addProcurementSheet(
 
   // Header rows — two rows: resource names + units
   const nameHdr = ws.addRow([
-    "S.No.", "Description", "No.", "Length", "Breadth", "Height", "Quantity", "Unit",
+    "S.No.", "Description", "No.", `Length (${procDrawingUnit})`, `Breadth (${procDrawingUnit})`, `Height (${procDrawingUnit})`, "Quantity", "Unit",
     ...resources.map(r => sanitizeCell(r.name)),
   ]);
   nameHdr.eachCell(c => applyHeaderStyle(c));
@@ -1523,24 +1552,16 @@ function addProcurementSheet(
 
         itemRow.eachCell(c => { borderAll(c); c.alignment = { vertical: "middle", horizontal: "right" }; });
         itemRow.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
-        itemRow.getCell(3).numFmt  = "#,##0.000";
-        itemRow.getCell(4).numFmt  = "#,##0.000";
-        itemRow.getCell(5).numFmt  = "#,##0.000";
-        itemRow.getCell(6).numFmt  = "#,##0.000";
-        itemRow.getCell(7).numFmt  = "#,##0.000"; // Quantity — live cell
+        itemRow.getCell(3).numFmt  = "#,##0.###";  // No. — suppress trailing zeros
+        itemRow.getCell(4).numFmt  = "#,##0.000";  // Length
+        itemRow.getCell(5).numFmt  = "#,##0.000";  // Breadth
+        itemRow.getCell(6).numFmt  = "#,##0.000";  // Height
+        itemRow.getCell(7).numFmt  = "#,##0.000";  // Quantity — live cell
         itemRow.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
 
-        // Qty formula: =No.*Length*Breadth*Height (only dimensions that are present)
-        if (item.length != null && item.breadth != null && item.height != null) {
-          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*E${rowNum}*F${rowNum}`, result: item.quantity };
-        } else if (item.length != null && item.breadth != null) {
-          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*E${rowNum}`, result: item.quantity };
-        } else if (item.length != null && item.height != null) {
-          // L + H without breadth — VERTICAL_WALL_AREA and VOLUME area_x_h
-          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}*F${rowNum}`, result: item.quantity };
-        } else if (item.length != null) {
-          itemRow.getCell(7).value = { formula: `=C${rowNum}*D${rowNum}`, result: item.quantity };
-        }
+        // Qty formula: C=No., D=Length, E=Breadth, F=Height
+        const procItemFml = itemQtyFormula(rowNum, item.length != null, item.breadth != null, item.height != null);
+        if (procItemFml) itemRow.getCell(7).value = { formula: procItemFml, result: item.quantity };
 
         // Resource formulas — reference the Quantity cell (col G) in THIS row
         resources.forEach((res, i) => {
@@ -1604,7 +1625,7 @@ function addProcurementSheet(
       resources.forEach((_, i) => {
         const colIdx = FIXED + 1 + i;
         const refs = subItemRows.map(r => `${colLetter(colIdx)}${r.number}`).join(",");
-        const sumVal = subItemRows.reduce((s, r) => {
+        const itemSum = subItemRows.reduce((s, r) => {
           const v = r.getCell(colIdx).value;
           if (v === null || v === undefined) return s;
           if (typeof v === "number") return s + v;
@@ -1614,8 +1635,11 @@ function addProcurementSheet(
           }
           return s;
         }, 0);
+        // Item resource formulas are per-span (no group multiplier); apply gm at the group subtotal
+        const resSumFormula = procGm !== 1 ? `=SUM(${refs})*${procGm}` : `=SUM(${refs})`;
+        const resSumVal = itemSum * procGm;
         const cell = subTotRow.getCell(colIdx);
-        cell.value = refs ? { formula: `=SUM(${refs})`, result: sumVal } : sumVal;
+        cell.value = refs ? { formula: resSumFormula, result: resSumVal } : resSumVal;
         cell.numFmt = "#,##0.000";
         cell.font = { bold: true };
         cell.alignment = { horizontal: "right", vertical: "middle" };
@@ -1703,7 +1727,7 @@ function addProcurementSheet(
 }
 
 // Convert 1-based column index to Excel letter (A, B, …, Z, AA, …)
-function colLetter(n: number): string {
+export function colLetter(n: number): string {
   let s = "";
   while (n > 0) {
     const rem = (n - 1) % 26;

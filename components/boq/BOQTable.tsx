@@ -335,7 +335,7 @@ function GroupRows({
         <tr className="bg-blue-50 dark:bg-blue-900/20 text-xs border-b border-blue-200 dark:border-blue-800">
           <td colSpan={6} />
           <td className="px-3 py-1 text-right font-semibold text-blue-800 dark:text-blue-300">
-            <div>{qty(grp.totalQuantity, grp.type === "COUNT")}</div>
+            <div>{qty(grp.totalQuantity, grp.type === "COUNT" || grp.type === "COUNT_BY_DISTANCE")}</div>
             {grp.conversionFactor !== 1 && grp.totalQuantity > 0 && (
               <div
                 className="text-[10px] text-amber-700 dark:text-amber-300 font-normal whitespace-nowrap"
