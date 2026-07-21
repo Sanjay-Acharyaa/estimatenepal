@@ -73,6 +73,7 @@ export function BOQTable({ projectId, isAdmin }: Props) {
   if (!boq) return null;
 
   const hasAnyItems = boq.disciplines.some((d) => d.groups.length > 0);
+  const drawingUnit = (boq.project.unitSystem ?? "imperial").toLowerCase().includes("metric") ? "m" : "ft";
 
   return (
     <div className="overflow-x-auto">
@@ -89,9 +90,9 @@ export function BOQTable({ projectId, isAdmin }: Props) {
               <th className="px-3 py-2 text-left w-10">S.No.</th>
               <th className="px-3 py-2 text-left">Description of Work</th>
               <th className="px-3 py-2 text-right w-20">No.</th>
-              <th className="px-3 py-2 text-right w-24">Length</th>
-              <th className="px-3 py-2 text-right w-24">Breadth</th>
-              <th className="px-3 py-2 text-right w-24">Height</th>
+              <th className="px-3 py-2 text-right w-24">Length ({drawingUnit})</th>
+              <th className="px-3 py-2 text-right w-24">Breadth ({drawingUnit})</th>
+              <th className="px-3 py-2 text-right w-24">Height ({drawingUnit})</th>
               <th className="px-3 py-2 text-right w-24">Quantity</th>
               <th className="px-3 py-2 text-center w-16">Unit</th>
               <th className="px-3 py-2 text-right w-32">Rate (NRS)</th>

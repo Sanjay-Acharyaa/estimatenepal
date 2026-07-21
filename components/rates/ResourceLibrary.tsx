@@ -457,7 +457,7 @@ export function ResourceLibrary({ isAdmin }: { isAdmin: boolean }) {
                       setForm(f => {
                         const allowed = RESOURCE_UNITS[newCat] ?? ["unit"];
                         const unit = allowed.includes(f.unit) ? f.unit : (CATEGORY_DEFAULT_UNIT[newCat] ?? "unit");
-                        const wastagePercent = editTarget ? f.wastagePercent : (CATEGORY_DEFAULT_WASTAGE[newCat] ?? "0");
+                        const wastagePercent = editTarget ? f.wastagePercent : String(CATEGORY_DEFAULT_WASTAGE[newCat] ?? 0);
                         return { ...f, category: newCat, unit, wastagePercent };
                       });
                     }}

@@ -239,9 +239,9 @@ export async function buildBOQExcel(
       gRow.getCell(4).alignment = { horizontal: "right" };
       gRow.getCell(5).alignment = { horizontal: "right" };
       gRow.getCell(6).alignment = { horizontal: "right" };
-      gRow.getCell(6).numFmt = '#,##0.000';
-      gRow.getCell(5).numFmt = '#,##0.000';
-      gRow.getCell(4).numFmt = '#,##0.000';
+      gRow.getCell(6).numFmt = '#,##0.00';   // Amount (NRS) — 2dp standard for currency
+      gRow.getCell(5).numFmt = '#,##0.000';  // Rate
+      gRow.getCell(4).numFmt = '#,##0.000';  // Quantity
 
       // Amount formula (overwrites the literal grp.amount)
       gRow.getCell(6).value = { formula: `=D${gRow.number}*E${gRow.number}`, result: grp.amount };
@@ -261,7 +261,7 @@ export async function buildBOQExcel(
     const stRow = summary.addRow([`${disc.name} Sub-Total`, "", "", "", "", subtotalValue]);
     summary.mergeCells(`A${stRow.number}:E${stRow.number}`);
     stRow.eachCell((c) => applyTotalStyle(c));
-    stRow.getCell(6).numFmt = '#,##0.000';
+    stRow.getCell(6).numFmt = '#,##0.00';  // Discipline subtotal is an NRS amount
     stRow.getCell(6).alignment = { horizontal: "right" };
     subtotalRowNums.push(stRow.number);
 
@@ -448,9 +448,9 @@ export async function buildBOQExcel(
         totalQtyValue, grp.unit, grp.rate, grp.amount,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
-      tRow.getCell(7).numFmt = '#,##0.000';
-      tRow.getCell(9).numFmt = '#,##0.000';
-      tRow.getCell(10).numFmt = '#,##0.000';
+      tRow.getCell(7).numFmt = '#,##0.000';  // Quantity
+      tRow.getCell(9).numFmt = '#,##0.000';  // Rate
+      tRow.getCell(10).numFmt = '#,##0.00';  // Amount (NRS) — 2dp standard for currency
       if (grp.isOverridden) applyOverrideStyle(tRow.getCell(9));
 
       // Amount formula
@@ -471,7 +471,7 @@ export async function buildBOQExcel(
     const stRow = ws.addRow([`${sanitizeCell(disc.name)} — Sub-Total`, "", "", "", "", "", "", "", "", disc.subtotal]);
     ws.mergeCells(`A${stRow.number}:I${stRow.number}`);
     stRow.eachCell((c) => applyTotalStyle(c));
-    stRow.getCell(10).numFmt = '#,##0.000';
+    stRow.getCell(10).numFmt = '#,##0.00';  // Discipline subtotal amount (NRS)
     stRow.getCell(10).alignment = { horizontal: "right" };
     if (grpAmtRowNums.length > 0) {
       stRow.getCell(10).value = {
@@ -979,8 +979,8 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
       gRow.getCell(5).alignment = { horizontal: "right" };
       gRow.getCell(6).alignment = { horizontal: "right" };
       gRow.height = 16;
-      gRow.getCell(5).numFmt = '#,##0.000';
-      gRow.getCell(6).numFmt = '#,##0.000';
+      gRow.getCell(5).numFmt = '#,##0.000';  // Rate
+      gRow.getCell(6).numFmt = '#,##0.00';   // Amount (NRS) — 2dp; updated to =F{totalRow} below
       if (cfGovt !== 1) {
         gRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${cfGovt.toFixed(6)} ${grp.unit}`;
       }
@@ -1018,10 +1018,10 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
       tRow.getCell(4).alignment = { horizontal: "right" };
       tRow.getCell(5).alignment = { horizontal: "right" };
       tRow.getCell(6).alignment = { horizontal: "right" };
-      tRow.getCell(5).numFmt = '#,##0.000';
+      tRow.getCell(5).numFmt = '#,##0.000';  // Rate
       const tRowNum = tRow.number;
       tRow.getCell(6).value = { formula: `=D${tRowNum}*E${tRowNum}`, result: grp.amount };
-      tRow.getCell(6).numFmt = '#,##0.000';
+      tRow.getCell(6).numFmt = '#,##0.00';   // Amount (NRS) — 2dp standard for currency
       if (cfGovt !== 1) {
         tRow.getCell(3).note = `Unit: ${grp.unit} (converted from ${grp.originalUnit})\nFactor: 1 ${grp.originalUnit} = ${cfGovt.toFixed(6)} ${grp.unit}`;
       }
@@ -1594,12 +1594,7 @@ function addProcurementSheet(
       if (subItemRows.length > 0) {
         const firstRn = subItemRows[0].number;
         const lastRn  = subItemRows[subItemRows.length - 1].number;
-        const sumExpr = `SUM(G${firstRn}:G${lastRn})`;
-        const factors: string[] = [];
-        if (procGm !== 1) factors.push(`${procGm}`);
-        if (procCf !== 1) factors.push(procCf.toFixed(9));
-        const factorStr = factors.length > 0 ? `*${factors.join("*")}` : "";
-        procGrpQtyValue = { formula: `=${sumExpr}${factorStr}`, result: grp.totalQuantity };
+        procGrpQtyValue = { formula: groupQtyFormula(firstRn, lastRn, "G", procGm, procCf), result: grp.totalQuantity };
       } else {
         procGrpQtyValue = grp.totalQuantity;
       }

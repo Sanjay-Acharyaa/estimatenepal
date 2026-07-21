@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 
 interface Props {
   projectId: string;
@@ -48,6 +48,9 @@ const EXPORTS: { type: ExportType; label: string; desc: string; icon: string; co
 // ── Govt export modal ─────────────────────────────────────────────────────────
 
 function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+
   const [fields, setFields] = useState({
     ministry: "",
     department: "",
@@ -63,6 +66,12 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
   });
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Focus the panel on mount so screen readers announce the dialog
+  useEffect(() => {
+    const timer = setTimeout(() => panelRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   const set = (k: keyof typeof fields) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields(f => ({ ...f, [k]: e.target.value }));
@@ -92,8 +101,8 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
       a.remove();
       URL.revokeObjectURL(url);
       onClose();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setDownloading(false);
     }
@@ -112,14 +121,38 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onKeyDown={e => {
+        if (e.key === "Escape") { onClose(); return; }
+        if (e.key !== "Tab") return;
+        const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+          "input, select, button, textarea, [tabindex]:not([tabindex='-1'])"
+        );
+        if (!focusable || focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+        } else {
+          if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+        }
+      }}
+    >
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto outline-none"
+      >
         <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Government BOQ (DUDBC Format)</h3>
+            <h3 id={titleId} className="font-semibold text-gray-900 dark:text-gray-100">Government BOQ (DUDBC Format)</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fill optional fields for the government header. All fields can be left blank.</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">x</button>
+          <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none px-1">×</button>
         </div>
         <div className="p-5 space-y-3">
           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Government Office</p>
@@ -136,7 +169,7 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
           {input("Prepared by (तयार गर्ने)", "preparedBy")}
           {input("Checked by (जाँच गर्ने)", "checkedBy")}
           {input("Approved by (स्वीकृत)", "approvedBy")}
-          {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg p-2">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg p-2">{error}</p>}
         </div>
         <div className="flex gap-3 p-5 border-t border-gray-100 dark:border-gray-700">
           <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -287,8 +320,8 @@ export function ExportButtons({ projectId }: Props) {
       a.click();
       a.remove();
       URL.revokeObjectURL(objectUrl);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setDownloading(null);
     }

@@ -17,7 +17,7 @@ describe("RESOURCE_UNITS coverage", () => {
   });
 
   it("has no empty unit lists", () => {
-    for (const [cat, units] of Object.entries(RESOURCE_UNITS)) {
+    for (const [, units] of Object.entries(RESOURCE_UNITS)) {
       expect(units.length).toBeGreaterThan(0);
       for (const u of units) {
         expect(typeof u).toBe("string");

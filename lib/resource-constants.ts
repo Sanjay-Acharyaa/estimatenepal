@@ -68,15 +68,15 @@ export const SOURCE_BADGE: Record<string, string> = {
 };
 
 // Default wastage % per category — used by ResourceLibrary form when creating a new resource.
-export const CATEGORY_DEFAULT_WASTAGE: Record<string, string> = {
-  CEMENT:           "3",
-  FINE_AGGREGATE:   "5",
-  COARSE_AGGREGATE: "5",
-  MASONRY:          "5",
-  STEEL:            "3",
-  TIMBER:           "10",
-  LABOUR_SKILLED:   "0",
-  LABOUR_UNSKILLED: "0",
-  EQUIPMENT:        "0",
-  OTHER:            "0",
+export const CATEGORY_DEFAULT_WASTAGE: Record<string, number> = {
+  CEMENT:           3,
+  FINE_AGGREGATE:   5,
+  COARSE_AGGREGATE: 5,
+  MASONRY:          5,
+  STEEL:            3,
+  TIMBER:           10,
+  LABOUR_SKILLED:   0,
+  LABOUR_UNSKILLED: 0,
+  EQUIPMENT:        0,
+  OTHER:            0,
 };
