@@ -272,6 +272,12 @@ function GroupRows({
               {grp.rateCode && (
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Code: {grp.rateCode}</div>
               )}
+              {grp.conversionFactor !== 1 && (
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 font-normal">
+                  {qty(grp.originalQuantity)} {grp.originalUnit} → {qty(grp.totalQuantity)} {grp.unit}
+                  <span className="ml-1 opacity-70">(×{grp.conversionFactor.toFixed(6)})</span>
+                </div>
+              )}
             </div>
           </div>
         </td>
@@ -325,7 +331,12 @@ function GroupRows({
         <tr className="bg-blue-50 dark:bg-blue-900/20 text-xs border-b border-blue-200 dark:border-blue-800">
           <td colSpan={6} />
           <td className="px-3 py-1 text-right font-semibold text-blue-800 dark:text-blue-300">
-            {qty(grp.totalQuantity, grp.type === "COUNT")}
+            <div>{qty(grp.totalQuantity, grp.type === "COUNT")}</div>
+            {grp.conversionFactor !== 1 && (
+              <div className="text-[10px] text-amber-500 dark:text-amber-400 font-normal whitespace-nowrap">
+                {qty(grp.originalQuantity)} {grp.originalUnit}
+              </div>
+            )}
           </td>
           <td className="px-3 py-1 text-center text-blue-700 dark:text-blue-400">{grp.unit}</td>
           <td className="px-3 py-1 text-right text-blue-700 dark:text-blue-400">{NRS(grp.rate)}</td>

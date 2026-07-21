@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { redis } from "./redis";
 import { BOQ_CACHE_TTL, BOQ_MAX_CACHE_BYTES } from "./cache-constants";
+import { getConversionFactor } from "./unit-conversions";
 
 export interface BOQItem {
   id: string;
@@ -26,6 +27,9 @@ export interface BOQGroup {
   items: BOQItem[];
   totalQuantity: number;
   unit: string;
+  originalQuantity: number;   // raw measured quantity before conversion
+  originalUnit: string;       // raw measured unit (e.g. "cu ft")
+  conversionFactor: number;   // 1.0 if no conversion was applied
   rate: number;
   amount: number;
   rateItemId: string | null;
@@ -263,8 +267,23 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         unit = (layer.items[0]?.unit ?? "").replace(/ \(set [^)]+\)/g, "").trim();
       }
 
+      // Attempt unit conversion to match rateItem.unit
+      let originalQuantity = totalQuantity;
+      const originalUnit = unit;
+      let conversionFactor = 1;
+
+      if (rateItem) {
+        const factor = getConversionFactor(unit, rateItem.unit);
+        if (factor !== null && factor !== 1) {
+          conversionFactor = factor;
+          totalQuantity = totalQuantity * factor;
+          unit = rateItem.unit;
+        }
+      }
+
       // Final guard — malformed additionalParams or multiplier can still produce NaN/Infinity
       if (!Number.isFinite(totalQuantity)) totalQuantity = 0;
+      if (!Number.isFinite(originalQuantity)) originalQuantity = 0;
 
       // Prefer district rate over base rate when the district rate is explicitly > 0.
       // A district rate of 0 is treated as "not set" (import artefact or missing entry)
@@ -362,6 +381,9 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         }),
         totalQuantity,
         unit,
+        originalQuantity,
+        originalUnit,
+        conversionFactor,
         rate,
         amount: totalQuantity * rate,
         rateItemId,

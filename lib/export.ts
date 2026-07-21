@@ -180,7 +180,10 @@ export async function buildBOQExcel(
 
     let dSno = 1;
     for (const grp of disc.groups) {
-      const gRow = summary.addRow([`${sno}.${dSno}`, sanitizeCell(grp.name), grp.unit, grp.totalQuantity, grp.rate, grp.amount]);
+      const qtyValue = grp.conversionFactor !== 1
+        ? { formula: `=${grp.originalQuantity.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: grp.totalQuantity }
+        : grp.totalQuantity;
+      const gRow = summary.addRow([`${sno}.${dSno}`, sanitizeCell(grp.name), grp.unit, qtyValue, grp.rate, grp.amount]);
       gRow.eachCell((c) => { applyGroupStyle(c); borderAll(c); });
 
       // Yellow for overridden rate
@@ -194,6 +197,10 @@ export async function buildBOQExcel(
       gRow.getCell(6).numFmt = '#,##0.000';
       gRow.getCell(5).numFmt = '#,##0.000';
       gRow.getCell(4).numFmt = '#,##0.000';
+
+      if (grp.conversionFactor !== 1) {
+        gRow.getCell(4).note = `Measured: ${grp.originalQuantity.toFixed(3)} ${grp.originalUnit}\nConversion: 1 ${grp.originalUnit} = ${grp.conversionFactor} ${grp.unit}`;
+      }
 
       dSno++;
     }
@@ -279,7 +286,7 @@ export async function buildBOQExcel(
           item.breadth ?? null,
           item.height ?? null,
           item.quantity,
-          grp.unit,
+          item.unit,
           null,
           null,
         ]);
@@ -295,9 +302,13 @@ export async function buildBOQExcel(
 
       // Group total row
       const safeTotal = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
+      const safeOrig  = Number.isFinite(grp.originalQuantity) ? grp.originalQuantity : 0;
+      const totalQtyValue = grp.conversionFactor !== 1
+        ? { formula: `=${safeOrig.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: safeTotal }
+        : safeTotal;
       const tRow = ws.addRow([
         "", `Total — ${sanitizeCell(grp.name)}`, "", "", "", "",
-        safeTotal, grp.unit, grp.rate, grp.amount,
+        totalQtyValue, grp.unit, grp.rate, grp.amount,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
       tRow.getCell(7).numFmt = '#,##0.000';
@@ -383,7 +394,7 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
           item.breadth ?? null,
           item.height ?? null,
           item.quantity,
-          grp.unit,
+          item.unit,
           item.siteLocation ?? "",
           item.measuredDate ? new Date(item.measuredDate).toLocaleDateString("en-NP") : "",
           item.notes ?? "",
@@ -401,8 +412,12 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       }
 
       const safeTotalMB = Number.isFinite(grp.totalQuantity) ? grp.totalQuantity : 0;
+      const safeOrigMB  = Number.isFinite(grp.originalQuantity) ? grp.originalQuantity : 0;
+      const mbQtyValue = grp.conversionFactor !== 1
+        ? { formula: `=${safeOrigMB.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: safeTotalMB }
+        : safeTotalMB;
       const tRow = ws.addRow([
-        "", `Total — ${grp.name}`, "", "", "", "", safeTotalMB, grp.unit,
+        "", `Total — ${grp.name}`, "", "", "", "", mbQtyValue, grp.unit,
       ]);
       tRow.eachCell((c) => applyTotalStyle(c));
       tRow.getCell(7).numFmt = '#,##0.000';
@@ -443,7 +458,7 @@ export function buildBOQHtml(boq: BOQDocument): string {
         <td class="num">${item.breadth != null ? qty(item.breadth) : ""}</td>
         <td class="num">${item.height != null ? qty(item.height) : ""}</td>
         <td class="num">${qty(item.quantity)}</td>
-        <td>${grp.unit}</td>
+        <td>${item.unit || grp.originalUnit || grp.unit}</td>
         <td></td>
         <td></td>
       </tr>`
@@ -781,13 +796,16 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
 
       // Sub-items (measurement lines)
       for (const item of grp.items) {
-        const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(grp.unit), item.quantity.toFixed(3), "", ""]);
+        const iRow = ws.addRow(["", sanitizeCell(`  ${item.label}`), sanitizeCell(item.unit || grp.originalUnit || grp.unit), item.quantity.toFixed(3), "", ""]);
         iRow.eachCell((c) => applyGovtItemRow(c));
         iRow.getCell(4).alignment = { horizontal: "right" };
       }
 
       // Group total
-      const tRow = ws.addRow(["", "जम्मा / Total", sanitizeCell(grp.unit), grp.totalQuantity.toFixed(3), NRS(grp.rate), NRS(grp.amount)]);
+      const govtQtyValue = grp.conversionFactor !== 1
+        ? { formula: `=${grp.originalQuantity.toFixed(6)}*${grp.conversionFactor.toFixed(9)}`, result: grp.totalQuantity }
+        : grp.totalQuantity;
+      const tRow = ws.addRow(["", "जम्मा / Total", sanitizeCell(grp.unit), govtQtyValue, NRS(grp.rate), NRS(grp.amount)]);
       tRow.eachCell((c) => applyGovtTotalRow(c));
       tRow.getCell(2).alignment = { horizontal: "right" };
       tRow.getCell(4).alignment = { horizontal: "right" };
@@ -1185,7 +1203,7 @@ function addProcurementSheet(
   titleRow.height = 22;
 
   const subtitleRow = ws.addRow([
-    `Formula: Qty/Unit × (1 + Wastage%) × Quantity (col G)  |  Edit Quantity → resource columns update automatically  (DUDBC standard)`
+    `Formula: Qty/Unit × (1 + Wastage%) × BOQ Qty (col G)  |  When unit mismatch, BOQ Qty includes conversion factor (e.g. cu ft → Cu.m. × 0.028317)  (DUDBC standard)`
   ]);
   ws.mergeCells(`A${subtitleRow.number}:${lastCol}${subtitleRow.number}`);
   subtitleRow.getCell(1).font = { size: 9, italic: true, color: { argb: "FF6B7280" } };
@@ -1282,9 +1300,16 @@ function addProcurementSheet(
           if (!line) return;
           const qpu = parseFloat(line.qtyPerUnit.toFixed(3));
           const wst = parseFloat(line.wastagePercent.toFixed(3));
-          const computed = parseFloat((qpu * (1 + wst / 100) * item.quantity).toFixed(3));
+          const cf  = grp.conversionFactor !== 1 ? grp.conversionFactor : 1;
+          // item.quantity is in the original takeoff unit (e.g. sq ft)
+          // qpu is per rate unit (e.g. per Cu.m.)
+          // so we must apply the conversion factor before multiplying
+          const computed = parseFloat((qpu * (1 + wst / 100) * item.quantity * cf).toFixed(3));
+          const formula  = cf !== 1
+            ? `=${QTY_COL}${rowNum}*${cf.toFixed(9)}*${qpu}*(1+${wst}/100)`
+            : `=${QTY_COL}${rowNum}*${qpu}*(1+${wst}/100)`;
           const cell = itemRow.getCell(colIdx);
-          cell.value = { formula: `=${QTY_COL}${rowNum}*${qpu}*(1+${wst}/100)`, result: computed };
+          cell.value = { formula, result: computed };
           cell.numFmt = "#,##0.000";
           cell.alignment = { horizontal: "right", vertical: "middle" };
         });
