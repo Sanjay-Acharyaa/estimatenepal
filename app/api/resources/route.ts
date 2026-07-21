@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
       userId: token.id as string,
       event: "resource.create",
       resourceId: resource.id,
-      meta: { name: resource.name } as any,
+      meta: { name: resource.name },
       ipAddress: ip,
     });
 

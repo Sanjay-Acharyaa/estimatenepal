@@ -106,7 +106,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       userId: token.id as string,
       event: "resource.update",
       resourceId: resource.id,
-      meta: { name: resource.name } as any,
+      meta: { name: resource.name },
       ipAddress: ip,
     });
 
@@ -158,7 +158,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
       userId: token.id as string,
       event: "resource.delete",
       resourceId: params.id,
-      meta: { name: existing.name } as any,
+      meta: { name: existing.name },
       ipAddress: ip,
     });
 

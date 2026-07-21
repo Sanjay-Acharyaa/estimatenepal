@@ -56,6 +56,7 @@ const NRS = (n: number) => fmtNum(n, 2);
 export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   const qtyInputId = useId();
   const loadAllControllerRef = useRef<AbortController | null>(null);
   const loadLinesControllerRef = useRef<AbortController | null>(null);
@@ -375,7 +376,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 outline-none"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="rla-title"
+      aria-labelledby={titleId}
       onKeyDown={e => {
         if (e.key === "Escape") { onClose(); return; }
         if (e.key === "Tab") {
@@ -405,7 +406,7 @@ export function ResourceLineAnalysis({ rate, isAdmin, onClose, onRateUpdated }: 
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{rate.code}</span>
-              <h2 id="rla-title" className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{rate.description.slice(0, 80)}</h2>
+              <h2 id={titleId} className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{rate.description.slice(0, 80)}</h2>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Resource-based analysis per {rate.unit} &middot; Current base rate: NRS {NRS(displayBaseRate)}
