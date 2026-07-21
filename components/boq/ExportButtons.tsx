@@ -197,6 +197,7 @@ export function ExportButtons({ projectId }: Props) {
   const [saving, setSaving]             = useState(false);
   const [saveMsg, setSaveMsg]           = useState("");
   const [newColLabel, setNewColLabel]   = useState("");
+  const [customColError, setCustomColError] = useState("");
   const [showGovtModal, setShowGovtModal] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -277,7 +278,15 @@ export function ExportButtons({ projectId }: Props) {
 
   function addCustomCol() {
     const label = newColLabel.trim();
-    if (!label || config.customCols.includes(label)) return;
+    if (label.includes(",")) {
+      setCustomColError("Column labels cannot contain commas.");
+      return;
+    }
+    if (!label || config.customCols.includes(label)) {
+      setCustomColError("");
+      return;
+    }
+    setCustomColError("");
     const previous = config;
     const next = { ...config, customCols: [...config.customCols, label] };
     setConfig(next);
@@ -357,12 +366,14 @@ export function ExportButtons({ projectId }: Props) {
                     disabled={i === 0}
                     className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-25 leading-none text-xs"
                     title="Move up"
+                    aria-label={`Move ${COL_LABELS[key]} column up`}
                   >^</button>
                   <button
                     onClick={() => moveCol(i, 1)}
                     disabled={i === config.colOrder.length - 1}
                     className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-25 leading-none text-xs"
                     title="Move down"
+                    aria-label={`Move ${COL_LABELS[key]} column down`}
                   >v</button>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer flex-1 select-none">
@@ -386,7 +397,8 @@ export function ExportButtons({ projectId }: Props) {
                   onClick={() => removeCustomCol(label)}
                   className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs"
                   title="Remove column"
-                >x</button>
+                  aria-label={`Remove ${label} column`}
+                >×</button>
               </div>
             ))}
           </div>
@@ -398,7 +410,7 @@ export function ExportButtons({ projectId }: Props) {
           <div className="flex gap-2">
             <input
               value={newColLabel}
-              onChange={e => setNewColLabel(e.target.value)}
+              onChange={e => { setNewColLabel(e.target.value); setCustomColError(""); }}
               onKeyDown={e => e.key === "Enter" && addCustomCol()}
               placeholder="Column label…"
               maxLength={40}
@@ -412,6 +424,9 @@ export function ExportButtons({ projectId }: Props) {
               Add
             </button>
           </div>
+          {customColError && (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400">{customColError}</p>
+          )}
         </div>
 
         <p className="text-xs text-gray-400 dark:text-gray-500">

@@ -2,21 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { generateBOQ } from "@/lib/boq";
-import { handleApiError, unauthorized, notFound } from "@/lib/errors";
+import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkExportRateLimit, getClientIp } from "@/lib/security";
 import { withSemaphore } from "@/lib/semaphore";
 import ExcelJS from "exceljs";
 import { trackEvent } from "@/lib/analytics";
 
+const PROJECT_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 // GET /api/projects/[id]/boq/export/procurement
 // Generates a Material Procurement Schedule Excel.
-// For each BOQ group: quantity × (1 + wastagePct/100) = material to order.
+// Column layout: A=SN, B=Discipline, C=Description, D=Unit, E=BOQ Qty, F=Wastage%, G=Order Qty, H=Rate, I=Amount
+// Formula: Order Qty (G) = =E*(1+F/100)   |   Amount (I) = =G*H
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const ip = getClientIp(req);
     const limited = await checkExportRateLimit(ip);
     if (limited) return limited;
+
+    if (!PROJECT_ID_RE.test(params.id) || params.id.length > 128)
+      return apiError("VALIDATION_ERROR", "Invalid project ID.", 400);
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) throw unauthorized();
@@ -37,11 +43,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       for (const bg of disc.groups) boqTotalsMap.set(bg.id, bg.totalQuantity);
     }
 
-    // Pull wastagePct per group (average across items)
+    // Pull wastagePct per group — include rawQuantity + isNegative for quantity-weighted average
     const groups = await prisma.takeoffGroup.findMany({
       where: { projectId: params.id, parentId: { not: null } },
       include: {
-        items: { select: { wastagePct: true } },
+        items: { select: { wastagePct: true, rawQuantity: true, isNegative: true } },
         rateItem: { select: { description: true, unit: true, baseRate: true } },
         discipline: { select: { name: true } },
       },
@@ -52,18 +58,36 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const ws = wb.addWorksheet("Procurement Schedule");
 
-    // Header row
+    // Column layout: A–I
     ws.columns = [
-      { key: "sn", width: 6 },
-      { key: "discipline", width: 20 },
-      { key: "item", width: 40 },
-      { key: "unit", width: 10 },
-      { key: "boqQty", width: 14 },
-      { key: "wastagePct", width: 12 },
-      { key: "orderQty", width: 16 },
-      { key: "rate", width: 14 },
-      { key: "amount", width: 16 },
+      { key: "sn",         width: 6  },  // A
+      { key: "discipline", width: 20 },  // B
+      { key: "item",       width: 40 },  // C
+      { key: "unit",       width: 10 },  // D  ← unit of the rate item (post-conversion)
+      { key: "boqQty",     width: 14 },  // E  ← col referenced by Order Qty formula
+      { key: "wastagePct", width: 12 },  // F  ← col referenced by Order Qty formula
+      { key: "orderQty",   width: 16 },  // G  ← =E*(1+F/100); col referenced by Amount formula
+      { key: "rate",       width: 14 },  // H  ← col referenced by Amount formula
+      { key: "amount",     width: 16 },  // I  ← =G*H
     ];
+
+    // Sub-header: formula legend so the reader knows how each column is computed
+    const legendRow = ws.addRow([
+      `PROCUREMENT SCHEDULE — ${boq.project.name.toUpperCase()}`
+    ]);
+    ws.mergeCells(`A${legendRow.number}:I${legendRow.number}`);
+    legendRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E3A5F" } };
+    legendRow.getCell(1).alignment = { horizontal: "center" };
+    legendRow.height = 22;
+
+    const formulaNote = ws.addRow([
+      "Formula: Order Qty (G) = BOQ Qty (E) × (1 + Wastage% (F) / 100)   |   Order Amount (I) = Order Qty (G) × Rate (H)"
+    ]);
+    ws.mergeCells(`A${formulaNote.number}:I${formulaNote.number}`);
+    formulaNote.getCell(1).font = { size: 9, italic: true, color: { argb: "FF6B7280" } };
+    formulaNote.getCell(1).alignment = { horizontal: "center" };
+
+    ws.addRow([]);
 
     const headerRow = ws.addRow([
       "SN", "Discipline", "Description", "Unit",
@@ -79,41 +103,64 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     let sn = 1;
     let totalOrderAmount = 0;
+    let firstDataRowNum: number | null = null;
+    let lastDataRowNum:  number | null = null;
 
     for (const grp of groups) {
-      const avgWastage = grp.items.length > 0
-        ? grp.items.reduce((s, i) => s + i.wastagePct, 0) / grp.items.length
-        : 0;
+      // Quantity-weighted wastage — more accurate than arithmetic mean when items have
+      // very different sizes (a 50m³ item at 3% and a 0.1m³ item at 10% should give ~3%, not 6.5%).
+      // Only positive (non-deduction) items contribute to material wastage.
+      let totalPositiveRaw = 0;
+      let weightedWastageSum = 0;
+      for (const item of grp.items) {
+        if (!item.isNegative) {
+          const raw = Number(item.rawQuantity);
+          totalPositiveRaw += raw;
+          weightedWastageSum += raw * Number(item.wastagePct);
+        }
+      }
+      const avgWastage = totalPositiveRaw > 0 ? weightedWastageSum / totalPositiveRaw : 0;
 
-      // Use the totalQuantity from generateBOQ() — it correctly applies height/breadth/method
-      // for VOLUME (area_x_h and lbh) and VERTICAL_WALL_AREA, unlike rawSum × multiplier alone.
-      const boqQty = boqTotalsMap.get(grp.id) ?? 0;
-      const orderQty = boqQty * (1 + avgWastage / 100);
-      const rate = grp.rateItem?.baseRate ?? 0;
-      const orderAmount = orderQty * rate;
-      totalOrderAmount += orderAmount;
+      // totalQuantity from generateBOQ() already applies height/breadth/volume method and unit conversion.
+      // The unit shown in column D is grp.rateItem.unit — the post-conversion unit — so E, G are in that unit.
+      const boqQtyNum = parseFloat((boqTotalsMap.get(grp.id) ?? 0).toFixed(3));
+      const rateNum   = parseFloat(Number(grp.rateItem?.baseRate ?? 0).toFixed(2));
+
+      // Computed values used as formula result seeds (ExcelJS `result` is the initial display value;
+      // Excel recalculates from the formula string on open).
+      const orderQtyComputed    = boqQtyNum * (1 + avgWastage / 100);
+      const orderAmountComputed = orderQtyComputed * rateNum;
+      totalOrderAmount += orderAmountComputed;
 
       const row = ws.addRow({
-        sn: sn++,
+        sn:         sn++,
         discipline: grp.discipline?.name ?? "",
-        item: grp.name,
-        unit: grp.rateItem?.unit ?? "",
-        boqQty: parseFloat(boqQty.toFixed(3)),
+        item:       grp.name,
+        unit:       grp.rateItem?.unit ?? "",
+        boqQty:     boqQtyNum,
         wastagePct: parseFloat(avgWastage.toFixed(1)),
-        orderQty: parseFloat(orderQty.toFixed(3)),
-        rate: parseFloat(rate.toFixed(2)),
-        amount: parseFloat(orderAmount.toFixed(2)),
+        orderQty:   null,   // set to formula below
+        rate:       rateNum,
+        amount:     null,   // set to formula below
       });
 
-      row.getCell("boqQty").numFmt = "#,##0.000";
+      const rn = row.number;
+      if (firstDataRowNum === null) firstDataRowNum = rn;
+      lastDataRowNum = rn;
+
+      // Excel formulas — match the system calculation exactly so cells auto-update on edit
+      row.getCell("orderQty").value = { formula: `=E${rn}*(1+F${rn}/100)`, result: parseFloat(orderQtyComputed.toFixed(3)) };
+      row.getCell("amount").value   = { formula: `=G${rn}*H${rn}`,         result: parseFloat(orderAmountComputed.toFixed(2)) };
+
+      row.getCell("boqQty").numFmt   = "#,##0.000";
       row.getCell("orderQty").numFmt = "#,##0.000";
-      row.getCell("rate").numFmt = "#,##0.00";
-      row.getCell("amount").numFmt = "#,##0.00";
+      row.getCell("rate").numFmt     = "#,##0.00";
+      row.getCell("amount").numFmt   = "#,##0.00";
       row.getCell("wastagePct").numFmt = "0.0";
 
       if (avgWastage > 0) {
         row.getCell("wastagePct").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF9C3" } };
-        row.getCell("orderQty").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FFF4" } };
+        row.getCell("orderQty").fill   = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FFF4" } };
       }
 
       row.eachCell(cell => {
@@ -122,22 +169,30 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       });
     }
 
-    // Total row
+    // Total row — SUM formula so it stays live when user adjusts quantities
     const totalRow = ws.addRow({
       sn: "", discipline: "", item: "TOTAL PROCUREMENT BUDGET",
-      unit: "", boqQty: "", wastagePct: "", orderQty: "", rate: "",
-      amount: parseFloat(totalOrderAmount.toFixed(2)),
+      unit: "", boqQty: null, wastagePct: null, orderQty: null, rate: null,
+      amount: null,
     });
     totalRow.eachCell(cell => {
-      cell.font = { bold: true };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
+      cell.font   = { bold: true };
+      cell.fill   = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
       cell.border = { top: { style: "medium" }, bottom: { style: "medium" } };
     });
+    if (firstDataRowNum !== null && lastDataRowNum !== null) {
+      totalRow.getCell("amount").value = {
+        formula: `=SUM(I${firstDataRowNum}:I${lastDataRowNum})`,
+        result:  parseFloat(totalOrderAmount.toFixed(2)),
+      };
+    } else {
+      totalRow.getCell("amount").value = parseFloat(totalOrderAmount.toFixed(2));
+    }
     totalRow.getCell("amount").numFmt = "#,##0.00";
 
     // Notes row
     ws.addRow([]);
-    const noteRow = ws.addRow(["Note: Order Qty = BOQ Qty × (1 + Wastage%). Wastage % is set per takeoff item and represents material over-order for cutting, breakage, and installation losses."]);
+    const noteRow = ws.addRow(["Note: Order Qty = BOQ Qty × (1 + Wastage%). Wastage% is quantity-weighted across takeoff items. Editing BOQ Qty or Rate cells will automatically update Order Qty and Order Amount."]);
     noteRow.getCell(1).font = { italic: true, size: 9, color: { argb: "FF6B7280" } };
     ws.mergeCells(`A${noteRow.number}:I${noteRow.number}`);
 
