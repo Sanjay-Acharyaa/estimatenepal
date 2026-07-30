@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (childRows.length > 0) await tx.assemblyGroup.createMany({ data: childRows });
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: orgId ?? "SYSTEM",
       userId: token.id as string,
       event: "assembly.duplicated",

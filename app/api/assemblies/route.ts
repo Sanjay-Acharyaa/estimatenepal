@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const { name, description, category, groups = [] } = parsed.data;
 

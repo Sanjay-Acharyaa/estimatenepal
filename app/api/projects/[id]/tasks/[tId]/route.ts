@@ -36,7 +36,7 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Validate new assignee if changing
     if (parsed.data.assignedToId && parsed.data.assignedToId !== task.assignedToId) {
@@ -82,7 +82,7 @@ export async function PUT(
       }).catch((err) => console.error("[tasks/update] notification failed:", err));
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "task.updated",
@@ -121,7 +121,7 @@ export async function DELETE(
 
     await prisma.projectTask.delete({ where: { id: params.tId } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "task.deleted",

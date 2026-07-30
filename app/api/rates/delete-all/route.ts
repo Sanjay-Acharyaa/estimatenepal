@@ -43,7 +43,7 @@ export async function DELETE(req: NextRequest) {
 
     const { count } = await prisma.rateItem.deleteMany({ where });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: token.orgId as string,
       userId: token.id as string,
       event: "rate_items.bulk_deleted",

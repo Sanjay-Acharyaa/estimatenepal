@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const data = parsed.data;
     if (Object.keys(data).length === 0) return apiError("VALIDATION_ERROR", "No fields provided.", 400);
@@ -62,7 +62,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
     redis.del(ck(orgId, existing.rateItemId)).catch(() => {});
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId,
       userId: token.id as string,
       event: "analysis_line.update",
@@ -102,7 +102,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
     redis.del(ck(orgId, existing.rateItemId)).catch(() => {});
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId,
       userId: token.id as string,
       event: "analysis_line.delete",

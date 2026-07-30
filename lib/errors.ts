@@ -24,7 +24,7 @@ export function apiError(
 
 export function handleApiError(err: unknown): NextResponse {
   if (err instanceof ZodError) {
-    return apiError("VALIDATION_ERROR", "Invalid input.", 400, err.flatten());
+    return apiError("VALIDATION_ERROR", "Invalid input.", 400, err.flatten(i => i.message));
   }
 
   if (err instanceof ApiException) {

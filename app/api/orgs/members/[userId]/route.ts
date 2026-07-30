@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { userId: st
       select: { id: true, name: true, email: true, role: true },
     });
 
-    await appendAuditLog({ orgId, userId: token.id as string, event: "member.role_changed",
+    appendAuditLog({ orgId, userId: token.id as string, event: "member.role_changed",
       resourceId: params.userId, meta: { newRole: body.role }, ipAddress: ip });
 
     return NextResponse.json(updated);
@@ -67,7 +67,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { userId: s
       data: { orgId: null },
     });
 
-    await appendAuditLog({ orgId, userId: token.id as string, event: "member.removed",
+    appendAuditLog({ orgId, userId: token.id as string, event: "member.removed",
       resourceId: params.userId, meta: { removedEmail: target.email }, ipAddress: ip });
 
     return NextResponse.json({ ok: true });

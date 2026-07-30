@@ -38,7 +38,7 @@ export async function PATCH(
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);
     if (!parsed.success) {
-      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
     }
 
     const existing = await prisma.testimonial.findUnique({ where: { id: params.id } });

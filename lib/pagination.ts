@@ -1,10 +1,10 @@
 export const DEFAULT_PAGE_LIMIT = 30;
 export const MAX_PAGE_LIMIT = 100;
 
-export function parsePagination(searchParams: URLSearchParams) {
+export function parsePagination(searchParams: URLSearchParams, maxLimit = MAX_PAGE_LIMIT) {
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const limit = Math.min(
-    MAX_PAGE_LIMIT,
+    maxLimit,
     Math.max(1, parseInt(searchParams.get("limit") ?? String(DEFAULT_PAGE_LIMIT), 10) || DEFAULT_PAGE_LIMIT)
   );
   const skip = (page - 1) * limit;

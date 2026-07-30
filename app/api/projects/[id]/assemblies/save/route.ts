@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const { name, description, category, groupIds } = parsed.data;
 
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "assembly.saved_from_project",

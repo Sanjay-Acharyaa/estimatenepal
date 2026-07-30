@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const rate = await prisma.rateItem.create({
       data: {
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: token.orgId as string,
       userId: token.id as string,
       event: "rate_item.created",

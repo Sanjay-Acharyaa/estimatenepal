@@ -35,8 +35,6 @@ export function DrawingScalePanel({
   const [preset, setPreset] = useState<CommonScalePreset>(DEFAULT_PRESET);
   const [feet, setFeet] = useState("");
   const [inches, setInches] = useState("");
-  const [applyMultiple, setApplyMultiple] = useState(false);
-
   const manualReady =
     mode === "manual" &&
     pixelLength !== null &&
@@ -148,17 +146,6 @@ export function DrawingScalePanel({
           )}
         </div>
       )}
-
-      {/* Apply to multiple */}
-      <label className="flex items-center gap-2 mb-4 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={applyMultiple}
-          onChange={(e) => setApplyMultiple(e.target.checked)}
-          className="accent-blue-600"
-        />
-        <span className="text-xs text-gray-600">Apply this scale to multiple drawings</span>
-      </label>
 
       <div className="flex gap-3">
         <button

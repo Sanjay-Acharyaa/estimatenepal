@@ -19,7 +19,9 @@ export type TakeoffItem = {
   quantity: number;
   unit: string;
   scaleUsed: number;
+  multiplier: number;
   isLocked: boolean;
+  isNegative: boolean;
   version: number;
   wastagePct: number;
   siteLocation: string | null;

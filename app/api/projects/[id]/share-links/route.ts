@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const shareToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = parsed.data.expiresInDays
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "project.share_link_created",

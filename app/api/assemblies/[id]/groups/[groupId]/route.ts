@@ -40,7 +40,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const { scope, ...updateData } = parsed.data;
 

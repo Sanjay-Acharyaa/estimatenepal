@@ -42,6 +42,7 @@ export interface BOQGroup {
     proposedValue: string;
     submittedBy: string;
   } | null;
+  excludedShapeCount?: number;
 }
 
 export interface BOQDiscipline {
@@ -76,19 +77,24 @@ export interface BOQDocument {
   tdsAmount: number;
   finalPayable: number;
   generatedAt: string;
+  zeroQuantityItemCount: number;
 }
 
 // BOQ_CACHE_TTL and BOQ_MAX_CACHE_BYTES are imported from cache-constants
 
 export async function invalidateBOQCache(projectId: string): Promise<void> {
-  redis.del(`boq:v2:${projectId}`).catch(() => {});
+  redis.del(`boq:v2:${projectId}`).catch((err: unknown) => {
+    console.error("[boq] Redis invalidation failed for project", projectId, err);
+  });
 }
 
 export async function generateBOQ(projectId: string): Promise<BOQDocument> {
   const cacheKey = `boq:v2:${projectId}`;
   try {
     const hit = await redis.get(cacheKey);
-    if (hit) return JSON.parse(hit) as BOQDocument;
+    if (hit) {
+      return JSON.parse(hit) as BOQDocument;
+    }
   } catch {
     // Redis miss or error — proceed to compute
   }
@@ -161,12 +167,12 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           select: { rateItemId: true, rate: true },
         })
       : Promise.resolve([]),
-    // Use distinct to fetch only the most-recent approved override per rate item —
-    // avoids loading the full override history on projects with many negotiated rates.
+    // Fetch all approved overrides (no distinct) so rate and description overrides
+    // for the same rateItemId are both applied independently. With distinct + createdAt desc,
+    // a description override approved after a rate override would silently displace the rate.
     prisma.bOQOverride.findMany({
       where: { projectId, status: "APPROVED" },
       orderBy: { createdAt: "desc" },
-      distinct: ["rateItemId"],
     }),
     prisma.bOQOverride.findMany({
       where: { projectId, status: "PENDING" },
@@ -178,8 +184,17 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
   const rateMap = new Map(rateItems.map((r) => [r.id, r]));
   const districtRateMap = new Map(districtRates.map((r) => [r.rateItemId, r.rate]));
 
-  const approvedMap = new Map(approvedOverrides.map((ov) => [ov.rateItemId, ov]));
-  const pendingMap  = new Map(pendingOverrides.map((ov)  => [ov.rateItemId, ov]));
+  // Build separate maps per field so both a rate override and a description override
+  // for the same rateItemId are applied independently (first-seen wins per field since
+  // overrides are ordered createdAt desc, so first = most recent).
+  const approvedRateMap = new Map<string, typeof approvedOverrides[0]>();
+  const approvedDescMap = new Map<string, typeof approvedOverrides[0]>();
+  for (const ov of approvedOverrides) {
+    if (!ov.rateItemId) continue;
+    if (ov.field === "rate" && !approvedRateMap.has(ov.rateItemId)) approvedRateMap.set(ov.rateItemId, ov);
+    if (ov.field === "description" && !approvedDescMap.has(ov.rateItemId)) approvedDescMap.set(ov.rateItemId, ov);
+  }
+  const pendingMap = new Map(pendingOverrides.filter(ov => ov.rateItemId != null).map((ov) => [ov.rateItemId, ov]));
 
   const boqDisciplines: BOQDiscipline[] = [];
 
@@ -209,62 +224,93 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         return Number.isFinite(n) ? n : 0;
       };
 
+      let excludedShapeCount = 0;
+      // For VOLUME, only include shapes that match the current method in the measurement book.
+      // For all other types, use every item.
+      let mbItems = layer.items;
+
       if (layer.type === "VOLUME") {
         const method = ap?.volumeMethod ?? "area_x_h";
-        // null means dimension not configured yet — use factor 1 (neutral), matching per-item effectiveQty
-        const h = ap?.height != null ? safeNum(ap.height.ft) + safeNum(ap.height.in) / 12 : null;
-        const rawTotal = layer.items.reduce((s, i) => {
+        const volumeValidItems = layer.items.filter(i => {
           const isLength = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || !i.shapeType;
           const isArea = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
-          if (method === "lbh" && !isLength) return s;
-          if (method !== "lbh" && !isArea) return s;
+          return method === "lbh" ? isLength : isArea;
+        });
+        mbItems = volumeValidItems;
+        excludedShapeCount = layer.items.length - volumeValidItems.length;
+        // heights/breadths stored as feet+inches; apply per-item unit conversion so shapes
+        // drawn in ft zones and m zones within the same group are each scaled correctly.
+        const heightFt = ap?.height != null ? safeNum(ap.height.ft) + safeNum(ap.height.in) / 12 : null;
+        const breadthFt = ap?.breadth != null ? safeNum(ap.breadth.ft) + safeNum(ap.breadth.in) / 12 : null;
+        let volumeTotal = 0;
+        for (const i of volumeValidItems) {
           const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
-          return s + raw;
-        }, 0);
-        // Derive imperial vs metric from item units (set by computeQuantity using scaleUnit)
-        const itemUnit = layer.items[0]?.unit ?? "ft";
-        const isMetric = itemUnit.endsWith("m");
+          const ftToUnit = i.unit.includes("ft") ? 1 : 0.3048;
+          const h = heightFt != null ? heightFt * ftToUnit : null;
+          if (method === "lbh") {
+            const b = breadthFt != null ? breadthFt * ftToUnit : null;
+            volumeTotal += raw * (b ?? 1) * (h ?? 1);
+          } else {
+            volumeTotal += raw * (h ?? 1);
+          }
+        }
+        totalQuantity = volumeTotal * layer.multiplier;
+        // Unit display uses first valid item's unit (consistent with how items are drawn)
+        const firstUnit = volumeValidItems[0]?.unit ?? layer.items[0]?.unit ?? "ft";
+        const isMetric = firstUnit.replace(/ \(set [^)]+\)/g, "").trim().endsWith("m");
         if (method === "lbh") {
-          const b = ap?.breadth != null ? safeNum(ap.breadth.ft) + safeNum(ap.breadth.in) / 12 : null;
-          totalQuantity = rawTotal * (b ?? 1) * (h ?? 1) * layer.multiplier;
-          unit = b !== null && b > 0 && h !== null && h > 0
+          unit = (breadthFt != null && breadthFt > 0) && (heightFt != null && heightFt > 0)
             ? (isMetric ? "cu m" : "cu ft")
             : (isMetric ? "sq m" : "sq ft");
         } else {
-          totalQuantity = rawTotal * (h ?? 1) * layer.multiplier;
-          unit = h !== null && h > 0 ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
+          unit = (heightFt != null && heightFt > 0) ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
         }
       } else if (layer.type === "VERTICAL_WALL_AREA") {
-        const wallH = ap?.wall ? safeNum(ap.wall.heightFt) + safeNum(ap.wall.heightIn) / 12 : 0;
-        const rawTotal = layer.items.reduce((s, i) => s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
-        totalQuantity = wallH > 0 ? rawTotal * wallH * layer.multiplier : 0;
+        // Per-item unit conversion: wall height stored in ft, convert to each item's scale unit.
+        const wallHFt = ap?.wall ? (safeNum(ap.wall.heightFt) + safeNum(ap.wall.heightIn) / 12) : 0;
+        let vwaTotal = 0;
+        for (const i of layer.items) {
+          const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
+          const ftToUnit = i.unit.includes("ft") ? 1 : 0.3048;
+          vwaTotal += raw * (wallHFt * ftToUnit);
+        }
+        totalQuantity = wallHFt > 0 ? vwaTotal * layer.multiplier : 0;
         const wallItemUnit = layer.items[0]?.unit ?? "ft";
-        unit = wallH > 0 ? (wallItemUnit.endsWith("m") ? "sq m" : "sq ft") : wallItemUnit;
+        unit = wallHFt > 0 ? (wallItemUnit.replace(/ \(set [^)]+\)/g, "").trim().endsWith("m") ? "sq m" : "sq ft") : wallItemUnit;
       } else if (layer.type === "COUNT_BY_DISTANCE") {
         const sp = ap?.spacing;
         const spacingFt = sp ? safeNum(sp.ft) + safeNum(sp.in) / 12 : 0;
         if (spacingFt > 0) {
           const countTotal = layer.items.reduce((s, i) => {
             const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
+            const ftu = i.unit.includes("ft") ? 1 : 0.3048;
+            const spacing = spacingFt * ftu;
             // Fence-post correction (+1) counts one object at each endpoint of a span.
             // Deduction layers (raw < 0) represent voids/openings; no extra post at the boundary.
             const count = raw >= 0
-              ? Math.floor(raw / spacingFt) + 1
-              : Math.ceil(raw / spacingFt);
+              ? Math.floor(raw / spacing) + 1
+              : Math.ceil(raw / spacing);
             return s + count;
           }, 0);
           totalQuantity = countTotal * layer.multiplier;
           unit = "each";
         } else {
-          const rawTotal = layer.items.reduce((s, i) => s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
+          // Normalise to metres so ft-zone and m-zone items accumulate in the same unit.
+          // Items drawn while spacing was set carry an "each|ft" sentinel; .includes("ft")
+          // still detects that correctly and applies the ft→m factor.
+          const rawTotal = layer.items.reduce((s, i) => {
+            const toM = i.unit.includes("ft") ? 0.3048 : 1;
+            return s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity) * toM;
+          }, 0);
           totalQuantity = rawTotal * layer.multiplier;
-          unit = (layer.items[0]?.unit ?? "ft").replace(/ \(set [^)]+\)/g, "").trim();
+          unit = "m";
         }
       } else {
         // COUNT, LINEAR, AREA
         const rawTotal = layer.items.reduce((s, i) => s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
         totalQuantity = rawTotal * layer.multiplier;
-        unit = (layer.items[0]?.unit ?? "").replace(/ \(set [^)]+\)/g, "").trim();
+        unit = (layer.items[0]?.unit ?? "").replace(/ \(set [^)]+\)/g, "").trim()
+          || (layer.type === "COUNT" ? "each" : layer.type === "AREA" ? "sq m" : "m");
       }
 
       // Attempt unit conversion to match rateItem.unit
@@ -285,35 +331,33 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       if (!Number.isFinite(totalQuantity)) totalQuantity = 0;
       if (!Number.isFinite(originalQuantity)) originalQuantity = 0;
 
-      // Prefer district rate over base rate when the district rate is explicitly > 0.
-      // A district rate of 0 is treated as "not set" (import artefact or missing entry)
-      // so the base rate is used as the fallback.
+      // Prefer district rate over base rate when one is explicitly set (including zero,
+      // which means government-supplied / no-cost in this district).
       const districtRate = rateItemId ? districtRateMap.get(rateItemId) : undefined;
-      const baseOrDistrictRate = (districtRate !== undefined && districtRate > 0)
+      const baseOrDistrictRate = districtRate !== undefined
         ? districtRate
         : (rateItemId ? (rateItem?.baseRate ?? 0) : 0);
       let rate = baseOrDistrictRate ?? 0;
       let isOverridden = false;
       let originalRate: number | null = null;
 
-      // Track the description in case there's an approved description override (BUG 23)
       let overriddenDescription: string | null = null;
 
       if (rateItemId) {
-        const ov = approvedMap.get(rateItemId);
-        if (ov && ov.field === "rate") {
+        const rateOv = approvedRateMap.get(rateItemId);
+        if (rateOv) {
           originalRate = rate;
-          const parsedRate = parseFloat(ov.approvedValue ?? ov.proposedValue);
-          // BUG 12: guard against NaN or negative values from non-numeric override
+          const parsedRate = parseFloat(rateOv.approvedValue ?? rateOv.proposedValue);
           if (!Number.isFinite(parsedRate) || parsedRate < 0) {
             rate = districtRateMap.get(rateItemId) ?? rateItem?.baseRate ?? 0;
           } else {
             rate = parsedRate;
           }
           isOverridden = true;
-        } else if (ov && ov.field === "description" && ov.status === "APPROVED") {
-          // BUG 23: apply approved description override
-          const desc = ov.approvedValue ?? ov.proposedValue;
+        }
+        const descOv = approvedDescMap.get(rateItemId);
+        if (descOv) {
+          const desc = descOv.approvedValue ?? descOv.proposedValue;
           if (desc) overriddenDescription = desc;
         }
       }
@@ -327,7 +371,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         type: layer.type,
         categoryName: layer.parent?.name ?? null,
         groupMultiplier: layer.multiplier,
-        items: layer.items.map((item) => {
+        items: mbItems.map((item) => {
           // Compute per-item L/B/H for measurement book format and recompute quantity
           // from rawQuantity + current group params to avoid stale stored values.
           let mbLength: number | null = null;
@@ -337,32 +381,49 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
 
           if (layer.type === "VERTICAL_WALL_AREA") {
-            const wH = ap?.wall != null
+            const wH_ft = ap?.wall != null
               ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12
               : null;
+            const wFtToUnit = item.unit.includes("ft") ? 1 : 0.3048;
+            const wH = wH_ft !== null ? wH_ft * wFtToUnit : null;
             mbLength = item.rawQuantity;
             if (wH !== null && wH > 0) mbHeight = wH;
-            effectiveQty = wH !== null ? signedRaw * wH * item.multiplier : signedRaw * item.multiplier;
+            effectiveQty = wH !== null ? signedRaw * wH * layer.multiplier : signedRaw * layer.multiplier;
           } else if (layer.type === "VOLUME") {
             const method = ap?.volumeMethod ?? "area_x_h";
+            const vFtToUnit = item.unit.includes("ft") ? 1 : 0.3048;
             // null means "dimension not specified" (use factor of 1); 0 means explicitly zero (quantity = 0)
             const h = ap?.height != null
-              ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12
+              ? ((ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12) * vFtToUnit
               : null;
             mbLength = item.rawQuantity;
             if (h !== null && h > 0) mbHeight = h;
             if (method === "lbh") {
               const b = ap?.breadth != null
-                ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12
+                ? ((ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12) * vFtToUnit
                 : null;
               if (b !== null && b > 0) mbBreadth = b;
-              effectiveQty = signedRaw * (b ?? 1) * (h ?? 1) * item.multiplier;
+              effectiveQty = signedRaw * (b ?? 1) * (h ?? 1) * layer.multiplier;
             } else {
-              effectiveQty = signedRaw * (h ?? 1) * item.multiplier;
+              effectiveQty = signedRaw * (h ?? 1) * layer.multiplier;
+            }
+          } else if (layer.type === "COUNT_BY_DISTANCE") {
+            const sp = ap?.spacing;
+            const spacingFt = sp ? safeNum(sp.ft) + safeNum(sp.in) / 12 : 0;
+            const cbtFtToUnit = item.unit.includes("ft") ? 1 : 0.3048;
+            const spacing = spacingFt * cbtFtToUnit;
+            if (spacing > 0) {
+              const count = signedRaw >= 0
+                ? Math.floor(signedRaw / spacing) + 1
+                : Math.ceil(signedRaw / spacing);
+              effectiveQty = count * layer.multiplier;
+            } else {
+              effectiveQty = signedRaw * layer.multiplier;
             }
           } else {
-            // COUNT, LINEAR, AREA, COUNT_BY_DISTANCE — stored quantity is correct
-            effectiveQty = item.isNegative ? -item.quantity : item.quantity;
+            // COUNT, LINEAR, AREA — recompute from rawQuantity × current group multiplier;
+            // item.quantity bakes in the multiplier at draw time and goes stale after a group multiplier change.
+            effectiveQty = signedRaw * layer.multiplier;
           }
 
           return {
@@ -373,7 +434,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             // the formula always produces a positive value and Excel recalculation flips
             // deductions to additions. COUNT/LINEAR/AREA items have no formula so the
             // negative sign lives in effectiveQty directly — their multiplier stays positive.
-            multiplier: (item.isNegative && mbLength !== null) ? -item.multiplier : item.multiplier,
+            multiplier: (item.isNegative && mbLength !== null) ? -layer.multiplier : layer.multiplier,
             length: mbLength,
             breadth: mbBreadth,
             height: mbHeight,
@@ -403,6 +464,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
               submittedBy: pendingOv.submittedBy,
             }
           : null,
+        excludedShapeCount,
       });
     }
 
@@ -413,6 +475,11 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       subtotal: boqGroups.reduce((s, g) => s + g.amount, 0),
     });
   }
+
+  const zeroQuantityItemCount = layers.reduce(
+    (total, layer) => total + layer.items.filter(i => i.rawQuantity === 0).length,
+    0
+  );
 
   const grandTotal = boqDisciplines.reduce((s, d) => s + d.subtotal, 0);
   const contingencyPct = project.contingencyPct ?? 0;
@@ -451,5 +518,6 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
     tdsAmount,
     finalPayable: subtotalAfterAdditions + vatAmount - tdsAmount,
     generatedAt: new Date().toISOString(),
+    zeroQuantityItemCount,
   };
 }

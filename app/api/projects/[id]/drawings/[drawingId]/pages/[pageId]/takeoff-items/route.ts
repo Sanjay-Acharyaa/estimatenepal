@@ -6,10 +6,20 @@ import { Prisma } from "@prisma/client";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
-import { computeQuantity, effectiveScale, type ToolData, type AdditionalParams } from "@/lib/takeoff";
+import { computeQuantity, perSegmentEffectiveScale, boundingBoxWeightedScale, type ToolData, type AdditionalParams } from "@/lib/takeoff";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
+import { invalidateBOQCache } from "@/lib/boq";
 
 const pointSchema = z.object({ x: z.number(), y: z.number() });
+
+/** Minimum number of points required for each shape type to form a valid geometry. */
+const MIN_POINTS: Record<string, number> = {
+  CIRCLE: 2,   // center + radius point
+  ARC: 3,      // start + end + midpoint-on-arc
+  RECTANGLE: 4, // four corners
+  POLYGON: 3,  // at least a triangle
+  POLYLINE: 2, // at least one segment
+};
 
 const createSchema = z.object({
   groupId: z.string(),
@@ -20,6 +30,15 @@ const createSchema = z.object({
   multiplier: z.number().positive().default(1),
   isNegative: z.boolean().default(false),
   sortOrder: z.number().int().optional(),
+}).superRefine((val, ctx) => {
+  const min = val.shapeType ? (MIN_POINTS[val.shapeType] ?? 1) : 1;
+  if (val.toolData.points.length < min) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["toolData", "points"],
+      message: `${val.shapeType ?? "shape"} requires at least ${min} point(s), got ${val.toolData.points.length}.`,
+    });
+  }
 });
 
 export async function GET(
@@ -41,7 +60,7 @@ export async function GET(
     const page = await prisma.drawingPage.findUnique({ where: { id: params.pageId } });
     if (!page || page.drawingId !== params.drawingId) throw notFound("Drawing page");
 
-    const { page: pg, limit } = parsePagination(req.nextUrl.searchParams);
+    const { page: pg, limit } = parsePagination(req.nextUrl.searchParams, 2000);
     // Exclude orphaned items (groupId: null) — they have no group so cannot be rendered on canvas
     const where = { pageId: params.pageId, groupId: { not: null } };
     const [total, items] = await Promise.all([
@@ -89,14 +108,20 @@ export async function POST(
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
-    // Verify group belongs to this project
+    // Verify group belongs to this project and is not locked
     const group = await prisma.takeoffGroup.findUnique({ where: { id: parsed.data.groupId } });
     if (!group || group.projectId !== params.id) throw notFound("Takeoff group");
+    if (group.isLocked) return apiError("FORBIDDEN", "This layer is locked. Unlock it before adding shapes.", 403);
 
-    // Resolve scale using centroid of all points (handles shapes crossing zone boundaries)
-    const scaleResult = effectiveScale(parsed.data.toolData.points, page.scale, page.scaleUnit, page.scaleZones);
+    // POLYLINE: per-segment length-weighted scale (accurate when crossing zones).
+    // Closed area shapes: bounding-box area-weighted scale (handles shapes that straddle zone boundaries).
+    // COUNT / point shapes: centroid lookup (single-point, bbox weighting degenerates correctly).
+    const pts = parsed.data.toolData.points;
+    const scaleResult = parsed.data.shapeType === "POLYLINE"
+      ? perSegmentEffectiveScale(pts, page.scale, page.scaleUnit, page.scaleZones)
+      : boundingBoxWeightedScale(pts, page.scale, page.scaleUnit, page.scaleZones, parsed.data.shapeType ?? null);
     if (!scaleResult) {
       return apiError("VALIDATION_ERROR", "No scale is set for this page. Set a drawing scale or add a scale zone before taking off.", 400);
     }
@@ -116,16 +141,30 @@ export async function POST(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const item = await prisma.$transaction(async (tx) => {
-      const last = await tx.takeoffItem.findFirst({
-        where: { pageId: params.pageId },
-        orderBy: { sortOrder: "desc" },
-        select: { sortOrder: true },
-      });
+      const [last, existingLabels] = await Promise.all([
+        tx.takeoffItem.findFirst({
+          where: { pageId: params.pageId },
+          orderBy: { sortOrder: "desc" },
+          select: { sortOrder: true },
+        }),
+        // Fetch all labels in the group to find the highest existing sequence number.
+        // Using MAX(label suffix) rather than COUNT prevents gaps after deletions.
+        tx.takeoffItem.findMany({
+          where: { groupId: parsed.data.groupId },
+          select: { label: true },
+        }),
+      ]);
+      // Server-assigned label: next after the highest existing number (never reuses deleted slots).
+      const maxSeq = existingLabels.reduce((m, i) => {
+        const match = i.label.match(/#(\d+)$/);
+        return match ? Math.max(m, parseInt(match[1], 10)) : m;
+      }, 0);
+      const serverLabel = `${group.name.slice(0, 60)} #${maxSeq + 1}`;
       return (tx.takeoffItem.create as any)({
         data: {
           pageId: params.pageId,
           groupId: parsed.data.groupId,
-          label: parsed.data.label,
+          label: serverLabel,
           toolType: parsed.data.toolType,
           shapeType: parsed.data.shapeType,
           toolData: parsed.data.toolData,
@@ -141,6 +180,7 @@ export async function POST(
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
+    invalidateBOQCache(params.id).catch(() => {});
     return NextResponse.json(item, { status: 201 });
   } catch (err) {
     return handleApiError(err);

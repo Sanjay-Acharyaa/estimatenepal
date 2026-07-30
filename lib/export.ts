@@ -539,6 +539,15 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       ws.mergeCells(`B${ghRow.number}:K${ghRow.number}`);
       ghRow.eachCell((c) => applyGroupStyle(c));
 
+      if (grp.excludedShapeCount && grp.excludedShapeCount > 0) {
+        const n = grp.excludedShapeCount;
+        const noteRow = ws.addRow(["", `  ⚠ ${n} shape${n !== 1 ? "s" : ""} excluded — wrong shape type for VOLUME method (not counted in total)`]);
+        ws.mergeCells(`B${noteRow.number}:K${noteRow.number}`);
+        noteRow.getCell(2).font = { italic: true, color: { argb: "FFB45309" } };
+        noteRow.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF7ED" } };
+        noteRow.getCell(2).alignment = { horizontal: "left", wrapText: true };
+      }
+
       // Item rows — always write multiplier as number so qty formula can reference col C
       let mbFirstItemRow: number | null = null;
       let mbLastItemRow: number | null = null;
@@ -649,7 +658,7 @@ export function buildBOQHtml(boq: BOQDocument): string {
     return `
     <tr class="group-row">
       <td>${sno}</td>
-      <td class="desc"><strong>${esc(grp.name)}</strong>${grp.preamble ? `<div class="preamble">${esc(grp.preamble)}</div>` : ""}</td>
+      <td class="desc"><strong>${esc(grp.name)}</strong>${grp.preamble ? `<div class="preamble">${esc(grp.preamble)}</div>` : ""}${grp.excludedShapeCount && grp.excludedShapeCount > 0 ? `<div class="excluded-shapes-warn">&#9888; ${grp.excludedShapeCount} shape${grp.excludedShapeCount !== 1 ? "s" : ""} excluded (wrong shape type for VOLUME method)</div>` : ""}</td>
       <td colspan="5"></td>
       <td>${grp.unit}</td>
       ${rateCell}
@@ -726,6 +735,7 @@ export function buildBOQHtml(boq: BOQDocument): string {
   .desc { text-align: left; }
   .indent { padding-left: 20px; }
   .preamble { font-size: 8pt; font-style: italic; color: #6b7280; font-weight: normal; margin-top: 2px; }
+  .excluded-shapes-warn { font-size: 8pt; font-style: italic; color: #b45309; font-weight: normal; margin-top: 2px; }
   .override { background: #fef9c3 !important; }
   @media print {
     body { font-size: 9pt; }

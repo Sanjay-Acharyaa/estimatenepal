@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { invalidateBOQCache } from "@/lib/boq";
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -65,14 +66,14 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const updated = await prisma.rateItem.update({
       where: { id: params.rateId },
       data: parsed.data,
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: "SYSTEM",
       userId: token!.id as string,
       event: "dudbc_rate.updated",
@@ -80,6 +81,13 @@ export async function PUT(
       meta: parsed.data as any,
       ipAddress: getClientIp(req),
     });
+
+    // Invalidate BOQ caches for all projects that link to this rate item
+    prisma.takeoffGroup.findMany({
+      where: { rateItemId: rate.id },
+      select: { projectId: true },
+      distinct: ["projectId"],
+    }).then(groups => Promise.all(groups.map(g => invalidateBOQCache(g.projectId)))).catch(() => {});
 
     return NextResponse.json(updated);
   } catch (err) {
@@ -102,9 +110,16 @@ export async function DELETE(
     if (!rate || rate.source !== "DUDBC") throw notFound("Rate");
     if (rate.isPublished) return apiError("FORBIDDEN", "Published rates cannot be deleted.", 403);
 
+    // Collect affected projects before deletion so we can invalidate their BOQ caches.
+    const affectedGroups = await prisma.takeoffGroup.findMany({
+      where: { rateItemId: rate.id },
+      select: { projectId: true },
+      distinct: ["projectId"],
+    });
+
     await prisma.rateItem.delete({ where: { id: params.rateId } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: "SYSTEM",
       userId: token!.id as string,
       event: "dudbc_rate.deleted",
@@ -112,6 +127,8 @@ export async function DELETE(
       meta: { code: rate.code, fiscalYear: rate.fiscalYear } as any,
       ipAddress: getClientIp(req),
     });
+
+    Promise.all(affectedGroups.map(g => invalidateBOQCache(g.projectId))).catch(() => {});
 
     return NextResponse.json({ message: "Deleted." });
   } catch (err) {

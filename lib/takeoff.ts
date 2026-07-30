@@ -50,41 +50,44 @@ function circleRadiusPx(pts: Point[]): number {
   return Math.sqrt((pts[1].x - pts[0].x) ** 2 + (pts[1].y - pts[0].y) ** 2);
 }
 
-// Arc length from 3 points (start, end, midpoint-on-arc) using circumscribed circle
-function arcLengthPx(pts: Point[]): number {
-  if (pts.length < 3) return polylineLength(pts);
+// Circumscribed circle of a 3-point arc: returns { r, sweep } or null when collinear.
+// pts = [start, end, midpoint-on-arc]. sweep is the central angle of the arc in radians.
+function arcGeometryPx(pts: Point[]): { r: number; sweep: number } | null {
+  if (pts.length < 3) return null;
   const [A, B, C] = pts;
   const D = 2 * (A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y));
-  if (Math.abs(D) < 1e-10) {
-    // Collinear — straight line from A to B
-    return Math.sqrt((B.x - A.x) ** 2 + (B.y - A.y) ** 2);
-  }
+  if (Math.abs(D) < 1e-10) return null;
   const A2 = A.x ** 2 + A.y ** 2, B2 = B.x ** 2 + B.y ** 2, C2 = C.x ** 2 + C.y ** 2;
   const ux = (A2 * (B.y - C.y) + B2 * (C.y - A.y) + C2 * (A.y - B.y)) / D;
   const uy = (A2 * (C.x - B.x) + B2 * (A.x - C.x) + C2 * (B.x - A.x)) / D;
   const r = Math.sqrt((A.x - ux) ** 2 + (A.y - uy) ** 2);
-
   const norm = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   const na1 = norm(Math.atan2(A.y - uy, A.x - ux));
   const na2 = norm(Math.atan2(B.y - uy, B.x - ux));
   const nam = norm(Math.atan2(C.y - uy, C.x - ux));
-
-  // CCW sweep from na1 to na2
   let ccwSweep = na2 - na1;
   if (ccwSweep < 0) ccwSweep += 2 * Math.PI;
-
-  // Is midpoint on the CCW arc from na1 to na2?
   let namRel = nam - na1;
   if (namRel < 0) namRel += 2 * Math.PI;
-
   const sweep = namRel <= ccwSweep ? ccwSweep : 2 * Math.PI - ccwSweep;
-  return r * sweep;
+  return { r, sweep };
+}
+
+// Arc length from 3 points (start, end, midpoint-on-arc) using circumscribed circle
+function arcLengthPx(pts: Point[]): number {
+  if (pts.length < 3) return polylineLength(pts);
+  const geo = arcGeometryPx(pts);
+  if (!geo) {
+    // Collinear — straight line from A to B
+    const [A, B] = pts;
+    return Math.sqrt((B.x - A.x) ** 2 + (B.y - A.y) ** 2);
+  }
+  return geo.r * geo.sweep;
 }
 
 export function areaUnit(scaleUnit: string): string {
-  if (scaleUnit === "ft") return "sq ft";
-  if (scaleUnit === "m") return "sq m";
-  return `${scaleUnit}²`;
+  if (scaleUnit === "ft" || scaleUnit === "in") return "sq ft";
+  return "sq m";
 }
 
 export function computeQuantity(
@@ -108,7 +111,7 @@ export function computeQuantity(
         rawPx = 2 * Math.PI * circleRadiusPx(pts);
       } else if (shapeType === "ARC") {
         rawPx = arcLengthPx(pts);
-      } else if (shapeType === "RECTANGLE") {
+      } else if (shapeType === "RECTANGLE" || shapeType === "POLYGON") {
         rawPx = perimeterOfPolygon(pts);
       } else {
         rawPx = polylineLength(pts);
@@ -124,21 +127,24 @@ export function computeQuantity(
         rawPx = 2 * Math.PI * circleRadiusPx(pts);
       } else if (shapeType === "ARC") {
         rawPx = arcLengthPx(pts);
-      } else if (shapeType === "RECTANGLE") {
+      } else if (shapeType === "RECTANGLE" || shapeType === "POLYGON") {
         rawPx = perimeterOfPolygon(pts);
       } else {
         rawPx = polylineLength(pts);
       }
       const lengthReal = rawPx * scale;
 
+      // spacing is stored as feet+inches; convert to the drawing's scale unit
+      const ftToUnit = scaleUnit === "ft" ? 1 : 0.3048;
       const sp = additionalParams?.spacing;
       const spacingFt = sp ? (sp.ft ?? 0) + (sp.in ?? 0) / 12 : 0;
-      if (!spacingFt) {
+      const spacingInUnit = spacingFt * ftToUnit;
+      if (!spacingInUnit) {
         // No spacing set — show raw length with hint so user knows to set it
         return { rawQuantity: lengthReal, quantity: lengthReal * multiplier, unit: `${scaleUnit} (set spacing)` };
       }
-      const count = Math.floor(lengthReal / spacingFt) + 1;
-      return { rawQuantity: lengthReal, quantity: count * multiplier, unit: "each" };
+      const count = Math.floor(lengthReal / spacingInUnit) + 1;
+      return { rawQuantity: lengthReal, quantity: count * multiplier, unit: scaleUnit === "ft" ? "each|ft" : "each" };
     }
 
     case "AREA": {
@@ -146,6 +152,12 @@ export function computeQuantity(
       if (shapeType === "CIRCLE") {
         const r = circleRadiusPx(pts);
         rawPx2 = Math.PI * r * r;
+      } else if (shapeType === "ARC" && pts.length >= 3) {
+        // Circular segment area = (r²/2)(θ − sin θ): the region between the arc and its chord.
+        // A sector (r²θ/2) would include the triangle back to the centre, which is not the
+        // enclosed construction area the user is measuring.
+        const geo = arcGeometryPx(pts);
+        rawPx2 = geo ? 0.5 * geo.r * geo.r * (geo.sweep - Math.sin(geo.sweep)) : polygonArea(pts);
       } else {
         rawPx2 = polygonArea(pts);
       }
@@ -160,14 +172,17 @@ export function computeQuantity(
         perimPx = 2 * Math.PI * circleRadiusPx(pts);
       } else if (shapeType === "ARC") {
         perimPx = arcLengthPx(pts);
-      } else if (shapeType === "RECTANGLE") {
+      } else if (shapeType === "RECTANGLE" || shapeType === "POLYGON") {
         perimPx = perimeterOfPolygon(pts);
       } else {
         perimPx = polylineLength(pts);
       }
       const perimeterReal = perimPx * scale;
+      // wall height is stored as feet+inches; convert to the drawing's scale unit
+      const ftToUnit = scaleUnit === "ft" ? 1 : 0.3048;
       const wall = additionalParams?.wall;
-      const wallH = wall ? (wall.heightFt ?? 0) + (wall.heightIn ?? 0) / 12 : 0;
+      const wallHFt = wall ? (wall.heightFt ?? 0) + (wall.heightIn ?? 0) / 12 : 0;
+      const wallH = wallHFt * ftToUnit;
       if (!wallH) {
         return { rawQuantity: perimeterReal, quantity: perimeterReal * multiplier, unit: `${scaleUnit} (set wall height)` };
       }
@@ -186,7 +201,7 @@ export function computeQuantity(
       const isLengthShape = shapeType === "POLYLINE" || shapeType === "ARC" || !shapeType;
       let rawQty: number;
       if (isLengthShape) {
-        rawQty = polylineLength(pts) * scale;
+        rawQty = (shapeType === "ARC" ? arcLengthPx(pts) : polylineLength(pts)) * scale;
       } else if (shapeType === "CIRCLE") {
         const r = circleRadiusPx(pts);
         rawQty = Math.PI * r * r * scale * scale;
@@ -196,24 +211,28 @@ export function computeQuantity(
       }
 
       const method = additionalParams?.volumeMethod ?? "area_x_h";
+      // height and breadth are stored as feet+inches; convert to the drawing's scale unit
+      const ftToUnit = scaleUnit === "ft" ? 1 : 0.3048;
       const h = additionalParams?.height;
       const heightFt = h ? (h.ft ?? 0) + (h.in ?? 0) / 12 : 0;
+      const heightInUnit = heightFt * ftToUnit;
 
       if (method === "lbh") {
         const b = additionalParams?.breadth;
         const breadthFt = b ? (b.ft ?? 0) + (b.in ?? 0) / 12 : 0;
-        if (!breadthFt || !heightFt) {
-          const missing = !breadthFt && !heightFt ? "breadth+height" : !breadthFt ? "breadth" : "height";
+        const breadthInUnit = breadthFt * ftToUnit;
+        if (!breadthInUnit || !heightInUnit) {
+          const missing = !breadthInUnit && !heightInUnit ? "breadth+height" : !breadthInUnit ? "breadth" : "height";
           return { rawQuantity: rawQty, quantity: rawQty * multiplier, unit: `${scaleUnit} (set ${missing})` };
         }
-        return { rawQuantity: rawQty, quantity: rawQty * breadthFt * heightFt * multiplier, unit: scaleUnit === "ft" ? "cu ft" : "cu m" };
+        return { rawQuantity: rawQty, quantity: rawQty * breadthInUnit * heightInUnit * multiplier, unit: scaleUnit === "ft" ? "cu ft" : "cu m" };
       }
 
       // area_x_h: expects area-based shape
-      if (!heightFt) {
+      if (!heightInUnit) {
         return { rawQuantity: rawQty, quantity: rawQty * multiplier, unit: areaUnit(scaleUnit) + " (set height)" };
       }
-      return { rawQuantity: rawQty, quantity: rawQty * heightFt * multiplier, unit: scaleUnit === "ft" ? "cu ft" : "cu m" };
+      return { rawQuantity: rawQty, quantity: rawQty * heightInUnit * multiplier, unit: scaleUnit === "ft" ? "cu ft" : "cu m" };
     }
 
     default:
@@ -244,4 +263,83 @@ export function effectiveScale(
   }
   if (pageScale && pageScale > 0) return { scale: pageScale, scaleUnit: pageScaleUnit };
   return null;
+}
+
+/** Like effectiveScale but computes a length-weighted average scale for POLYLINE shapes by
+ *  looking up the zone at each segment's midpoint. Gives accurate results when a polyline
+ *  crosses zones with different scales. Returns the same type as effectiveScale so it can
+ *  be used as a drop-in replacement for POLYLINE shapes. Non-POLYLINE shapes should still
+ *  use effectiveScale (centroid is appropriate for areas and circles). */
+export function perSegmentEffectiveScale(
+  pts: Point[],
+  pageScale: number | null,
+  pageScaleUnit: string,
+  scaleZones: Array<{ x: number; y: number; width: number; height: number; scale: number; scaleUnit: string }>
+): { scale: number; scaleUnit: string } | null {
+  const fallback = effectiveScale(pts, pageScale, pageScaleUnit, scaleZones);
+  if (!fallback || scaleZones.length === 0 || pts.length < 2) return fallback;
+  let totalPx = 0;
+  let totalReal = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const mid: Point = { x: (pts[i - 1].x + pts[i].x) / 2, y: (pts[i - 1].y + pts[i].y) / 2 };
+    const sr = effectiveScale([mid], pageScale, pageScaleUnit, scaleZones);
+    const dx = pts[i].x - pts[i - 1].x;
+    const dy = pts[i].y - pts[i - 1].y;
+    const segPx = Math.sqrt(dx * dx + dy * dy);
+    totalPx += segPx;
+    totalReal += segPx * (sr?.scale ?? fallback.scale);
+  }
+  if (totalPx === 0) return fallback;
+  // Return a synthetic scale = totalReal / totalPx so that polylineLength(pts) * scale = totalReal
+  return { scale: totalReal / totalPx, scaleUnit: fallback.scaleUnit };
+}
+
+/** Area-weighted scale for closed shapes (RECTANGLE, POLYGON, CIRCLE, ARC) that may cross
+ *  zone boundaries.  Computes the fraction of the shape's axis-aligned bounding box that
+ *  overlaps each zone, then returns the area-weighted average scale.  For CIRCLE, the true
+ *  circular bounding box [cx±r, cy±r] is used rather than the raw two-point bbox.
+ *  Falls back to centroid lookup when there are no zones or the shape is a point. */
+export function boundingBoxWeightedScale(
+  pts: Point[],
+  pageScale: number | null,
+  pageScaleUnit: string,
+  scaleZones: Array<{ x: number; y: number; width: number; height: number; scale: number; scaleUnit: string }>,
+  shapeType?: string | null
+): { scale: number; scaleUnit: string } | null {
+  const fallback = effectiveScale(pts, pageScale, pageScaleUnit, scaleZones);
+  if (!fallback || scaleZones.length === 0 || pts.length === 0) return fallback;
+
+  let minX: number, maxX: number, minY: number, maxY: number;
+  if (shapeType === "CIRCLE" && pts.length >= 2) {
+    const r = Math.sqrt((pts[1].x - pts[0].x) ** 2 + (pts[1].y - pts[0].y) ** 2);
+    minX = pts[0].x - r; maxX = pts[0].x + r;
+    minY = pts[0].y - r; maxY = pts[0].y + r;
+  } else {
+    minX = Math.min(...pts.map(p => p.x)); maxX = Math.max(...pts.map(p => p.x));
+    minY = Math.min(...pts.map(p => p.y)); maxY = Math.max(...pts.map(p => p.y));
+  }
+
+  const bboxArea = (maxX - minX) * (maxY - minY);
+  if (bboxArea === 0) return fallback;
+
+  let totalWeight = 0;
+  let weightedScale = 0;
+  for (const z of scaleZones) {
+    const ix1 = Math.max(minX, z.x), ix2 = Math.min(maxX, z.x + z.width);
+    const iy1 = Math.max(minY, z.y), iy2 = Math.min(maxY, z.y + z.height);
+    if (ix2 <= ix1 || iy2 <= iy1) continue;
+    const overlap = (ix2 - ix1) * (iy2 - iy1);
+    weightedScale += overlap * z.scale;
+    totalWeight += overlap;
+  }
+
+  // Any part of the bbox not covered by a zone uses the page scale.
+  const uncovered = bboxArea - totalWeight;
+  if (uncovered > 0 && pageScale && pageScale > 0) {
+    weightedScale += uncovered * pageScale;
+    totalWeight += uncovered;
+  }
+
+  if (totalWeight === 0) return fallback;
+  return { scale: weightedScale / totalWeight, scaleUnit: fallback.scaleUnit };
 }

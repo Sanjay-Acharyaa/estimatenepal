@@ -81,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const body = await req.json();
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
-      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
     }
 
     const { fileName, fileKey, pageCount, fileSizeBytes, revisionNumber, parentDrawingId, folderId } = parsed.data;
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: parentDrawingId ? "drawing.revision_uploaded" : "drawing.uploaded",

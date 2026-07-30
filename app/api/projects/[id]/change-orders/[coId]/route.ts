@@ -32,7 +32,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Only OWNER/ADMIN can approve/reject
     if ((parsed.data.status === "APPROVED" || parsed.data.status === "REJECTED") && !["OWNER", "ADMIN"].includes(caller.role)) {
@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 
     const updated = await prisma.changeOrder.update({ where: { id: params.coId }, data });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "change_order.updated",
@@ -75,7 +75,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     await prisma.changeOrder.delete({ where: { id: params.coId } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "change_order.deleted",

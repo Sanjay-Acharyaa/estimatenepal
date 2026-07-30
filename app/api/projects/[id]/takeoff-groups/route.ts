@@ -76,11 +76,29 @@ export async function POST(
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const group = await prisma.$transaction(async (tx) => {
+      if (parsed.data.parentId) {
+        const parent = await tx.takeoffGroup.findUnique({
+          where: { id: parsed.data.parentId },
+          select: { projectId: true, parentId: true, disciplineId: true },
+        });
+        if (!parent || parent.projectId !== params.id) {
+          throw apiError("NOT_FOUND", "Parent group not found.", 404);
+        }
+        if (parent.parentId !== null) {
+          throw apiError("VALIDATION_ERROR", "Groups can only be nested one level deep.", 400);
+        }
+        if (parent.disciplineId !== parsed.data.disciplineId) {
+          throw apiError("VALIDATION_ERROR", "Layer discipline must match its parent category.", 400);
+        }
+      }
       const last = await tx.takeoffGroup.findFirst({
-        where: { projectId: params.id },
+        where: {
+          projectId: params.id,
+          parentId: parsed.data.parentId ?? null,
+        },
         orderBy: { sortOrder: "desc" },
         select: { sortOrder: true },
       });
@@ -104,7 +122,7 @@ export async function POST(
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "takeoff_group.created",

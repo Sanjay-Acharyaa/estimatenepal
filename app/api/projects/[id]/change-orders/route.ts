@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const co = await prisma.$transaction(async (tx) => {
       const last = await tx.changeOrder.findFirst({ where: { projectId: params.id }, orderBy: { number: "desc" }, select: { number: true } });
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
     }, { isolationLevel: "Serializable" });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "change_order.created",

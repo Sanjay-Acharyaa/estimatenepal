@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
     const parsed = profileSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const user = await prisma.user.update({
       where: { id: token.id as string },
@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest) {
       select: { id: true, name: true, email: true, role: true },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: (token.orgId as string) ?? "SYSTEM",
       userId: token.id as string,
       event: "user.profile_updated",

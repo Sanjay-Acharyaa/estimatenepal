@@ -69,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Verify assignee belongs to same org AND is a member of this specific project
     if (parsed.data.assignedToId) {
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }).catch((err) => console.error("[tasks] notification failed:", err));
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "task.created",

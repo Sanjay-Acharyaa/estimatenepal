@@ -31,7 +31,7 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const updated = await prisma.projectNote.update({
       where: { id: params.nId },
@@ -39,7 +39,7 @@ export async function PUT(
       include: { user: { select: { id: true, name: true, email: true } } },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "note.updated",
@@ -78,7 +78,7 @@ export async function DELETE(
 
     await prisma.projectNote.delete({ where: { id: params.nId } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "note.deleted",

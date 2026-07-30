@@ -42,7 +42,7 @@ type Props = {
   activeDisciplineId: string | null;
   onSelectGroup: (id: string | null) => void;
   onGroupsChange: (groups: TakeoffGroup[]) => void;
-  groupTotals?: Record<string, { rawQty: number; unit: string }>;
+  groupTotals?: Record<string, { rawQty: number; unit: string; pageId?: string }>;
   liveItemCounts?: Record<string, number>;
   allPageGroupTotals?: Record<string, { rawQty: number; unit: string; count: number }>;
   sidebarWidth?: number;
@@ -57,36 +57,48 @@ const TYPE_ICONS: Record<string, string> = {
 
 function getNum(v: unknown) { const n = Number(v); return isNaN(n) ? 0 : n; }
 
-function volumeDisplay(group: TakeoffGroup, rawQty: number): { qty: number; unit: string } {
+// rawUnit is the unit string stored on items (e.g. "cu m", "sq ft").
+// It tells us whether the drawing is metric or imperial.
+function volumeDisplay(group: TakeoffGroup, rawQty: number, rawUnit: string): { qty: number; unit: string } {
+  const scaleUnit = rawUnit.includes("ft") ? "ft" : "m";
+  const ftToUnit = scaleUnit === "ft" ? 1 : 0.3048;
   const ap = group.additionalParams as Record<string, unknown> | null;
   const method = (ap?.volumeMethod as string) ?? "area_x_h";
   const hObj = ap?.height as Record<string, unknown> | undefined;
-  const h = (getNum(hObj?.ft)) + getNum(hObj?.in) / 12;
+  const hFt = getNum(hObj?.ft) + getNum(hObj?.in) / 12;
+  const h = hFt * ftToUnit;
 
   if (method === "lbh") {
     const bObj = ap?.breadth as Record<string, unknown> | undefined;
-    const b = getNum(bObj?.ft) + getNum(bObj?.in) / 12;
+    const bFt = getNum(bObj?.ft) + getNum(bObj?.in) / 12;
+    const b = bFt * ftToUnit;
     if (!b || !h) return { qty: rawQty * group.multiplier, unit: "(set b+h)" };
-    return { qty: rawQty * b * h * group.multiplier, unit: "cu ft" };
+    return { qty: rawQty * b * h * group.multiplier, unit: scaleUnit === "ft" ? "cu ft" : "cu m" };
   }
   if (!h) return { qty: rawQty * group.multiplier, unit: "(set height)" };
-  return { qty: rawQty * h * group.multiplier, unit: "cu ft" };
+  return { qty: rawQty * h * group.multiplier, unit: scaleUnit === "ft" ? "cu ft" : "cu m" };
 }
 
-function countByDistanceDisplay(group: TakeoffGroup, rawLengthFt: number): { qty: number; unit: string } {
-  const ap = group.additionalParams as Record<string, unknown> | null;
-  const spObj = ap?.spacing as Record<string, unknown> | undefined;
-  const spacing = spObj ? getNum(spObj.ft) + getNum(spObj.in) / 12 : 0;
-  if (!spacing) return { qty: rawLengthFt * group.multiplier, unit: "ft (set spacing)" };
-  return { qty: (Math.floor(rawLengthFt / spacing) + 1) * group.multiplier, unit: "each" };
+function countByDistanceDisplay(group: TakeoffGroup, rawLength: number, rawUnit: string): { qty: number; unit: string } {
+  // Server pre-computed per-item counts when spacing was configured (unit="each").
+  // rawLength is already the count sum — just apply multiplier.
+  if (rawUnit === "each" || rawUnit === "each|ft") {
+    return { qty: rawLength * group.multiplier, unit: "each" };
+  }
+  // Spacing not configured: rawLength is a raw length total; show hint until spacing is set.
+  const scaleUnit = rawUnit.includes("ft") ? "ft" : "m";
+  return { qty: rawLength * group.multiplier, unit: `${scaleUnit} (set spacing)` };
 }
 
-function wallAreaDisplay(group: TakeoffGroup, rawPerimFt: number): { qty: number; unit: string } {
+function wallAreaDisplay(group: TakeoffGroup, rawPerim: number, rawUnit: string): { qty: number; unit: string } {
+  const scaleUnit = rawUnit.includes("ft") ? "ft" : "m";
+  const ftToUnit = scaleUnit === "ft" ? 1 : 0.3048;
   const ap = group.additionalParams as Record<string, unknown> | null;
   const wObj = ap?.wall as Record<string, unknown> | undefined;
-  const wallH = wObj ? getNum(wObj.heightFt) + getNum(wObj.heightIn) / 12 : 0;
-  if (!wallH) return { qty: rawPerimFt * group.multiplier, unit: "ft (set wall height)" };
-  return { qty: rawPerimFt * wallH * group.multiplier, unit: "sq ft" };
+  const wallHFt = wObj ? getNum(wObj.heightFt) + getNum(wObj.heightIn) / 12 : 0;
+  const wallH = wallHFt * ftToUnit;
+  if (!wallH) return { qty: rawPerim * group.multiplier, unit: `${scaleUnit} (set wall height)` };
+  return { qty: rawPerim * wallH * group.multiplier, unit: scaleUnit === "ft" ? "sq ft" : "sq m" };
 }
 
 function EyeOpen() {
@@ -124,6 +136,9 @@ export function TakeoffPanel({
   groupTotals = {}, liveItemCounts = {}, allPageGroupTotals = {}, sidebarWidth = 224, onRefreshItems, onItemsAppended,
 }: Props) {
   const [groups, setGroups] = useState<TakeoffGroup[]>(initialGroups);
+
+  // Sync internal groups when the parent pushes a server-refreshed list (e.g. after refreshGroups()).
+  useEffect(() => { setGroups(initialGroups); }, [initialGroups]);
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showCreateCategory, setShowCreateCategory] = useState(false);
@@ -297,10 +312,9 @@ export function TakeoffPanel({
 
   async function handleDelete(g: TakeoffGroup) {
     const childLayers = groups.filter(x => x.parentId === g.id);
-    const totalItems = childLayers.reduce((s, l) => s + l._count.items, g._count.items);
     const msg = childLayers.length > 0
-      ? `Delete group "${g.name}"? Its ${childLayers.length} layer(s) and all ${totalItems} shape(s) will be removed.`
-      : `Delete "${g.name}"? All ${g._count.items} shape(s) will be removed.`;
+      ? `Delete group "${g.name}"? Its ${childLayers.length} layer(s) and all shapes will be permanently removed.`
+      : `Delete "${g.name}"? All shapes in this layer will be permanently removed.`;
     const ok = await confirmDialog_({ title: "Delete Group", message: msg, variant: "danger", confirmLabel: "Delete" });
     if (!ok) return;
     await apiCall(
@@ -309,6 +323,8 @@ export function TakeoffPanel({
         updateGroups(groups.filter(x => x.id !== g.id && x.parentId !== g.id));
         setOpenMenuId(null);
         if (selectedGroupId === g.id || childLayers.some(l => l.id === selectedGroupId)) onSelectGroup(null);
+        // Remove deleted group's shapes from canvas so they don't linger as ghost items.
+        onRefreshItems?.();
       }
     );
   }
@@ -334,15 +350,16 @@ export function TakeoffPanel({
   }
 
   async function persistReorder(items: TakeoffGroup[]) {
-    await Promise.all(
-      items.map((g, i) =>
-        fetch(`/api/projects/${projectId}/takeoff-groups/${g.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sortOrder: i }),
-        })
-      )
-    ).catch(() => setPanelError("Failed to save order."));
+    try {
+      const res = await fetch(`/api/projects/${projectId}/takeoff-groups/sort`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: items.map((item, i) => ({ id: item.id, sortOrder: i })) }),
+      });
+      if (!res.ok) setPanelError("Failed to save order.");
+    } catch {
+      setPanelError("Failed to save order.");
+    }
   }
 
   function handleCategoryDrop(targetId: string) {
@@ -619,12 +636,13 @@ export function TakeoffPanel({
                             )}
                             {allPageGroupTotals[layer.id] ? (() => {
                               const raw = allPageGroupTotals[layer.id].rawQty;
+                              const storedUnit = allPageGroupTotals[layer.id].unit;
                               const { qty, unit } = layer.type === "VOLUME"
-                                ? volumeDisplay(layer, raw)
+                                ? volumeDisplay(layer, raw, storedUnit)
                                 : layer.type === "COUNT_BY_DISTANCE"
-                                ? countByDistanceDisplay(layer, raw)
+                                ? countByDistanceDisplay(layer, raw, storedUnit)
                                 : layer.type === "VERTICAL_WALL_AREA"
-                                ? wallAreaDisplay(layer, raw)
+                                ? wallAreaDisplay(layer, raw, storedUnit)
                                 : { qty: raw * layer.multiplier, unit: allPageGroupTotals[layer.id].unit.replace(" (set spacing)", "").replace(" (set height)", "").replace(" (set breadth+height)", "").replace(" (set wall height)", "") };
                               return (
                                 <p className="text-xs text-blue-400 font-medium truncate" title="All pages total">
@@ -756,8 +774,8 @@ export function TakeoffPanel({
           onClose={() => setShowAssemblyModal(false)}
           onApplied={() => {
             setShowAssemblyModal(false);
-            // Reload all groups for this discipline so canvas sees new layers instantly
-            fetch(`/api/projects/${projectId}/takeoff-groups?disciplineId=${activeDisciplineId}&limit=200`)
+            // Reload all groups (all disciplines) so other-discipline layers are not dropped
+            fetch(`/api/projects/${projectId}/takeoff-groups`)
               .then(r => r.json())
               .then(d => { if (Array.isArray(d)) updateGroups(d); })
               .catch(() => {});

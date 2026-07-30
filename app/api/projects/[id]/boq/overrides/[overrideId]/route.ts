@@ -42,7 +42,7 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = reviewSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const newStatus = parsed.data.action === "approve" ? "APPROVED" : "REJECTED";
     const approvedValue =
@@ -60,7 +60,7 @@ export async function PUT(
       },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: `boq_override.${newStatus.toLowerCase()}`,
@@ -69,7 +69,7 @@ export async function PUT(
       ipAddress: ip,
     });
 
-    invalidateBOQCache(params.id);
+    invalidateBOQCache(params.id).catch(() => {});
 
     // Notify the member who proposed the override
     if (override.submittedBy && override.submittedBy !== token.id as string) {

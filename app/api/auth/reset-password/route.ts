@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
     }
 
     const { token, password } = parsed.data;

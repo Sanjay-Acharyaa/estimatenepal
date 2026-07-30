@@ -52,7 +52,7 @@ export async function PUT(
       data: { thumbnailUrl: key },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "drawing.thumbnail_updated",

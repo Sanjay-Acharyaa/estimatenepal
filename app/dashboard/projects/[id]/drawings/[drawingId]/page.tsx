@@ -21,7 +21,7 @@ export default async function DrawingViewerPage({
 
   const project = await prisma.project.findUnique({
     where: { id: params.id },
-    select: { id: true, name: true, orgId: true, unitSystem: true, isPricingLocked: true },
+    select: { id: true, name: true, orgId: true, isPricingLocked: true },
   });
 
   if (!project || project.orgId !== session.user.orgId) notFound();
@@ -93,7 +93,6 @@ export default async function DrawingViewerPage({
               scaleZones: p.scaleZones,
             })),
           }}
-          unitSystem={project.unitSystem}
           initialGroups={takeoffGroups.map((g) => ({
             id: g.id,
             name: g.name,

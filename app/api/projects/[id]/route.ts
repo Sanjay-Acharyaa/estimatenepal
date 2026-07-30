@@ -7,6 +7,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { Prisma } from "@prisma/client";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { invalidateBOQCache } from "@/lib/boq";
 
 const updateSchema = z.object({
   name: z.string().min(2).max(200).optional(),
@@ -87,7 +88,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Restricted fields — only OWNER or ADMIN may change them
     const RESTRICTED_FIELDS = ["status", "isPricingLocked", "estimatedValue", "vatRate", "tdsRate"] as const;
@@ -106,6 +107,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       meta: parsed.data as Prisma.InputJsonValue,
       ipAddress: ip,
     });
+
+    // Invalidate cached BOQ whenever any financial field that affects the BOQ total changes.
+    const BOQ_AFFECTING_FIELDS = ["vatRate", "vatEnabled", "tdsRate", "tdsEnabled", "contingencyPct", "provisionalSum"] as const;
+    if (BOQ_AFFECTING_FIELDS.some(f => (parsed.data as Record<string, unknown>)[f] !== undefined)) {
+      invalidateBOQCache(params.id).catch(() => {});
+    }
 
     return NextResponse.json(updated);
   } catch (err) {

@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = inviteSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Enforce plan member limit — superadmins bypass
     if (!token.isSuperAdmin) {
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       console.error("[invite] Failed to send invite email:", { to: parsed.data.email, err });
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: token.orgId as string,
       userId: token.id as string,
       event: "org_invite.sent",

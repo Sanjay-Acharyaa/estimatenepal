@@ -1,4 +1,4 @@
-﻿export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       if (!code) { errors.push(`Row ${rowNum}: Code is required.`); return; }
       if (!description) { errors.push(`Row ${rowNum}: Description is required.`); return; }
       if (!unit) { errors.push(`Row ${rowNum}: Unit is required.`); return; }
-      if (baseRate === null || baseRate < 0) { errors.push(`Row ${rowNum}: Base Rate must be ≥ 0.`); return; }
+      if (baseRate === null || baseRate < 0) { errors.push(`Row ${rowNum}: Base Rate must be = 0.`); return; }
 
       rows.push({ code, description, unit, baseRate, fiscalYear: fy });
     });
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
 
     invalidateDudbcCaches().catch((e) => console.error("[admin/rates/import] Cache invalidation failed:", e));
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: "SYSTEM",
       userId: token!.id as string,
       event: "dudbc_rates.imported",

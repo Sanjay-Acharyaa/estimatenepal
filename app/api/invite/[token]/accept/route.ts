@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     const body = await req.json();
     const parsed = acceptSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     let userId: string;
 
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       return apiError("CONFLICT", "This invitation has already been accepted.", 409);
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: invite.orgId,
       userId,
       event: "org_invite.accepted",

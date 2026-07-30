@@ -34,7 +34,7 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const updated = await prisma.drawingFolder.update({
       where: { id: params.fId },
@@ -46,7 +46,7 @@ export async function PUT(
       include: { _count: { select: { drawings: true } } },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "folder.updated",
@@ -92,7 +92,7 @@ export async function DELETE(
 
     await prisma.drawingFolder.delete({ where: { id: params.fId } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "folder.deleted",

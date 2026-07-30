@@ -9,13 +9,12 @@ type Props = {
   onCancel: () => void;
 };
 
-const UNITS = ["m", "mm", "ft", "in"];
+const UNITS = ["m", "ft"];
 
 export function ScaleZonePanel({ defaultUnit, defaultScale, onSave, onCancel }: Props) {
   const [scale, setScale] = useState(defaultScale ? String(defaultScale) : "");
   const [unit, setUnit] = useState(UNITS.includes(defaultUnit) ? defaultUnit : "m");
   const [label, setLabel] = useState("");
-  const [error, setError] = useState("");
   const [fieldError, setFieldError] = useState("");
 
   function handleSave() {
@@ -42,7 +41,6 @@ export function ScaleZonePanel({ defaultUnit, defaultScale, onSave, onCancel }: 
           Set the scale for this region. It will override the page scale inside the zone.
         </p>
 
-        {error && <p role="alert" className="text-red-600 text-xs mb-2">{error}</p>}
         {fieldError && <p id="szp-scale-err" role="alert" className="text-red-600 text-xs mb-2">{fieldError}</p>}
 
         <div className="space-y-3 mb-4">
@@ -67,7 +65,7 @@ export function ScaleZonePanel({ defaultUnit, defaultScale, onSave, onCancel }: 
                 min="0.000001"
                 step="any"
                 value={scale}
-                onChange={(e) => { setScale(e.target.value); setFieldError(""); setError(""); }}
+                onChange={(e) => { setScale(e.target.value); setFieldError(""); }}
                 placeholder="e.g. 0.05"
                 autoFocus
                 aria-describedby={fieldError ? "szp-scale-err" : undefined}

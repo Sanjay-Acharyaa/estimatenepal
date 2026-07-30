@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
-import { computeQuantity, effectiveScale, type ToolData, type AdditionalParams } from "@/lib/takeoff";
+import { computeQuantity, perSegmentEffectiveScale, boundingBoxWeightedScale, type ToolData, type AdditionalParams } from "@/lib/takeoff";
+import { invalidateBOQCache } from "@/lib/boq";
 
 const pointSchema = z.object({ x: z.number(), y: z.number() });
 
@@ -51,13 +52,11 @@ export async function GET(
     if (!project) throw notFound("Project");
     await withTenantGuard(token.id as string, project.orgId);
 
-    const resolved = await resolveItem(params.pageId, params.drawingId, params.itemId);
-    if (!resolved) throw notFound("Takeoff item");
-
-    const item = await prisma.takeoffItem.findUnique({
-      where: { id: params.itemId },
+    const item = await prisma.takeoffItem.findFirst({
+      where: { id: params.itemId, pageId: params.pageId, page: { drawingId: params.drawingId } },
       include: { group: true },
     });
+    if (!item) throw notFound("Takeoff item");
 
     return NextResponse.json(item);
   } catch (err) {
@@ -89,7 +88,16 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
+
+    // Validate minimum point count per shape type when toolData is being updated.
+    if (parsed.data.toolData && item.shapeType) {
+      const MIN_POINTS: Record<string, number> = { CIRCLE: 2, ARC: 3, RECTANGLE: 4, POLYGON: 3, POLYLINE: 2 };
+      const min = MIN_POINTS[item.shapeType] ?? 1;
+      if (parsed.data.toolData.points.length < min) {
+        return apiError("VALIDATION_ERROR", `${item.shapeType} requires at least ${min} point(s).`, 400);
+      }
+    }
 
     // Prevent editing locked item (unless unlocking it)
     if (item.isLocked && parsed.data.isLocked !== false) {
@@ -101,21 +109,33 @@ export async function PUT(
       return apiError("CONFLICT", "This shape was modified by another user. Please refresh.", 409);
     }
 
-    // Recompute quantity if toolData or multiplier changed
+    // When groupId changes, validate the target group belongs to this project and is not locked.
+    const targetGroupId = parsed.data.groupId ?? item.groupId;
+    if (parsed.data.groupId && parsed.data.groupId !== item.groupId) {
+      const newGroup = await prisma.takeoffGroup.findUnique({ where: { id: parsed.data.groupId } });
+      if (!newGroup || newGroup.projectId !== params.id) throw notFound("Takeoff group");
+      if (newGroup.isLocked) return apiError("FORBIDDEN", "The target layer is locked.", 403);
+    }
+
+    // Recompute quantity if toolData or multiplier changed, using the target group's params.
     let quantityUpdate: { quantity?: number; rawQuantity?: number; unit?: string; scaleUsed?: number } = {};
     if (parsed.data.toolData || parsed.data.multiplier !== undefined) {
-      if (!item.groupId) {
+      if (!targetGroupId) {
         return apiError("CONFLICT", "Cannot recompute quantity: item has no assigned group.", 409);
       }
       const toolData = (parsed.data.toolData ?? item.toolData) as ToolData;
       const multiplier = parsed.data.multiplier ?? item.multiplier;
-      const scaleResult = effectiveScale(toolData.points, page.scale, page.scaleUnit, page.scaleZones);
+      const shapeType = item.shapeType ?? null;
+      const scaleResult = shapeType === "POLYLINE"
+        ? perSegmentEffectiveScale(toolData.points, page.scale, page.scaleUnit, page.scaleZones)
+        : boundingBoxWeightedScale(toolData.points, page.scale, page.scaleUnit, page.scaleZones, shapeType);
       const scaleUsed = scaleResult?.scale ?? item.scaleUsed;
       const scaleUnit = scaleResult?.scaleUnit ?? page.scaleUnit;
-      const group = await prisma.takeoffGroup.findUnique({ where: { id: item.groupId } });
+      const group = await prisma.takeoffGroup.findUnique({ where: { id: targetGroupId } });
       if (!group) return apiError("NOT_FOUND", "Takeoff group not found.", 404);
+      const computeTool = group.type === "VOLUME" ? "VOLUME" : item.toolType;
       const { quantity, rawQuantity, unit } = computeQuantity(
-        item.toolType,
+        computeTool,
         toolData,
         scaleUsed,
         scaleUnit,
@@ -139,6 +159,7 @@ export async function PUT(
       include: { group: { select: { id: true, name: true, colour: true } } },
     });
 
+    invalidateBOQCache(params.id).catch(() => {});
     return NextResponse.json(updated);
   } catch (err) {
     return handleApiError(err);
@@ -170,7 +191,18 @@ export async function DELETE(
       return apiError("CONFLICT", "Cannot delete a locked takeoff item.", 409);
     }
 
+    if (resolved.item.groupId) {
+      const group = await prisma.takeoffGroup.findUnique({
+        where: { id: resolved.item.groupId },
+        select: { isLocked: true },
+      });
+      if (group?.isLocked) {
+        return apiError("CONFLICT", "Cannot delete an item from a locked group.", 409);
+      }
+    }
+
     await prisma.takeoffItem.delete({ where: { id: params.itemId } });
+    invalidateBOQCache(params.id).catch(() => {});
     return NextResponse.json({ message: "Takeoff item deleted." });
   } catch (err) {
     return handleApiError(err);

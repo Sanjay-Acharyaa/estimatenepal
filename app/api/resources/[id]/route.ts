@@ -57,7 +57,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const data = parsed.data;
 
@@ -101,7 +101,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       }
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId,
       userId: token.id as string,
       event: "resource.update",
@@ -153,7 +153,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
     invalidateCache(orgId, existing.category);
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId,
       userId: token.id as string,
       event: "resource.delete",

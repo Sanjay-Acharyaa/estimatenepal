@@ -54,7 +54,7 @@ export async function POST(
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const discipline = await prisma.$transaction(async (tx) => {
       const last = await tx.discipline.findFirst({
@@ -73,7 +73,7 @@ export async function POST(
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "discipline.created",

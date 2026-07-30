@@ -174,6 +174,9 @@ function GovtModal({ projectId, onClose }: { projectId: string; onClose: () => v
           {input("Prepared by (तयार गर्ने)", "preparedBy")}
           {input("Checked by (जाँच गर्ने)", "checkedBy")}
           {input("Approved by (स्वीकृत)", "approvedBy")}
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <span className="font-medium">Note:</span> Govt BOQ Total Payable excludes TDS. Per DUDBC standard, TDS is withheld by the paying authority and is not included in the submitted estimate.
+          </div>
           {error && <p role="alert" className="text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg p-2">{error}</p>}
         </div>
         <div className="flex gap-3 p-5 border-t border-gray-100 dark:border-gray-700">
@@ -475,7 +478,7 @@ export function ExportButtons({ projectId }: Props) {
           <li>PDF generation may take 10-30 seconds for large BOQs</li>
           <li>Excel files open in Microsoft Excel or LibreOffice Calc</li>
           <li>Measurement Book includes site-level breakdown for field verification</li>
-          <li>Govt BOQ (DUDBC) follows Nepal government standard submission format</li>
+          <li>Govt BOQ (DUDBC) follows Nepal government standard — Total Payable excludes TDS (withheld separately by the paying authority)</li>
           <li>Custom columns appear as empty cells for manual data entry</li>
           <li>All amounts are in NRS (Nepali Rupee)</li>
         </ul>

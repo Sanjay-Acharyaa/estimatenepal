@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json();
     const parsed = addSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Verify target user is in same org
     const targetUser = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       include: { user: { select: { id: true, name: true, email: true } } },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "project.member_added",

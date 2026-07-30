@@ -27,9 +27,11 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
 
   const wastageSuggestion = useMemo(() => getWastageDefault(label), [label]);
 
-  const qtyDisplay = item.unit === "each"
-    ? `${Math.round(item.quantity)} ${item.unit}`
-    : `${item.quantity.toFixed(2)} ${item.unit}`;
+  const isCountUnit = item.unit.startsWith("each");
+  const displayUnit = isCountUnit ? "each" : item.unit;
+  const qtyDisplay = isCountUnit
+    ? `${Math.round(item.quantity)} ${displayUnit}`
+    : `${item.quantity.toFixed(2)} ${displayUnit}`;
 
   async function handleSave() {
     const pct = parseFloat(wastagePct);
@@ -86,10 +88,10 @@ export function TakeoffItemDetail({ item, projectId, drawingId, pageId, onClose,
         {item.wastagePct > 0 && (
           <div className="mt-1.5 bg-amber-50 border border-amber-200 rounded px-2 py-1">
             <p className="text-xs text-amber-700 font-medium">
-              Material to order: {(item.unit === "each"
+              Material to order: {(isCountUnit
                 ? Math.round(item.quantity * (1 + item.wastagePct / 100))
                 : (item.quantity * (1 + item.wastagePct / 100)).toFixed(2)
-              )} {item.unit}
+              )} {displayUnit}
             </p>
             <p className="text-xs text-amber-600 mt-0.5">
               {qtyDisplay} + {item.wastagePct}% wastage — for procurement only, not billed

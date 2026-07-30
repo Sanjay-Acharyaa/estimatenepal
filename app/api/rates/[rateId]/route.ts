@@ -7,6 +7,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { invalidateRatesCache } from "@/lib/rates";
+import { invalidateBOQCache } from "@/lib/boq";
 
 const RATE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -75,7 +76,7 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const updated = await prisma.rateItem.update({
       where: { id: params.rateId },
@@ -92,6 +93,13 @@ export async function PUT(req: NextRequest, { params }: { params: { rateId: stri
     });
 
     invalidateRatesCache(rate.orgId ?? undefined).catch(() => {});
+
+    // Invalidate BOQ caches for all projects that link to this rate item
+    prisma.takeoffGroup.findMany({
+      where: { rateItemId: rate.id },
+      select: { projectId: true },
+      distinct: ["projectId"],
+    }).then(groups => Promise.all(groups.map(g => invalidateBOQCache(g.projectId)))).catch(() => {});
 
     return NextResponse.json(updated);
   } catch (err) {

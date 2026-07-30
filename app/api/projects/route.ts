@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
-      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
     }
 
     const project = await prisma.project.create({
@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
       data: DEFAULT_FOLDERS.map((name, i) => ({ projectId: project.id, name, sortOrder: i })),
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: token.orgId as string,
       userId: token.id as string,
       event: "project.created",

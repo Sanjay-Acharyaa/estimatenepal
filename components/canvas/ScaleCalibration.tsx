@@ -9,7 +9,7 @@ type Props = {
   onCancel: () => void;
 };
 
-const UNITS = ["m", "mm", "ft", "in"];
+const UNITS = ["m", "ft"];
 
 export function ScaleCalibration({ pixelLength, currentUnit, onSave, onCancel }: Props) {
   const [realLength, setRealLength] = useState("");

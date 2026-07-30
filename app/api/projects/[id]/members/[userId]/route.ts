@@ -33,7 +33,7 @@ export async function DELETE(
       where: { projectId_userId: { projectId: params.id, userId: params.userId } },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "project.member_removed",

@@ -87,7 +87,7 @@ export async function PUT(
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) {
-      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
     }
 
     const updated = await prisma.drawing.update({
@@ -95,7 +95,7 @@ export async function PUT(
       data: parsed.data,
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "drawing.renamed",
@@ -160,7 +160,7 @@ export async function DELETE(
       }).catch(() => {});
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "drawing.deleted",

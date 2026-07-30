@@ -17,6 +17,7 @@ type TakeoffItem = {
   toolType: string;
   shapeType: string | null;
   pageId: string;
+  isNegative: boolean;
 };
 
 type Group = {
@@ -46,7 +47,7 @@ type Props = {
   onClose: () => void;
   onGroupUpdated: (g: Group) => void;
   refreshKey?: number;
-  thisPageTotal?: { rawQty: number; unit: string };
+  thisPageTotal?: { rawQty: number; unit: string; pageId?: string };
   sidebarWidth?: number;
 };
 
@@ -57,7 +58,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 function getNum(val: unknown): number {
   const n = Number(val);
-  return isNaN(n) ? 0 : n;
+  return Number.isFinite(n) ? n : 0;
 }
 
 export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onGroupUpdated, refreshKey, thisPageTotal, sidebarWidth = 224 }: Props) {
@@ -162,6 +163,8 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
       newParams.height = { ft: parseFloat(heightFt) || 0, in: parseFloat(heightIn) || 0 };
       if (volumeMethod === "lbh") {
         newParams.breadth = { ft: parseFloat(breadthFt) || 0, in: parseFloat(breadthIn) || 0 };
+      } else {
+        delete newParams.breadth;
       }
     }
     if (group.type === "VERTICAL_WALL_AREA") {
@@ -186,14 +189,15 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   // For VOLUME: sum rawQuantity only for shapes matching the current method.
   // lbh = length-based shapes (POLYLINE, ARC); area_x_h = area-based shapes (RECTANGLE, CIRCLE).
   const totalRaw = detail?.items?.reduce((s, i) => {
+    const signed = i.isNegative ? -(i.rawQuantity ?? 0) : (i.rawQuantity ?? 0);
     if (group.type === "VOLUME") {
       const isLengthShape = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || i.shapeType === null;
       const isAreaShape = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
-      if (volumeMethod === "lbh" && isLengthShape) return s + (i.rawQuantity ?? 0);
-      if (volumeMethod !== "lbh" && isAreaShape) return s + (i.rawQuantity ?? 0);
+      if (volumeMethod === "lbh" && isLengthShape) return s + signed;
+      if (volumeMethod !== "lbh" && isAreaShape) return s + signed;
       return s;
     }
-    return s + (i.rawQuantity ?? 0);
+    return s + signed;
   }, 0) ?? 0;
   const currentMult = parseFloat(multiplier) || group.multiplier;
   const currentH = (parseFloat(heightFt) || 0) + (parseFloat(heightIn) || 0) / 12;
@@ -202,16 +206,26 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   const currentWallH = (parseFloat(wallFt) || 0) + (parseFloat(wallIn) || 0) / 12;
 
   function applyFormula(raw: number, baseUnit: string): { qty: number; unit: string } {
+    // Params (height, breadth, spacing, wallH) are stored as ft+in; convert to drawing unit.
+    const drawingFt = baseUnit === "" || baseUnit.includes("ft");
+    const ftu = drawingFt ? 1 : 0.3048;
     if (group.type === "VOLUME") {
-      if (volumeMethod === "lbh") return { qty: raw * currentB * currentH * currentMult, unit: currentB > 0 && currentH > 0 ? "cu ft" : "(set breadth+height)" };
-      return { qty: raw * currentH * currentMult, unit: currentH > 0 ? "cu ft" : "(set height)" };
+      const hU = currentH * ftu;
+      const bU = currentB * ftu;
+      const cuUnit = drawingFt ? "cu ft" : "cu m";
+      if (volumeMethod === "lbh") return { qty: raw * bU * hU * currentMult, unit: bU > 0 && hU > 0 ? cuUnit : "(set breadth+height)" };
+      return { qty: raw * hU * currentMult, unit: hU > 0 ? cuUnit : "(set height)" };
     }
     if (group.type === "COUNT_BY_DISTANCE") {
-      if (currentSpacing > 0) return { qty: (Math.floor(raw / currentSpacing) + 1) * currentMult, unit: "each" };
+      const spacingU = currentSpacing * ftu;
+      if (spacingU > 0) return { qty: (Math.floor(raw / spacingU) + 1) * currentMult, unit: "each" };
       return { qty: raw * currentMult, unit: "(set spacing)" };
     }
     if (group.type === "VERTICAL_WALL_AREA") {
-      return { qty: currentWallH > 0 ? raw * currentWallH * currentMult : raw * currentMult, unit: currentWallH > 0 ? "sq ft" : "ft (set wall height)" };
+      const wallHU = currentWallH * ftu;
+      const sqUnit = drawingFt ? "sq ft" : "sq m";
+      const lenUnit = drawingFt ? "ft" : "m";
+      return { qty: wallHU > 0 ? raw * wallHU * currentMult : raw * currentMult, unit: wallHU > 0 ? sqUnit : `${lenUnit} (set wall height)` };
     }
     return { qty: raw * currentMult, unit: baseUnit };
   }
@@ -219,10 +233,58 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   const allPagesBaseUnit = detail?.items?.[0]?.unit
     ?.replace(" (set height)", "").replace(" (set breadth+height)", "")
     .replace(" (set spacing)", "").replace(" (set wall height)", "") ?? "";
-  const { qty: displayTotal, unit: qtyUnit } = applyFormula(totalRaw, allPagesBaseUnit);
+
+  // Unit labels for the drawing's native scale unit (derived from first item).
+  const isDrawingFt = allPagesBaseUnit === "" || allPagesBaseUnit.includes("ft");
+  const ftToUnit = isDrawingFt ? 1 : 0.3048;
+  const lenUnit = isDrawingFt ? "ft" : "m";
+  const sqUnit = isDrawingFt ? "sq ft" : "sq m";
+  const cuUnit = isDrawingFt ? "cu ft" : "cu m";
+  // Parameter values converted to the drawing's scale unit (for formula display strings).
+  const currentHInUnit = currentH * ftToUnit;
+  const currentBInUnit = currentB * ftToUnit;
+  const currentSpacingInUnit = currentSpacing * ftToUnit;
+  const currentWallHInUnit = currentWallH * ftToUnit;
+  // COUNT_BY_DISTANCE: mirror BOQ per-item fence-post using detail.items when available,
+  // so the panel total matches the BOQ export exactly. Falls back to applyFormula
+  // (aggregate) while detail is still loading (items not yet fetched).
+  const { qty: displayTotal, unit: qtyUnit } = (() => {
+    if (group.type === "COUNT_BY_DISTANCE" && detail?.items && detail.items.length > 0) {
+      if (!currentSpacing) return { qty: totalRaw * currentMult, unit: `${allPagesBaseUnit || "unit"} (set spacing)` };
+      let total = 0;
+      for (const item of detail.items) {
+        const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+        const ftu = item.unit.includes("ft") ? 1 : 0.3048;
+        const spacing = currentSpacing * ftu;
+        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
+        total += count * currentMult;
+      }
+      return { qty: total, unit: "each" };
+    }
+    return applyFormula(totalRaw, allPagesBaseUnit);
+  })();
 
   const thisPageBaseUnit = thisPageTotal?.unit ?? allPagesBaseUnit;
-  const { qty: thisPageDisplay, unit: thisPageUnit } = applyFormula(thisPageTotal?.rawQty ?? 0, thisPageBaseUnit);
+  const { qty: thisPageDisplay, unit: thisPageUnit } = (() => {
+    if (group.type === "COUNT_BY_DISTANCE" && thisPageTotal?.pageId && detail?.items && detail.items.length > 0) {
+      if (!currentSpacing) return { qty: (thisPageTotal.rawQty ?? 0) * currentMult, unit: `${thisPageBaseUnit || "unit"} (set spacing)` };
+      let total = 0;
+      for (const item of detail.items.filter(i => i.pageId === thisPageTotal.pageId)) {
+        const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+        const ftu = item.unit.includes("ft") ? 1 : 0.3048;
+        const spacing = currentSpacing * ftu;
+        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
+        total += count * currentMult;
+      }
+      return { qty: total, unit: "each" };
+    }
+    // When unit is "each" the server already computed the count — multiplying by spacing again
+    // (inside applyFormula) would double-apply fence-post. Return the count directly.
+    if (group.type === "COUNT_BY_DISTANCE" && thisPageBaseUnit === "each") {
+      return { qty: (thisPageTotal?.rawQty ?? 0) * currentMult, unit: "each" };
+    }
+    return applyFormula(thisPageTotal?.rawQty ?? 0, thisPageBaseUnit);
+  })();
 
   const itemCount = detail?._count.items ?? group._count.items;
 
@@ -443,20 +505,20 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                   {displayTotal.toFixed(2)}
                   <span className="text-sm font-normal text-gray-500 ml-1">{qtyUnit}</span>
                 </p>
-                {group.type === "VOLUME" && currentH > 0 ? (
+                {group.type === "VOLUME" && currentHInUnit > 0 ? (
                   <p className="text-xs text-gray-600 mt-0.5">
                     {volumeMethod === "lbh"
-                      ? `${totalRaw.toFixed(2)} ft × ${currentB.toFixed(3)} ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} cu ft`
-                      : `${totalRaw.toFixed(2)} sq ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} cu ft`
+                      ? `${totalRaw.toFixed(2)} ${lenUnit} × ${currentBInUnit.toFixed(3)} ${lenUnit} × ${currentHInUnit.toFixed(3)} ${lenUnit}${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} ${cuUnit}`
+                      : `${totalRaw.toFixed(2)} ${sqUnit} × ${currentHInUnit.toFixed(3)} ${lenUnit}${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} ${cuUnit}`
                     }
                   </p>
-                ) : group.type === "VERTICAL_WALL_AREA" && currentWallH > 0 ? (
+                ) : group.type === "VERTICAL_WALL_AREA" && currentWallHInUnit > 0 ? (
                   <p className="text-xs text-gray-600 mt-0.5">
-                    {`${totalRaw.toFixed(2)} ft × ${currentWallH.toFixed(3)} ft (wall)${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} sq ft`}
+                    {`${totalRaw.toFixed(2)} ${lenUnit} × ${currentWallHInUnit.toFixed(3)} ${lenUnit} (wall)${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(2)} ${sqUnit}`}
                   </p>
-                ) : group.type === "COUNT_BY_DISTANCE" && currentSpacing > 0 ? (
+                ) : group.type === "COUNT_BY_DISTANCE" && currentSpacingInUnit > 0 ? (
                   <p className="text-xs text-gray-600 mt-0.5">
-                    {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.floor(totalRaw / currentSpacing) + 1} items${currentMult !== 1 ? ` × ${currentMult} = ${displayTotal}` : ""}`}
+                    {`${itemCount} segment${itemCount !== 1 ? "s" : ""}, per-segment count${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal} items`}
                   </p>
                 ) : currentMult !== 1 ? (
                   <p className="text-xs text-gray-600 mt-0.5">
@@ -532,7 +594,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
                     </div>
                   </div>
-                  {currentH > 0 && <p className="text-xs text-blue-600 mt-1">= {currentH.toFixed(3)} ft</p>}
+                  {currentHInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentHInUnit.toFixed(3)} {lenUnit}</p>}
                 </div>
 
                 {/* Breadth — only for LBH */}
@@ -551,7 +613,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
                       </div>
                     </div>
-                    {currentB > 0 && <p className="text-xs text-blue-600 mt-1">= {currentB.toFixed(3)} ft</p>}
+                    {currentBInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentBInUnit.toFixed(3)} {lenUnit}</p>}
                   </div>
                 )}
 
@@ -562,11 +624,11 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                     <p className="text-base font-bold text-gray-800">
                       {displayTotal.toFixed(3)} <span className="text-sm font-normal text-gray-500">{qtyUnit}</span>
                     </p>
-                    {currentH > 0 && (
+                    {currentHInUnit > 0 && (
                       <p className="text-xs text-gray-600 mt-0.5">
                         {volumeMethod === "lbh"
-                          ? `${totalRaw.toFixed(2)} ft × ${currentB.toFixed(3)} ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(3)} cu ft`
-                          : `${totalRaw.toFixed(2)} sq ft × ${currentH.toFixed(3)} ft${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(3)} cu ft`
+                          ? `${totalRaw.toFixed(2)} ${lenUnit} × ${currentBInUnit.toFixed(3)} ${lenUnit} × ${currentHInUnit.toFixed(3)} ${lenUnit}${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(3)} ${cuUnit}`
+                          : `${totalRaw.toFixed(2)} ${sqUnit} × ${currentHInUnit.toFixed(3)} ${lenUnit}${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${displayTotal.toFixed(3)} ${cuUnit}`
                         }
                       </p>
                     )}
@@ -592,20 +654,20 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
                     </div>
                   </div>
-                  {currentWallH > 0 && <p className="text-xs text-blue-600 mt-1">= {currentWallH.toFixed(3)} ft</p>}
+                  {currentWallHInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentWallHInUnit.toFixed(3)} {lenUnit}</p>}
                 </div>
                 {totalRaw > 0 && (
                   <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                     <p className="text-xs text-gray-500 mb-0.5">Live preview ({itemCount} shape{itemCount !== 1 ? "s" : ""})</p>
                     <p className="text-base font-bold text-gray-800">
-                      {currentWallH > 0
-                        ? <>{(totalRaw * currentWallH * currentMult).toFixed(2)} <span className="text-sm font-normal text-gray-500">sq ft</span></>
-                        : <>{totalRaw.toFixed(2)} <span className="text-sm font-normal text-gray-500">ft (set wall height)</span></>
+                      {currentWallHInUnit > 0
+                        ? <>{(totalRaw * currentWallHInUnit * currentMult).toFixed(2)} <span className="text-sm font-normal text-gray-500">{sqUnit}</span></>
+                        : <>{totalRaw.toFixed(2)} <span className="text-sm font-normal text-gray-500">{lenUnit} (set wall height)</span></>
                       }
                     </p>
-                    {currentWallH > 0 && (
+                    {currentWallHInUnit > 0 && (
                       <p className="text-xs text-gray-600 mt-0.5">
-                        {`${totalRaw.toFixed(2)} ft (perimeter) × ${currentWallH.toFixed(3)} ft (height)${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${(totalRaw * currentWallH * currentMult).toFixed(2)} sq ft`}
+                        {`${totalRaw.toFixed(2)} ${lenUnit} (perimeter) × ${currentWallHInUnit.toFixed(3)} ${lenUnit} (height)${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${(totalRaw * currentWallHInUnit * currentMult).toFixed(2)} ${sqUnit}`}
                       </p>
                     )}
                   </div>
@@ -632,27 +694,47 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
                     </div>
                   </div>
-                  {currentSpacing > 0 && <p className="text-xs text-blue-600 mt-1">= {currentSpacing.toFixed(3)} ft per item</p>}
+                  {currentSpacingInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentSpacingInUnit.toFixed(3)} {lenUnit} per item</p>}
                 </div>
 
-                {totalRaw > 0 && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                    <p className="text-xs text-gray-500 mb-0.5">Live preview ({itemCount} shape{itemCount !== 1 ? "s" : ""})</p>
-                    <p className="text-base font-bold text-gray-800">
-                      {currentSpacing > 0
-                        ? <>{(Math.floor(totalRaw / currentSpacing) + 1) * currentMult} <span className="text-sm font-normal text-gray-500">each</span></>
-                        : <>{totalRaw.toFixed(2)} <span className="text-sm font-normal text-gray-500">ft (set spacing)</span></>
+                {totalRaw > 0 && (() => {
+                  // Per-item fence-post when items are loaded — matches BOQ exactly.
+                  // Falls back to aggregate (totalRaw) while detail.items is still fetching.
+                  let previewCount: number | null = null;
+                  if (currentSpacingInUnit > 0 && detail?.items && detail.items.length > 0) {
+                    let total = 0;
+                    for (const item of detail.items) {
+                      const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+                      const ftu = item.unit.includes("ft") ? 1 : 0.3048;
+                      const spacing = currentSpacing * ftu;
+                      if (spacing > 0) {
+                        total += signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
                       }
-                    </p>
-                    {currentSpacing > 0 && (
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        {`${totalRaw.toFixed(2)} ft ÷ ${currentSpacing.toFixed(3)} ft = ${Math.floor(totalRaw / currentSpacing) + 1} items${currentMult !== 1 ? ` × ${currentMult} = ${(Math.floor(totalRaw / currentSpacing) + 1) * currentMult}` : ""}`}
+                    }
+                    previewCount = total * currentMult;
+                  }
+                  return (
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                      <p className="text-xs text-gray-500 mb-0.5">Live preview ({itemCount} shape{itemCount !== 1 ? "s" : ""})</p>
+                      <p className="text-base font-bold text-gray-800">
+                        {currentSpacingInUnit > 0
+                          ? <>{previewCount ?? (Math.floor(totalRaw / currentSpacingInUnit) + 1) * currentMult} <span className="text-sm font-normal text-gray-500">each</span></>
+                          : <>{totalRaw.toFixed(2)} <span className="text-sm font-normal text-gray-500">{lenUnit} (set spacing)</span></>
+                        }
                       </p>
-                    )}
-                  </div>
-                )}
+                      {currentSpacingInUnit > 0 && (
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          {previewCount != null
+                            ? `${itemCount} segment${itemCount !== 1 ? "s" : ""}, per-segment ⌊len ÷ spacing⌋ + 1${currentMult !== 1 ? ` × ${currentMult}` : ""} = ${previewCount} items`
+                            : `${totalRaw.toFixed(2)} ${lenUnit} ÷ ${currentSpacingInUnit.toFixed(3)} ${lenUnit} = ${Math.floor(totalRaw / currentSpacingInUnit) + 1} items${currentMult !== 1 ? ` × ${currentMult} = ${(Math.floor(totalRaw / currentSpacingInUnit) + 1) * currentMult}` : ""}`
+                          }
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <p className="text-xs text-gray-600">
-                  Count = ⌊ total length ÷ spacing ⌋ + 1. Set spacing first, then draw shapes.
+                  Count per segment = ⌊ segment length ÷ spacing ⌋ + 1. Total = sum across all segments.
                 </p>
               </div>
             )}

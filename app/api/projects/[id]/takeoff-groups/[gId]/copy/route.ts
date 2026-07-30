@@ -6,6 +6,7 @@ import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { appendAuditLog } from "@/lib/audit";
+import { invalidateBOQCache } from "@/lib/boq";
 import { randomUUID } from "crypto";
 
 const copySchema = z.object({
@@ -15,12 +16,15 @@ const copySchema = z.object({
 });
 
 // Copies all TakeoffItems from originalGroupId to newGroupId using createMany (no N+1).
+// Pre-assigns UUIDs so we can fetch the newly created records and return their real IDs.
 async function copyItems(originalGroupId: string, newGroupId: string) {
   const originals = await prisma.takeoffItem.findMany({ where: { groupId: originalGroupId } });
   if (originals.length === 0) return [];
+  const newIds = originals.map(() => randomUUID());
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (prisma.takeoffItem.createMany as any)({
-    data: originals.map(item => ({
+    data: originals.map((item, i) => ({
+      id: newIds[i],
       pageId: item.pageId,
       groupId: newGroupId,
       label: item.label,
@@ -42,10 +46,10 @@ async function copyItems(originalGroupId: string, newGroupId: string) {
       scaleUsed: item.scaleUsed,
       sortOrder: item.sortOrder,
       toolData: item.toolData,
-      rateItemId: item.rateItemId,
     })),
   });
-  return originals;
+  // Return the actual created records (not originals) so callers have correct IDs and groupId.
+  return prisma.takeoffItem.findMany({ where: { id: { in: newIds } }, orderBy: { sortOrder: "asc" } });
 }
 
 export async function POST(
@@ -68,7 +72,7 @@ export async function POST(
 
     const body = await req.json();
     const parsed = copySchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const { targetDisciplineId, withObjects, targetGroupId } = parsed.data;
 
@@ -90,6 +94,11 @@ export async function POST(
     if (isCategory) {
       // ── Copy category + ALL its layers (+ optionally all items) ─────────────
       // Copies are always created unlocked + visible so they're ready to edit.
+      const maxCatSort = await prisma.takeoffGroup.findFirst({
+        where: { projectId: params.id, disciplineId: targetDisciplineId, parentId: null },
+        orderBy: { sortOrder: "desc" },
+        select: { sortOrder: true },
+      });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const newCat = await (prisma.takeoffGroup.create as any)({
         data: {
@@ -106,7 +115,7 @@ export async function POST(
           rateItemId: original.rateItemId ?? undefined,
           isLocked: false,
           isVisible: true,
-          sortOrder: original.sortOrder + 1,
+          sortOrder: (maxCatSort?.sortOrder ?? -1) + 1,
         },
         include: { _count: { select: { items: true } }, rateItem: { select: { code: true, source: true } } },
       });
@@ -140,10 +149,10 @@ export async function POST(
 
       const allCopiedItems: unknown[] = [];
       if (withObjects) {
-        for (let i = 0; i < original.children.length; i++) {
-          const copied = await copyItems(original.children[i].id, layerIds[i]);
-          allCopiedItems.push(...copied);
-        }
+        const batches = await Promise.all(
+          original.children.map((child, i) => copyItems(child.id, layerIds[i]))
+        );
+        for (const batch of batches) allCopiedItems.push(...batch);
       }
 
       // Fetch the created layers with relations for the response
@@ -156,7 +165,7 @@ export async function POST(
         : [];
       const newLayers = newLayerRecords.map((l: any) => ({ ...l, parentId: newCat.id, disciplineId: targetDisciplineId }));
 
-      await appendAuditLog({
+      appendAuditLog({
         orgId: project.orgId,
         userId: token.id as string,
         event: "takeoff_group.copied",
@@ -165,6 +174,7 @@ export async function POST(
         ipAddress: ip,
       });
 
+      invalidateBOQCache(params.id).catch(() => {});
       return NextResponse.json(
         { category: { ...newCat, disciplineId: targetDisciplineId }, layers: newLayers, copiedItems: allCopiedItems },
         { status: 201 }
@@ -190,6 +200,11 @@ export async function POST(
           if (existing) {
             targetParentId = existing.id;
           } else {
+            const maxParentSort = await prisma.takeoffGroup.findFirst({
+              where: { projectId: params.id, disciplineId: targetDisciplineId, parentId: null },
+              orderBy: { sortOrder: "desc" },
+              select: { sortOrder: true },
+            });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const newParent = await (prisma.takeoffGroup.create as any)({
               data: {
@@ -204,7 +219,7 @@ export async function POST(
                 rateItemId: origParent.rateItemId ?? undefined,
                 isLocked: false,
                 isVisible: true,
-                sortOrder: origParent.sortOrder,
+                sortOrder: (maxParentSort?.sortOrder ?? -1) + 1,
               },
               include: { _count: { select: { items: true } }, rateItem: { select: { code: true, source: true } } },
             });
@@ -213,6 +228,11 @@ export async function POST(
         }
       }
 
+      const maxLayerSort = await prisma.takeoffGroup.findFirst({
+        where: { projectId: params.id, parentId: targetParentId ?? undefined },
+        orderBy: { sortOrder: "desc" },
+        select: { sortOrder: true },
+      });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const newLayer = await (prisma.takeoffGroup.create as any)({
         data: {
@@ -230,14 +250,14 @@ export async function POST(
           rateItemId: original.rateItemId ?? undefined,
           isLocked: false,
           isVisible: true,
-          sortOrder: original.sortOrder + 1,
+          sortOrder: (maxLayerSort?.sortOrder ?? -1) + 1,
         },
         include: { _count: { select: { items: true } }, rateItem: { select: { code: true, source: true } } },
       });
 
       const copiedItems = withObjects ? await copyItems(original.id, newLayer.id) : [];
 
-      await appendAuditLog({
+      appendAuditLog({
         orgId: project.orgId,
         userId: token.id as string,
         event: "takeoff_group.copied",
@@ -246,6 +266,7 @@ export async function POST(
         ipAddress: ip,
       });
 
+      invalidateBOQCache(params.id).catch(() => {});
       return NextResponse.json(
         { layer: { ...newLayer, parentId: targetParentId, disciplineId: targetDisciplineId }, targetParentId, copiedItems },
         { status: 201 }

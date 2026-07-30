@@ -5,6 +5,10 @@ import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
+function getNum(v: unknown): number {
+  const n = Number(v); return Number.isFinite(n) ? n : 0;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -27,31 +31,128 @@ export async function GET(
       select: { id: true, type: true, additionalParams: true },
     });
 
-    // Fetch all items across all pages for this project
-    const items = await prisma.takeoffItem.findMany({
-      where: { group: { projectId: params.id } },
-      select: { groupId: true, rawQuantity: true, unit: true, shapeType: true },
-    });
-
     const groupMap = new Map(groups.map(g => [g.id, g]));
     const totals: Record<string, { rawQty: number; unit: string; count: number }> = {};
 
-    for (const item of items) {
-      if (!item.groupId) continue;
-      const grp = groupMap.get(item.groupId);
-      if (!totals[item.groupId]) totals[item.groupId] = { rawQty: 0, unit: item.unit, count: 0 };
-      totals[item.groupId].count++;
+    // ── Simple groups (LINEAR, AREA, COUNT, VERTICAL_WALL_AREA) ─────────────
+    // Use database-level aggregation to avoid loading all item rows into memory.
+    // Group by (groupId, unit) so we can detect and normalise mixed-unit groups.
+    const simpleGroupIds = groups
+      .filter(g => g.type !== "VOLUME" && g.type !== "COUNT_BY_DISTANCE")
+      .map(g => g.id);
 
-      if (grp?.type === "VOLUME") {
-        const ap = grp.additionalParams as { volumeMethod?: string } | null;
-        const method = ap?.volumeMethod ?? "area_x_h";
-        const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
-        const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
-        if ((method === "lbh" && isLengthShape) || (method !== "lbh" && isAreaShape)) {
-          totals[item.groupId].rawQty += item.rawQuantity;
+    if (simpleGroupIds.length > 0) {
+      const [posAgg, negAgg] = await Promise.all([
+        prisma.takeoffItem.groupBy({
+          by: ["groupId", "unit"],
+          where: { groupId: { in: simpleGroupIds }, isNegative: false },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          _sum: { rawQuantity: true } as any,
+          _count: { id: true },
+        }),
+        prisma.takeoffItem.groupBy({
+          by: ["groupId", "unit"],
+          where: { groupId: { in: simpleGroupIds }, isNegative: true },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          _sum: { rawQuantity: true } as any,
+          _count: { id: true },
+        }),
+      ]);
+
+      // Conversion factor to a canonical unit (metric) for each raw unit.
+      // COUNT / dimensionless units return factor 1 and keep their unit.
+      const toMetric = (unit: string): { factor: number; canonicalUnit: string } => {
+        if (unit === "ft" || unit === "Rm." || unit === "rm") return { factor: 0.3048, canonicalUnit: "m" };
+        if (unit === "sqft" || unit === "sq ft") return { factor: 0.3048 * 0.3048, canonicalUnit: "sqm" };
+        if (unit === "cu ft" || unit === "cuft") return { factor: 0.3048 ** 3, canonicalUnit: "cu m" };
+        return { factor: 1, canonicalUnit: unit };
+      };
+
+      // Accumulate per-group totals, normalising to metric when a group has mixed units.
+      type GroupAccum = { rawQty: number; unit: string; count: number; units: Set<string> };
+      const accum = new Map<string, GroupAccum>();
+
+      const addToAccum = (gid: string, unit: string, signedSum: number, count: number) => {
+        if (!accum.has(gid)) accum.set(gid, { rawQty: 0, unit, count: 0, units: new Set() });
+        const a = accum.get(gid)!;
+        a.units.add(unit);
+        a.count += count;
+        if (a.units.size > 1) {
+          // Mixed units detected: re-normalise existing total and add new bucket in metric.
+          const prevMetric = toMetric(a.unit);
+          const newMetric = toMetric(unit);
+          a.rawQty = a.rawQty * prevMetric.factor + signedSum * newMetric.factor;
+          a.unit = newMetric.canonicalUnit;
+        } else {
+          a.rawQty += signedSum;
+          a.unit = unit;
         }
-      } else {
-        totals[item.groupId].rawQty += item.rawQuantity;
+      };
+
+      for (const row of posAgg) {
+        const gid = row.groupId as string;
+        const sum = getNum((row as any)._sum?.rawQuantity);
+        const count = (row._count as any).id ?? 0;
+        addToAccum(gid, row.unit, sum, count);
+      }
+      for (const row of negAgg) {
+        const gid = row.groupId as string;
+        const sum = getNum((row as any)._sum?.rawQuantity);
+        const count = (row._count as any).id ?? 0;
+        addToAccum(gid, row.unit, -sum, count);
+      }
+
+      accum.forEach((a, gid) => {
+        totals[gid] = { rawQty: a.rawQty, unit: a.unit, count: a.count };
+      });
+    }
+
+    // ── Complex groups (VOLUME, COUNT_BY_DISTANCE) ───────────────────────────
+    // These need per-item shapeType for filtering, so rows are loaded — but only
+    // for the subset of groups that require it (typically much fewer than all items).
+    const complexGroupIds = groups
+      .filter(g => g.type === "VOLUME" || g.type === "COUNT_BY_DISTANCE")
+      .map(g => g.id);
+
+    if (complexGroupIds.length > 0) {
+      const complexItems = await prisma.takeoffItem.findMany({
+        where: { groupId: { in: complexGroupIds } },
+        select: { groupId: true, rawQuantity: true, unit: true, shapeType: true, isNegative: true },
+      });
+
+      for (const item of complexItems) {
+        if (!item.groupId) continue;
+        const grp = groupMap.get(item.groupId);
+        if (!totals[item.groupId]) totals[item.groupId] = { rawQty: 0, unit: item.unit, count: 0 };
+        totals[item.groupId].count++;
+
+        if (grp?.type === "VOLUME") {
+          const ap = grp.additionalParams as { volumeMethod?: string } | null;
+          const method = ap?.volumeMethod ?? "area_x_h";
+          const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
+          const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
+          if ((method === "lbh" && isLengthShape) || (method !== "lbh" && isAreaShape)) {
+            totals[item.groupId].rawQty += item.isNegative ? -item.rawQuantity : item.rawQuantity;
+          }
+        } else {
+          // COUNT_BY_DISTANCE: mirror lib/boq.ts per-item counting.
+          const ap = grp?.additionalParams as { spacing?: { ft?: number; in?: number } } | null;
+          const sp = ap?.spacing;
+          const spacingFt = sp ? getNum(sp.ft) + getNum(sp.in) / 12 : 0;
+          const ftToUnit = item.unit.includes("ft") ? 1 : 0.3048;
+          const spacing = spacingFt * ftToUnit;
+          const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+          if (spacing > 0) {
+            const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
+            totals[item.groupId].rawQty += count;
+            totals[item.groupId].unit = "each";
+          } else {
+            // Normalise to metres so mixed ft+m groups sum correctly.
+            const toM = item.unit.includes("ft") ? 0.3048 : 1;
+            totals[item.groupId].rawQty += signedRaw * toM;
+            totals[item.groupId].unit = "m";
+          }
+        }
       }
     }
 

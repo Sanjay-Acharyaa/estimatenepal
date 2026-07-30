@@ -1,4 +1,4 @@
-ï»¿export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/admin/rates â€” create a single DUDBC rate item
+// POST /api/admin/rates — create a single DUDBC rate item
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Block if same code+fiscalYear already published
     const existing = await prisma.rateItem.findFirst({
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       data: { ...parsed.data, source: "DUDBC", isPublished: false },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: "SYSTEM",
       userId: token!.id as string,
       event: "dudbc_rate.created",
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/admin/rates?fiscalYear=X â€” super admin only, deletes entire fiscal year
+// DELETE /api/admin/rates?fiscalYear=X — super admin only, deletes entire fiscal year
 // Super admin only. Deletes ALL DUDBC rates for the given fiscal year (published or not),
 // including district rates, rate analyses, and BOQ overrides linked to them.
 export async function DELETE(req: NextRequest) {
@@ -149,7 +149,7 @@ export async function DELETE(req: NextRequest) {
       prisma.rateItem.deleteMany({ where: { id: { in: ids } } }),
     ]);
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: "SYSTEM",
       userId: token!.id as string,
       event: "dudbc_rates.fiscal_year_deleted",

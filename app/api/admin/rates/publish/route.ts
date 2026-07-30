@@ -1,4 +1,4 @@
-﻿export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const { fiscalYear } = parsed.data;
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       data: { isPublished: true },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: "SYSTEM",
       userId: token!.id as string,
       event: "dudbc_rates.published",

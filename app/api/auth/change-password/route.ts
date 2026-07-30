@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const user = await prisma.user.findUnique({ where: { id: token.id as string } });
     if (!user) throw unauthorized();
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     await redis.set(`pw_changed:${user.id}`, now.getTime().toString(), "EX", 7 * 24 * 3600);
     invalidateUserCache(user.id).catch((e) => console.error("[change-password] cache invalidation failed:", e));
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: user.orgId ?? "SYSTEM",
       userId: user.id,
       event: "user.password_changed",

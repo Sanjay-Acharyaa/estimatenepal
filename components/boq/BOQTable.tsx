@@ -83,6 +83,12 @@ export function BOQTable({ projectId, isAdmin }: Props) {
         </div>
       )}
 
+      {hasAnyItems && boq.zeroQuantityItemCount > 0 && (
+        <div role="alert" className="mb-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-2 text-sm text-amber-800 dark:text-amber-300">
+          <span className="font-medium">Warning:</span> {boq.zeroQuantityItemCount} shape{boq.zeroQuantityItemCount !== 1 ? "s" : ""} ha{boq.zeroQuantityItemCount !== 1 ? "ve" : "s"} zero computed quantity and will contribute nothing to the BOQ total. Check the drawing canvas for degenerate shapes (e.g. collapsed rectangles or overlapping points).
+        </div>
+      )}
+
       {hasAnyItems && (
         <table className="w-full text-sm border-collapse">
           <thead>

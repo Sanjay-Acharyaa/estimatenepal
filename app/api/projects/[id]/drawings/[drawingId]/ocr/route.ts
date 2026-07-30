@@ -40,7 +40,7 @@ export async function POST(
     const body = await req.json();
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+      return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
     }
 
     // Limit concurrent Tesseract workers to 4 to cap CPU usage per replica.

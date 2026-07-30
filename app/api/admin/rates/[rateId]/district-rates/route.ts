@@ -7,6 +7,7 @@ import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/l
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { NEPAL_DISTRICTS } from "@/lib/districts";
+import { invalidateBOQCache } from "@/lib/boq";
 
 async function requireSuperAdmin(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -73,7 +74,7 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = upsertSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     const districts = parsed.data.rates.map(r => r.district);
     await prisma.$transaction([
@@ -87,7 +88,7 @@ export async function PUT(
       }),
     ]);
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: "SYSTEM",
       userId: token!.id as string,
       event: "dudbc_rate.district_rates_updated",
@@ -95,6 +96,14 @@ export async function PUT(
       meta: { rateCode: rate.code, fiscalYear: rate.fiscalYear, count: parsed.data.rates.length } as any,
       ipAddress: ip,
     });
+
+    // Invalidate BOQ cache for every project that references this rate item, so they
+    // regenerate with the new district rates on next download.
+    prisma.takeoffGroup.findMany({
+      where: { rateItemId: params.rateId },
+      select: { projectId: true },
+      distinct: ["projectId"],
+    }).then(rows => Promise.all(rows.map(r => invalidateBOQCache(r.projectId)))).catch(() => {});
 
     return NextResponse.json({ updated: parsed.data.rates.length });
   } catch (err) {

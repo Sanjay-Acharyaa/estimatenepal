@@ -27,7 +27,7 @@ export async function DELETE(
 
     await prisma.shareLink.update({ where: { id: params.linkId }, data: { isActive: false } });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "project.share_link_deactivated",

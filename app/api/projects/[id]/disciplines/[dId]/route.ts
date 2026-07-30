@@ -35,7 +35,7 @@ export async function PUT(
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Copy: duplicate discipline + all groups (category→layer hierarchy) + all items
     if (parsed.data.copy) {
@@ -157,7 +157,7 @@ export async function PUT(
         include: { _count: { select: { groups: true } } },
       });
 
-      await appendAuditLog({
+      appendAuditLog({
         orgId: project.orgId,
         userId: token.id as string,
         event: "discipline.copied",
@@ -186,7 +186,7 @@ export async function PUT(
       include: { _count: { select: { groups: true } } },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "discipline.updated",
@@ -265,7 +265,7 @@ export async function DELETE(
       if (first) await prisma.discipline.update({ where: { id: first.id }, data: { isPrimary: true } });
     }
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "discipline.deleted",

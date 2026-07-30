@@ -74,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json();
     const parsed = proposeSchema.safeParse(body);
-    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten());
+    if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
     // Verify the rate item exists and look up the authoritative original value server-side
     const rateItem = await prisma.rateItem.findUnique({ where: { id: parsed.data.rateItemId } });
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
     });
 
-    await appendAuditLog({
+    appendAuditLog({
       orgId: project.orgId,
       userId: token.id as string,
       event: "boq_override.proposed",
