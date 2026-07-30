@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/admin/rates — create a single DUDBC rate item
+// POST /api/admin/rates â€” create a single DUDBC rate item
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/admin/rates?fiscalYear=X — super admin only, deletes entire fiscal year
+// DELETE /api/admin/rates?fiscalYear=X â€” super admin only, deletes entire fiscal year
 // Super admin only. Deletes ALL DUDBC rates for the given fiscal year (published or not),
 // including district rates, rate analyses, and BOQ overrides linked to them.
 export async function DELETE(req: NextRequest) {
