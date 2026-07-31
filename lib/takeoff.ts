@@ -3,6 +3,10 @@ import type { TakeoffTool } from "@prisma/client";
 export type Point = { x: number; y: number };
 export type ToolData = { points: Point[] };
 
+export const MIN_SHAPE_POINTS: Record<string, number> = {
+  CIRCLE: 2, ARC: 3, RECTANGLE: 4, POLYGON: 3, POLYLINE: 2,
+};
+
 export type AdditionalParams = {
   wall?: { enabled: boolean; heightFt: number; heightIn: number };
   height?: { ft: number; in: number };           // VOLUME depth/height
@@ -50,9 +54,10 @@ function circleRadiusPx(pts: Point[]): number {
   return Math.sqrt((pts[1].x - pts[0].x) ** 2 + (pts[1].y - pts[0].y) ** 2);
 }
 
-// Circumscribed circle of a 3-point arc: returns { r, sweep } or null when collinear.
+// Circumscribed circle of a 3-point arc: returns { r, sweep, sweepFlag } or null when collinear.
 // pts = [start, end, midpoint-on-arc]. sweep is the central angle of the arc in radians.
-function arcGeometryPx(pts: Point[]): { r: number; sweep: number } | null {
+// sweepFlag matches the SVG arc sweep-flag (1 = midpoint on CCW math arc → CW in screen y-down).
+function arcGeometryPx(pts: Point[]): { r: number; sweep: number; sweepFlag: 0 | 1 } | null {
   if (pts.length < 3) return null;
   const [A, B, C] = pts;
   const D = 2 * (A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y));
@@ -69,8 +74,19 @@ function arcGeometryPx(pts: Point[]): { r: number; sweep: number } | null {
   if (ccwSweep < 0) ccwSweep += 2 * Math.PI;
   let namRel = nam - na1;
   if (namRel < 0) namRel += 2 * Math.PI;
-  const sweep = namRel <= ccwSweep ? ccwSweep : 2 * Math.PI - ccwSweep;
-  return { r, sweep };
+  const midOnCcwArc = namRel <= ccwSweep;
+  const sweep = midOnCcwArc ? ccwSweep : 2 * Math.PI - ccwSweep;
+  const sweepFlag: 0 | 1 = midOnCcwArc ? 1 : 0;
+  return { r, sweep, sweepFlag };
+}
+
+// Generates an SVG arc path through A (start), B (end), C (midpoint on arc).
+// Single source of truth — shared with DrawingCanvas.tsx to avoid drift.
+export function arcSvgPath(A: Point, B: Point, C: Point): string {
+  const geo = arcGeometryPx([A, B, C]);
+  if (!geo) return `M ${A.x} ${A.y} L ${B.x} ${B.y}`;
+  const largeArcFlag = geo.sweep > Math.PI ? 1 : 0;
+  return `M ${A.x} ${A.y} A ${geo.r} ${geo.r} 0 ${largeArcFlag} ${geo.sweepFlag} ${B.x} ${B.y}`;
 }
 
 // Arc length from 3 points (start, end, midpoint-on-arc) using circumscribed circle
@@ -196,9 +212,13 @@ export function computeQuantity(
 
     case "VOLUME": {
       // rawQuantity stores the shape's intrinsic measurement:
-      //   POLYLINE / ARC  → length (ft)    — used by lbh method (L × B × H)
-      //   POLYGON / RECTANGLE / CIRCLE → area (sq ft) — used by area_x_h method
-      const isLengthShape = shapeType === "POLYLINE" || shapeType === "ARC" || !shapeType;
+      //   POLYLINE / ARC  → length        — used by lbh method (L × B × H)
+      //   POLYGON / RECTANGLE / CIRCLE → area — used by area_x_h method
+      // Items with unknown shapeType are excluded (quantity = 0) to match computeGroupTotal
+      // which also excludes them. This prevents corrupting rawQuantity during type-change
+      // recomputes on legacy items that pre-date the shapeType column.
+      if (!shapeType) return { rawQuantity: 0, quantity: 0, unit: scaleUnit };
+      const isLengthShape = shapeType === "POLYLINE" || shapeType === "ARC";
       let rawQty: number;
       if (isLengthShape) {
         rawQty = (shapeType === "ARC" ? arcLengthPx(pts) : polylineLength(pts)) * scale;

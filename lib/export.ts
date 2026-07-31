@@ -128,6 +128,7 @@ export function itemQtyFormula(
 /**
  * Returns the group-total qty formula: =SUM(col{first}:col{last}) × groupMultiplier × conversionFactor.
  * `qtyCol` is the column letter holding item quantities (G for Detail/MB/Procurement, D for Govt format).
+ * groupMultiplier is emitted only when ≠1 to keep the formula readable for the common case.
  */
 export function groupQtyFormula(
   firstRow: number,
@@ -137,10 +138,9 @@ export function groupQtyFormula(
   conversionFactor: number,
 ): string {
   const sumExpr = `SUM(${qtyCol}${firstRow}:${qtyCol}${lastRow})`;
-  const factors: string[] = [];
-  if (groupMultiplier !== 1) factors.push(`${groupMultiplier}`);
-  if (conversionFactor !== 1) factors.push(conversionFactor.toFixed(9));
-  return `=${sumExpr}${factors.length > 0 ? `*${factors.join("*")}` : ""}`;
+  const gmPart = groupMultiplier !== 1 ? `*${groupMultiplier}` : "";
+  const cfPart = conversionFactor !== 1 ? `*${conversionFactor.toFixed(9)}` : "";
+  return `=${sumExpr}${gmPart}${cfPart}`;
 }
 
 // ─── BOQ Excel Export ─────────────────────────────────────────────────────────
@@ -874,7 +874,7 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
 
   const COLS = 6;
   const mergeRow = (row: ExcelJS.Row, style?: (c: ExcelJS.Cell) => void) => {
-    ws.mergeCells(`A${row.number}:${String.fromCharCode(64 + COLS)}${row.number}`);
+    ws.mergeCells(`A${row.number}:${colLetter(COLS)}${row.number}`);
     if (style) style(row.getCell(1));
   };
 

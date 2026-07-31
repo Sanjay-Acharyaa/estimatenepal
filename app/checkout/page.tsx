@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useState, Suspense, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -32,8 +32,8 @@ function PendingScreen({ plan, billing, price, txnId }: { plan: string; billing:
           <p className="font-semibold text-amber-800">What happens next:</p>
           <ol className="list-decimal list-inside space-y-1 text-amber-700">
             <li>We verify your transaction ID <span className="font-mono text-xs bg-amber-100 px-1 rounded">{txnId}</span></li>
-            <li>We WhatsApp you an activation code (usually within a few hours)</li>
-            <li>Enter the code in <strong>Dashboard → Settings → Billing</strong></li>
+            <li>Your plan is activated directly on your account (usually within a few hours)</li>
+            <li>Refresh your dashboard to see your new plan features</li>
           </ol>
         </div>
 
@@ -60,6 +60,7 @@ function PendingScreen({ plan, billing, price, txnId }: { plan: string; billing:
 
 function CheckoutContent() {
   const params = useSearchParams();
+  const router = useRouter();
   const planKey = params.get("plan") ?? "solo-pro";
   const plan = PLANS[planKey] ?? PLANS["solo-pro"];
 
@@ -84,12 +85,21 @@ function CheckoutContent() {
       .catch(() => {});
     fetch("/api/auth/profile")
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.email) setEmail(d.email); })
-      .catch(() => {});
+      .then(d => {
+        if (d?.email) {
+          setEmail(d.email);
+        } else {
+          router.push(`/login?redirect=/checkout?plan=${planKey}`);
+        }
+      })
+      .catch(() => {
+        router.push(`/login?redirect=/checkout?plan=${planKey}`);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const waMsg = encodeURIComponent(
-    `Hi, I have paid for ${plan.name} (${billing === "annual" ? "Annual" : "Monthly"} — ${fmt(price)}) on EstimateNepal.\nRegistered email: ${email || "[your email]"}\nTransaction ID: ${txnId || "[your txn ID]"}\nPlease send my activation code.`
+    `Hi, I have paid for ${plan.name} (${billing === "annual" ? "Annual" : "Monthly"} — ${fmt(price)}) on EstimateNepal.\nTransaction ID: ${txnId || "[your txn ID]"}\nPlease activate my plan.`
   );
   const waLink = waNumber ? `https://wa.me/${waNumber}?text=${waMsg}` : "#";
   const canNotify = !!(email && txnId);
@@ -101,7 +111,7 @@ function CheckoutContent() {
       await fetch("/api/payments/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, planKey, billing, amount: price, txnId }),
+        body: JSON.stringify({ planKey, billing, txnId }),
       });
     } catch { /* non-blocking — WhatsApp still opens */ }
     setNotifying(false);
@@ -171,14 +181,13 @@ function CheckoutContent() {
         <div className="space-y-3 mb-6">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              Your registered email <span className="text-red-500">*</span>
+              Registered account email
             </label>
             <input
               type="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              readOnly
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-default"
             />
           </div>
           <div>
@@ -201,10 +210,10 @@ function CheckoutContent() {
           <p className="font-semibold mb-2">How it works:</p>
           <ol className="list-decimal list-inside space-y-1 text-blue-700">
             <li>Scan QR and pay <strong>{fmt(price)}</strong></li>
-            <li>Enter your email and transaction ID above</li>
+            <li>Enter your transaction ID above</li>
             <li>Click &quot;Notify on WhatsApp&quot; — message is pre-filled</li>
-            <li>We verify and send your activation code within a few hours</li>
-            <li>Enter the code in <strong>Dashboard → Settings → Billing</strong></li>
+            <li>We verify and activate your plan directly (usually within a few hours)</li>
+            <li>Refresh your dashboard to see your new plan features</li>
           </ol>
         </div>
 
@@ -224,7 +233,7 @@ function CheckoutContent() {
         </a>
         {!canNotify && (
           <p className="text-center text-xs text-amber-600 mb-3">
-            Fill in your email and transaction ID above to enable this button.
+            Enter your transaction ID above to enable this button.
           </p>
         )}
 

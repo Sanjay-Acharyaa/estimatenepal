@@ -7,6 +7,7 @@ import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { appendAuditLog } from "@/lib/audit";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
+import { Prisma } from "@prisma/client";
 
 const createSchema = z.object({
   title: z.string().min(1).max(300).trim(),
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const { page, limit, skip } = parsePagination(req.nextUrl.searchParams);
     const completedFilter = req.nextUrl.searchParams.get("completed");
-    const where: any = { projectId: params.id };
+    const where: Prisma.ProjectTaskWhereInput = { projectId: params.id };
     if (completedFilter === "0") where.isCompleted = false;
     if (completedFilter === "1") where.isCompleted = true;
 
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       userId: token.id as string,
       event: "task.created",
       resourceId: task.id,
-      meta: { title: task.title, assignedToId: task.assignedToId } as any,
+      meta: { title: task.title, assignedToId: task.assignedToId } as Prisma.InputJsonValue,
       ipAddress: ip,
     });
 

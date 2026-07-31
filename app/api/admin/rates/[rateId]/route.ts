@@ -110,25 +110,70 @@ export async function DELETE(
     if (!rate || rate.source !== "DUDBC") throw notFound("Rate");
     if (rate.isPublished) return apiError("FORBIDDEN", "Published rates cannot be deleted.", 403);
 
-    // Collect affected projects before deletion so we can invalidate their BOQ caches.
+    // Collect affected groups before deletion (SetNull fires on delete, so query first).
     const affectedGroups = await prisma.takeoffGroup.findMany({
       where: { rateItemId: rate.id },
       select: { projectId: true },
-      distinct: ["projectId"],
     });
 
-    await prisma.rateItem.delete({ where: { id: params.rateId } });
+    if (affectedGroups.length > 0) {
+      // Build per-project group count so the notification message is precise.
+      const groupCountByProject: Record<string, number> = {};
+      for (const g of affectedGroups) {
+        groupCountByProject[g.projectId] = (groupCountByProject[g.projectId] ?? 0) + 1;
+      }
+      const affectedProjectIds = Object.keys(groupCountByProject);
 
-    appendAuditLog({
-      orgId: "SYSTEM",
-      userId: token!.id as string,
-      event: "dudbc_rate.deleted",
-      resourceId: params.rateId,
-      meta: { code: rate.code, fiscalYear: rate.fiscalYear } as any,
-      ipAddress: getClientIp(req),
-    });
+      // Fetch project names and LEAD/ESTIMATOR members in parallel (before delete).
+      const [affectedProjects, affectedMembers] = await Promise.all([
+        prisma.project.findMany({
+          where: { id: { in: affectedProjectIds } },
+          select: { id: true, name: true },
+        }),
+        prisma.projectMember.findMany({
+          where: { projectId: { in: affectedProjectIds }, projectRole: { in: ["LEAD", "ESTIMATOR"] } },
+          select: { userId: true, projectId: true },
+        }),
+      ]);
+      const projectNameMap = Object.fromEntries(affectedProjects.map(p => [p.id, p.name]));
 
-    Promise.all(affectedGroups.map(g => invalidateBOQCache(g.projectId))).catch(() => {});
+      await prisma.rateItem.delete({ where: { id: params.rateId } });
+
+      appendAuditLog({
+        orgId: "SYSTEM",
+        userId: token!.id as string,
+        event: "dudbc_rate.deleted",
+        resourceId: params.rateId,
+        meta: { code: rate.code, fiscalYear: rate.fiscalYear, affectedProjectIds } as any,
+        ipAddress: getClientIp(req),
+      });
+
+      // Notify affected estimators/leads so they know to re-link the rate.
+      if (affectedMembers.length > 0) {
+        prisma.notification.createMany({
+          data: affectedMembers.map(m => ({
+            userId: m.userId,
+            type: "rate_link_nulled",
+            message: `Rate "${rate.code}" was deleted. ${groupCountByProject[m.projectId] ?? 1} layer(s) in "${projectNameMap[m.projectId] ?? "your project"}" lost their rate link and need to be re-linked.`,
+            link: `/dashboard/projects/${m.projectId}?tab=estimating`,
+          })),
+        }).catch(err => console.error("[rates/delete] notification failed:", err));
+      }
+
+      Promise.all(affectedProjectIds.map(id => invalidateBOQCache(id))).catch(() => {});
+    } else {
+      // No layers were linked — straightforward delete, no notifications needed.
+      await prisma.rateItem.delete({ where: { id: params.rateId } });
+
+      appendAuditLog({
+        orgId: "SYSTEM",
+        userId: token!.id as string,
+        event: "dudbc_rate.deleted",
+        resourceId: params.rateId,
+        meta: { code: rate.code, fiscalYear: rate.fiscalYear, affectedProjectIds: [] } as any,
+        ipAddress: getClientIp(req),
+      });
+    }
 
     return NextResponse.json({ message: "Deleted." });
   } catch (err) {

@@ -110,3 +110,22 @@ describe("edge cases", () => {
     expect(getConversionFactor("cu ft", "")).toBeNull();
   });
 });
+
+describe("COUNT_BY_DISTANCE sentinel: each|ft", () => {
+  it("normalizes 'each|ft' to 'ea' (not unknown string)", () => {
+    expect(normalizeUnit("each|ft")).toBe("ea");
+  });
+
+  it("getConversionFactor returns 1 for each|ft vs each (same dimension)", () => {
+    expect(getConversionFactor("each|ft", "each")).toBe(1);
+  });
+
+  it("getConversionFactor returns 1 for each|ft vs ea", () => {
+    expect(getConversionFactor("each|ft", "ea")).toBe(1);
+  });
+
+  it("getConversionFactor returns null (not 0) for each|ft vs metric length", () => {
+    // Count vs length is genuinely incompatible — should return null, not crash or return 0
+    expect(getConversionFactor("each|ft", "Rm.")).toBeNull();
+  });
+});

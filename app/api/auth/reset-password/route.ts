@@ -34,18 +34,22 @@ export async function POST(req: NextRequest) {
     const userId = await redis.get(`reset:${token}`);
     if (!userId) return apiError("VALIDATION_ERROR", "Invalid or expired reset token.", 400);
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Consume the token BEFORE writing to the DB so a crash between these two steps
+    // can never leave a valid token that could be replayed for a second reset.
+    await Promise.all([
+      redis.del(`reset:${token}`),
+      redis.del(`reset_user:${userId}`),
+    ]);
+
     const now = new Date();
     await prisma.user.update({
       where: { id: userId },
       data: { passwordHash, passwordChangedAt: now },
     });
-    await Promise.all([
-      redis.del(`reset:${token}`),
-      redis.del(`reset_user:${userId}`),
-      // Signal active JWTs to self-invalidate — key TTL matches max session lifetime
-      redis.set(`pw_changed:${userId}`, now.getTime().toString(), "EX", 7 * 24 * 3600),
-    ]);
+    // Signal active JWTs to self-invalidate — key TTL matches max session lifetime
+    await redis.set(`pw_changed:${userId}`, now.getTime().toString(), "EX", 7 * 24 * 3600);
 
     return NextResponse.json({ message: "Password reset successfully. You can now log in." });
   } catch (err) {

@@ -52,6 +52,12 @@ export async function PUT(
     }
 
     // Zod-validated payload — safe to cast JSON fields for Prisma.
+    // Concurrent PUT safety: canvasJson (viewport pan/zoom) and annotationsJson are stored in
+    // separate columns. Prisma's update only writes the keys present in the payload, so a
+    // concurrent viewport save and annotation save cannot overwrite each other — each request
+    // touches only its own column. Stale-write risk is limited to two concurrent saves of the
+    // same field (e.g. two viewport drags), where last-write wins; viewport state is idempotent
+    // enough that this is acceptable without an optimistic lock.
     // Maintain the denormalized hasAnnotations flag when annotationsJson is updated.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = { ...parsed.data };

@@ -14,6 +14,33 @@ const createSchema = z.object({
   purpose: z.enum(["proposal", "view"]).default("proposal"),
 });
 
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const ip = getClientIp(req);
+    const limited = await checkApiRateLimit(ip);
+    if (limited) return limited;
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (!token) throw unauthorized();
+
+    const project = await prisma.project.findUnique({ where: { id: params.id } });
+    if (!project) throw notFound("Project");
+    const caller = await withTenantGuard(token.id as string, project.orgId);
+    if (!["OWNER", "ADMIN"].includes(caller.role)) throw forbidden();
+
+    const links = await prisma.shareLink.findMany({
+      where: { projectId: params.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const base = process.env.NEXTAUTH_URL;
+    return NextResponse.json(
+      links.map((l) => ({ ...l, shareUrl: `${base}/share/${l.token}` }))
+    );
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const ip = getClientIp(req);

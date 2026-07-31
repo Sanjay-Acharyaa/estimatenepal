@@ -78,6 +78,18 @@ export async function POST(
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
+    // Validate that the requested rateItemId is accessible to this org (public DUDBC item OR
+    // owned by the same org). Prevents a tenant from linking another org's private rate.
+    if (parsed.data.rateItemId) {
+      const rateItem = await prisma.rateItem.findUnique({
+        where: { id: parsed.data.rateItemId },
+        select: { orgId: true },
+      });
+      if (!rateItem || (rateItem.orgId !== null && rateItem.orgId !== project.orgId)) {
+        return apiError("NOT_FOUND", "Rate item not found.", 404);
+      }
+    }
+
     const group = await prisma.$transaction(async (tx) => {
       if (parsed.data.parentId) {
         const parent = await tx.takeoffGroup.findUnique({

@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { PRESET_COLORS } from "./TakeoffGroupDialog";
 import type { TakeoffGroup } from "./TakeoffPanel";
 import type { Discipline } from "./DrawingCanvas";
+
+function pickNextColour(siblings: { colour: string }[]): string {
+  const used = new Set(siblings.map(s => s.colour));
+  return PRESET_COLORS.find(c => !used.has(c)) ?? PRESET_COLORS[0];
+}
 
 type Props = {
   group: TakeoffGroup;
@@ -27,10 +33,18 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
     setLoading(true);
     setError("");
     try {
+      // For single-layer copies, suggest the next unused colour in the destination group
+      // so no two sibling layers in the same category share a colour by default.
+      const extraBody: Record<string, unknown> = {};
+      if (!isCategory) {
+        const targetParentId = targetGroupId || group.parentId;
+        const siblings = groups.filter(g => g.parentId === targetParentId && g.id !== group.id);
+        extraBody.colour = pickNextColour(siblings);
+      }
       const res = await fetch(`/api/projects/${projectId}/takeoff-groups/${group.id}/copy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetDisciplineId, withObjects, ...(targetGroupId ? { targetGroupId } : {}) }),
+        body: JSON.stringify({ targetDisciplineId, withObjects, ...(targetGroupId ? { targetGroupId } : {}), ...extraBody }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -49,7 +63,9 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
   const targetTabName = disciplines.find(d => d.id === targetDisciplineId)?.name ?? "";
   const isSameTab = targetDisciplineId === activeDisciplineId;
   const availableGroups = groups.filter(g => g.parentId === null && g.disciplineId === targetDisciplineId);
-  const selectedGroupName = availableGroups.find(g => g.id === targetGroupId)?.name ?? "";
+  const selectedGroup = availableGroups.find(g => g.id === targetGroupId) ?? null;
+  const selectedGroupName = selectedGroup?.name ?? "";
+  const typeMismatch = !isCategory && withObjects && !!targetGroupId && !!selectedGroup && selectedGroup.type !== group.type;
 
   return (
     <div
@@ -71,7 +87,7 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
 
         {/* Destination tab */}
         <div className="mb-3">
-          <label htmlFor="cgd-target-tab" className="block text-xs font-medium text-gray-700 mb-1.5">Copy to tab</label>
+          <label htmlFor="cgd-target-tab" className="block text-xs font-medium text-gray-700 mb-1.5">Copy to drawing</label>
           <select
             id="cgd-target-tab"
             value={targetDisciplineId}
@@ -125,6 +141,14 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
             </span>
           </label>
         </div>
+
+        {/* Type-mismatch warning */}
+        {typeMismatch && (
+          <div role="alert" className="bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 mb-3 text-xs text-yellow-800">
+            <strong>Type mismatch:</strong> this layer is <strong>{group.type}</strong> but the target group uses <strong>{selectedGroup!.type}</strong>.
+            Shapes will be copied and quantities recomputed for the target type — review the MB export after copying to verify results.
+          </div>
+        )}
 
         {/* Summary */}
         <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4 text-xs text-blue-700">

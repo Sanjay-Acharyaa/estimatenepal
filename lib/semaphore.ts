@@ -16,9 +16,9 @@ export async function acquireSemaphore(
   ttlSeconds = 120
 ): Promise<Semaphore | null> {
   const key = `sem:${name}`;
-  const current = await redis.incr(key);
-  // Refresh TTL on every increment so the key never expires while slots are held
-  await redis.expire(key, ttlSeconds);
+  // Pipeline INCR + EXPIRE so a crash between them can't leave a key with no TTL
+  const results = await redis.pipeline().incr(key).expire(key, ttlSeconds).exec();
+  const current = (results?.[0]?.[1] as number | null) ?? 1;
 
   if (current > max) {
     // Over the limit — release our slot immediately and refuse

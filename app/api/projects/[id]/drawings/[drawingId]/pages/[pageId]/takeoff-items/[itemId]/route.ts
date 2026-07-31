@@ -5,10 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
-import { computeQuantity, perSegmentEffectiveScale, boundingBoxWeightedScale, type ToolData, type AdditionalParams } from "@/lib/takeoff";
+import { computeQuantity, perSegmentEffectiveScale, boundingBoxWeightedScale, MIN_SHAPE_POINTS, type ToolData, type AdditionalParams } from "@/lib/takeoff";
 import { invalidateBOQCache } from "@/lib/boq";
 
-const pointSchema = z.object({ x: z.number(), y: z.number() });
+const pointSchema = z.object({ x: z.number().finite(), y: z.number().finite() });
 
 const updateSchema = z.object({
   label: z.string().min(1).max(200).optional(),
@@ -90,12 +90,14 @@ export async function PUT(
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
-    // Validate minimum point count per shape type when toolData is being updated.
+    // Validate point count per shape type when toolData is being updated.
     if (parsed.data.toolData && item.shapeType) {
-      const MIN_POINTS: Record<string, number> = { CIRCLE: 2, ARC: 3, RECTANGLE: 4, POLYGON: 3, POLYLINE: 2 };
-      const min = MIN_POINTS[item.shapeType] ?? 1;
+      const min = MIN_SHAPE_POINTS[item.shapeType] ?? 1;
       if (parsed.data.toolData.points.length < min) {
         return apiError("VALIDATION_ERROR", `${item.shapeType} requires at least ${min} point(s).`, 400);
+      }
+      if (item.shapeType === "RECTANGLE" && parsed.data.toolData.points.length !== 4) {
+        return apiError("VALIDATION_ERROR", `RECTANGLE requires exactly 4 points, got ${parsed.data.toolData.points.length}.`, 400);
       }
     }
 
@@ -104,7 +106,11 @@ export async function PUT(
       return apiError("CONFLICT", "This takeoff item is locked.", 409);
     }
 
-    // Optimistic locking: reject stale updates
+    // Optimistic locking: reject stale updates.
+    // Clients that perform writes must echo back the version they last saw.
+    // Requests that omit version entirely bypass the check (legacy or simple toggle
+    // callers that don't need concurrency protection); once all write paths consistently
+    // echo version this guard will be unconditional.
     if (parsed.data.version !== undefined && item.version !== parsed.data.version) {
       return apiError("CONFLICT", "This shape was modified by another user. Please refresh.", 409);
     }
@@ -117,9 +123,12 @@ export async function PUT(
       if (newGroup.isLocked) return apiError("FORBIDDEN", "The target layer is locked.", 403);
     }
 
-    // Recompute quantity if toolData or multiplier changed, using the target group's params.
+    // Recompute quantity if toolData, multiplier, or the target group changed.
+    // A group change must recompute because the new group may have different additionalParams
+    // (e.g. moving from LINEAR to VERTICAL_WALL_AREA requires perimeter × wall-height calculation).
+    const groupChanged = !!parsed.data.groupId && parsed.data.groupId !== item.groupId;
     let quantityUpdate: { quantity?: number; rawQuantity?: number; unit?: string; scaleUsed?: number } = {};
-    if (parsed.data.toolData || parsed.data.multiplier !== undefined) {
+    if (parsed.data.toolData || parsed.data.multiplier !== undefined || groupChanged) {
       if (!targetGroupId) {
         return apiError("CONFLICT", "Cannot recompute quantity: item has no assigned group.", 409);
       }

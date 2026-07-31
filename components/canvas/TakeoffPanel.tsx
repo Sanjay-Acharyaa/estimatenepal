@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { TakeoffGroupDialog, TOOL_TYPES, COUNT_SHAPES } from "./TakeoffGroupDialog";
+import { TakeoffGroupDialog, TOOL_TYPES, COUNT_SHAPES, PRESET_COLORS } from "./TakeoffGroupDialog";
 import { TakeoffGroupDetail } from "./TakeoffGroupDetail";
 import { CopyGroupDialog } from "./CopyGroupDialog";
 import { toast } from "sonner";
@@ -57,9 +57,25 @@ const TYPE_ICONS: Record<string, string> = {
 
 function getNum(v: unknown) { const n = Number(v); return isNaN(n) ? 0 : n; }
 
+/** Returns the first PRESET_COLOR not already used by any sibling layer in the same group. */
+function pickNextColour(siblings: { colour: string }[]): string {
+  const used = new Set(siblings.map(s => s.colour));
+  return PRESET_COLORS.find(c => !used.has(c)) ?? PRESET_COLORS[0];
+}
+
 // rawUnit is the unit string stored on items (e.g. "cu m", "sq ft").
 // It tells us whether the drawing is metric or imperial.
 function volumeDisplay(group: TakeoffGroup, rawQty: number, rawUnit: string): { qty: number; unit: string } {
+  // rawQty comes from computeGroupTotal(multiplier=1) which ALREADY applies height (and
+  // breadth for lbh) inside its loop.  When all required dimensions are configured the
+  // server signals this by returning "cu m" / "cu ft".  Only apply group.multiplier here —
+  // re-applying h/b would square the dimensions and produce the wrong result.
+  if (rawUnit === "cu m" || rawUnit === "cu ft") {
+    return { qty: rawQty * group.multiplier, unit: rawUnit };
+  }
+
+  // rawUnit is "sq *": at least one dimension is still missing (server fell back to ×1).
+  // Keep the existing partial-dimension path so the sidebar can show the appropriate hint.
   const scaleUnit = rawUnit.includes("ft") ? "ft" : "m";
   const ftToUnit = scaleUnit === "ft" ? 1 : 0.3048;
   const ap = group.additionalParams as Record<string, unknown> | null;
@@ -91,14 +107,15 @@ function countByDistanceDisplay(group: TakeoffGroup, rawLength: number, rawUnit:
 }
 
 function wallAreaDisplay(group: TakeoffGroup, rawPerim: number, rawUnit: string): { qty: number; unit: string } {
-  const scaleUnit = rawUnit.includes("ft") ? "ft" : "m";
-  const ftToUnit = scaleUnit === "ft" ? 1 : 0.3048;
   const ap = group.additionalParams as Record<string, unknown> | null;
   const wObj = ap?.wall as Record<string, unknown> | undefined;
   const wallHFt = wObj ? getNum(wObj.heightFt) + getNum(wObj.heightIn) / 12 : 0;
-  const wallH = wallHFt * ftToUnit;
-  if (!wallH) return { qty: rawPerim * group.multiplier, unit: `${scaleUnit} (set wall height)` };
-  return { qty: rawPerim * wallH * group.multiplier, unit: scaleUnit === "ft" ? "sq ft" : "sq m" };
+  // Normalise perimeter to metres so the sidebar always matches computeGroupTotal (which
+  // always outputs sq m for VERTICAL_WALL_AREA regardless of the drawing's scale unit).
+  const perimM = rawUnit.includes("ft") ? rawPerim * 0.3048 : rawPerim;
+  const wallHM = wallHFt * 0.3048;
+  if (!wallHM) return { qty: perimM * group.multiplier, unit: "m (set wall height)" };
+  return { qty: perimM * wallHM * group.multiplier, unit: "sq m" };
 }
 
 function EyeOpen() {
@@ -250,9 +267,13 @@ export function TakeoffPanel({
 
   async function handleEdit(data: { name: string; type: string; colour: string; lineWidth: number; tag?: string; multiplier: number }) {
     if (!editingGroup) return;
+    // Explicitly build the body with only the editable fields so that rateItemId is never
+    // accidentally sent as null (the onSave callback always returns rateItemId: null when
+    // the catalog is skipped in edit mode, which would silently unlink the rate).
+    const body = { name: data.name, type: data.type, colour: data.colour, lineWidth: data.lineWidth, tag: data.tag, multiplier: data.multiplier };
     await apiCall(
       () => fetch(`/api/projects/${projectId}/takeoff-groups/${editingGroup.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       }),
       async (res) => {
         const u = await res.json();
@@ -707,6 +728,7 @@ export function TakeoffPanel({
       {creatingLayerIn && (
         <TakeoffGroupDialog
           title="New Takeoff Layer"
+          defaultColour={pickNextColour(groups.filter(g => g.parentId === creatingLayerIn))}
           onSave={data => handleCreateLayer(data, creatingLayerIn)}
           onCancel={() => setCreatingLayerIn(null)}
         />
@@ -723,6 +745,7 @@ export function TakeoffPanel({
             tag: editingGroup.tag ?? undefined,
             multiplier: editingGroup.multiplier,
           }}
+          currentRateItem={editingGroup.rateItem ?? null}
           onSave={handleEdit}
           onCancel={() => setEditingGroup(null)}
         />
@@ -831,13 +854,18 @@ export function TakeoffPanel({
                 <button disabled={saveAssemblySaving || !saveAssemblyForm.name || selectedForSave.size === 0}
                   onClick={async () => {
                     setSaveAssemblySaving(true);
-                    const res = await fetch(`/api/projects/${projectId}/assemblies/save`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ ...saveAssemblyForm, groupIds: Array.from(selectedForSave) }),
-                    });
-                    setSaveAssemblySaving(false);
-                    if (res.ok) { toast.success("Assembly saved to your organisation library."); setShowSaveAssembly(false); setSaveAssemblyForm({ name: "", description: "", category: "" }); setSelectedForSave(new Set()); }
-                    else { const d = await res.json(); toast.error(d?.error?.message ?? "Failed to save."); }
+                    try {
+                      const res = await fetch(`/api/projects/${projectId}/assemblies/save`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ...saveAssemblyForm, groupIds: Array.from(selectedForSave) }),
+                      });
+                      if (res.ok) { toast.success("Assembly saved to your organisation library."); setShowSaveAssembly(false); setSaveAssemblyForm({ name: "", description: "", category: "" }); setSelectedForSave(new Set()); }
+                      else { const d = await res.json(); toast.error(d?.error?.message ?? "Failed to save."); }
+                    } catch {
+                      toast.error("Network error. Please try again.");
+                    } finally {
+                      setSaveAssemblySaving(false);
+                    }
                   }}
                   className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                   {saveAssemblySaving ? "Saving…" : "Save Assembly"}

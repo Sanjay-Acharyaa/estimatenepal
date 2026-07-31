@@ -32,13 +32,11 @@ export async function invalidateLatestFYCache(): Promise<void> {
 export async function invalidateRatesCache(orgId?: string): Promise<void> {
   const pattern = orgId ? `rates:${orgId}:*` : "rates:*";
   let cursor = "0";
-  const keys: string[] = [];
   do {
     const [next, batch] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 200);
     cursor = next;
-    keys.push(...batch);
+    if (batch.length > 0) await redis.del(...batch);
   } while (cursor !== "0");
-  if (keys.length > 0) await redis.del(...keys);
 }
 
 // Invalidates both caches in one call.

@@ -1,14 +1,15 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
+import { handleApiError } from "@/lib/errors";
 
 const LT = "loadtest.estimatenepal.local";
 
 function escape(v: string | null | undefined): string {
   if (v == null) return "";
-  const s = String(v);
+  // CSV injection guard: prefix cells that open with a formula character
+  let s = /^[=+\-@\t\r]/.test(String(v)) ? " " + String(v) : String(v);
   if (s.includes(",") || s.includes('"') || s.includes("\n")) {
     return `"${s.replace(/"/g, '""')}"`;
   }
@@ -21,9 +22,7 @@ function row(cells: (string | number | null | undefined)[]): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) throw unauthorized();
-    if (!token.isSuperAdmin) throw forbidden();
+    await requireSuperAdmin(req);
 
     const type = req.nextUrl.searchParams.get("type") ?? "orgs";
 

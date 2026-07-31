@@ -7,7 +7,7 @@ import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 import { invalidateRatesCache } from "@/lib/rates";
 import { MAX_IMPORT_FILE_BYTES } from "@/lib/cache-constants";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 // POST /api/rates/import
 // Accepts: multipart/form-data, field "file" (.xlsx)
@@ -79,18 +79,42 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     _log("buffer ready");
 
-    // SheetJS is fully synchronous — no streams or async ZIP callbacks that can crash the worker.
-    const wb = XLSX.read(buffer, { type: "buffer" });
+    const wb = new ExcelJS.Workbook();
+    // ExcelJS's .load() signature predates Node's generic Buffer<T>; cast to any
+    // so the structurally identical newer Buffer<ArrayBufferLike> is accepted.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await wb.xlsx.load(buffer as any);
     _log("workbook loaded");
 
-    const wsName = wb.SheetNames[0];
-    if (!wsName) {
+    const ws = wb.worksheets[0];
+    if (!ws) {
       return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
     }
 
-    const ws = wb.Sheets[wsName];
-    // header:1 → array of arrays; raw:false → all values as strings; defval:"" → empty string for missing cells
-    const aoa: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+    // Build array-of-arrays matching the shape SheetJS produced:
+    // each row is an array of cell values as strings (empty string for missing cells).
+    const aoa: unknown[][] = [];
+    ws.eachRow({ includeEmpty: false }, (row) => {
+      const arr: unknown[] = [];
+      const cellCount = typeof row.cellCount === "number" ? row.cellCount : 10;
+      for (let c = 1; c <= Math.max(cellCount, 5); c++) {
+        const cell = row.getCell(c);
+        let val: unknown = "";
+        if (cell.value !== null && cell.value !== undefined) {
+          if (typeof cell.value === "object" && "result" in (cell.value as object)) {
+            // Formula cell — use the cached result
+            val = (cell.value as ExcelJS.CellFormulaValue).result ?? "";
+          } else if (typeof cell.value === "object" && "richText" in (cell.value as object)) {
+            // Rich text cell — join all runs into a plain string.
+            val = (cell.value as ExcelJS.CellRichTextValue).richText.map(rt => rt.text).join("") || "";
+          } else {
+            val = cell.value;
+          }
+        }
+        arr.push(val);
+      }
+      aoa.push(arr);
+    });
     _log(`sheet parsed, aoa=${aoa.length}`);
 
     interface ParsedRow { code: string; description: string; unit: string; baseRate: number; fiscalYear: string; rowNum: number; }

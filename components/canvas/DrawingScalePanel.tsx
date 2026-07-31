@@ -9,8 +9,8 @@ type Props = {
   currentUnit: string;
   /** Fired when user switches between Common / Manual so parent can gate line drawing */
   onSubModeChange: (mode: "common" | "manual") => void;
-  /** Called for common scale — scale is ft/px, unit is always "ft" */
-  onApplyCommon: (scale: number, unit: "ft") => void;
+  /** Called for common scale — scale is ft/px; the handler converts to the page unit if needed */
+  onApplyCommon: (scaleFtPerPx: number) => void;
   /** Called for manual calibration — realFt is the real-world length in feet */
   onApplyManual: (realFt: number) => void;
   onCancel: () => void;
@@ -44,7 +44,7 @@ export function DrawingScalePanel({
 
   function handleApply() {
     if (mode === "common") {
-      onApplyCommon(presetToFtPerPx(preset), "ft");
+      onApplyCommon(presetToFtPerPx(preset));
     } else {
       const ft = parseFloat(feet) || 0;
       const ins = parseFloat(inches) || 0;

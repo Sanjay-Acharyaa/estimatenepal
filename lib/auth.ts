@@ -6,6 +6,7 @@ import { redis } from "./redis";
 import { z } from "zod";
 import { ApiException } from "./errors";
 import { trackEvent } from "./analytics";
+import { appendAuditLog } from "./audit";
 import { TENANT_CACHE_TTL } from "./cache-constants";
 const loginSchema = z.object({
   email: z.string().email(),
@@ -44,15 +45,24 @@ export const authOptions: NextAuthOptions = {
           where: { email: parsed.data.email },
         });
 
-        if (!user || !user.emailVerified) {
-          // Consume a token only on a real credential failure, not server errors
+        if (!user) {
           await consumeLoginFailure(ip, parsed.data.email);
-          if (user) {
-            await prisma.failedLogin.create({
-              data: { userId: user.id, email: parsed.data.email, ipAddress: ip },
-            });
-          }
           return null;
+        }
+
+        if (!user.emailVerified) {
+          await consumeLoginFailure(ip, parsed.data.email);
+          await prisma.failedLogin.create({
+            data: { userId: user.id, email: parsed.data.email, ipAddress: ip },
+          });
+          appendAuditLog({
+            orgId: user.orgId ?? "SYSTEM",
+            userId: user.id,
+            event: "user.login_failed",
+            meta: { reason: "email_not_verified" },
+            ipAddress: ip,
+          });
+          throw new Error("EMAIL_NOT_VERIFIED");
         }
 
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
@@ -61,11 +71,18 @@ export const authOptions: NextAuthOptions = {
           await prisma.failedLogin.create({
             data: { userId: user.id, email: parsed.data.email, ipAddress: ip },
           });
+          appendAuditLog({
+            orgId: user.orgId ?? "SYSTEM",
+            userId: user.id,
+            event: "user.login_failed",
+            meta: { reason: "wrong_password" },
+            ipAddress: ip,
+          });
           return null;
         }
 
         // Opportunistically upgrade stored hash to current cost if it was stored at a lower cost
-        const BCRYPT_COST = 10;
+        const BCRYPT_COST = 12;
         if (bcrypt.getRounds(user.passwordHash) < BCRYPT_COST) {
           bcrypt.hash(parsed.data.password, BCRYPT_COST).then(newHash =>
             prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } })

@@ -16,13 +16,29 @@ export async function GET(req: NextRequest) {
     const token = req.nextUrl.searchParams.get("token");
     if (!token) return apiError("VALIDATION_ERROR", "Missing token.", 400);
 
-    const userId = await redis.get(`verify:${token}`);
-    if (!userId) return apiError("VALIDATION_ERROR", "Invalid or expired token.", 400);
+    let userId = await redis.get(`verify:${token}`);
+
+    // DB fallback: Redis token missing (e.g. after a flush) — look up by token column
+    if (!userId) {
+      const dbUser = await prisma.user.findUnique({
+        where: { verifyToken: token },
+        select: { id: true, verifyTokenAt: true },
+      });
+      const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+      if (
+        !dbUser ||
+        !dbUser.verifyTokenAt ||
+        Date.now() - dbUser.verifyTokenAt.getTime() > TWENTY_FOUR_HOURS
+      ) {
+        return apiError("VALIDATION_ERROR", "Invalid or expired token.", 400);
+      }
+      userId = dbUser.id;
+    }
 
     // L4: Fetch org.trialEndsAt alongside the user so welcome email can show the trial expiry date
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { emailVerified: true },
+      data: { emailVerified: true, verifyToken: null, verifyTokenAt: null },
       select: { name: true, email: true, org: { select: { trialEndsAt: true } } },
     });
     await redis.del(`verify:${token}`);

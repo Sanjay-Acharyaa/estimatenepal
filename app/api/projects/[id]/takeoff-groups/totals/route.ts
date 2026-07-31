@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { handleApiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
+import { computeGroupTotal } from "@/lib/boq";
 
 function getNum(v: unknown): number {
   const n = Number(v); return Number.isFinite(n) ? n : 0;
@@ -63,7 +64,7 @@ export async function GET(
       // COUNT / dimensionless units return factor 1 and keep their unit.
       const toMetric = (unit: string): { factor: number; canonicalUnit: string } => {
         if (unit === "ft" || unit === "Rm." || unit === "rm") return { factor: 0.3048, canonicalUnit: "m" };
-        if (unit === "sqft" || unit === "sq ft") return { factor: 0.3048 * 0.3048, canonicalUnit: "sqm" };
+        if (unit === "sqft" || unit === "sq ft") return { factor: 0.3048 * 0.3048, canonicalUnit: "sq m" };
         if (unit === "cu ft" || unit === "cuft") return { factor: 0.3048 ** 3, canonicalUnit: "cu m" };
         return { factor: 1, canonicalUnit: unit };
       };
@@ -120,42 +121,29 @@ export async function GET(
         select: { groupId: true, rawQuantity: true, unit: true, shapeType: true, isNegative: true },
       });
 
+      // Group items by groupId so the shared helper runs once per group.
+      const itemsByGroup = new Map<string, Array<{ rawQuantity: number; unit: string; shapeType: string | null; isNegative: boolean }>>();
       for (const item of complexItems) {
         if (!item.groupId) continue;
-        const grp = groupMap.get(item.groupId);
-        if (!totals[item.groupId]) totals[item.groupId] = { rawQty: 0, unit: item.unit, count: 0 };
-        totals[item.groupId].count++;
+        if (!itemsByGroup.has(item.groupId)) itemsByGroup.set(item.groupId, []);
+        itemsByGroup.get(item.groupId)!.push(item);
+      }
 
-        if (grp?.type === "VOLUME") {
-          const ap = grp.additionalParams as { volumeMethod?: string } | null;
-          const method = ap?.volumeMethod ?? "area_x_h";
-          const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
-          const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
-          if ((method === "lbh" && isLengthShape) || (method !== "lbh" && isAreaShape)) {
-            totals[item.groupId].rawQty += item.isNegative ? -item.rawQuantity : item.rawQuantity;
-          }
-        } else {
-          // COUNT_BY_DISTANCE: mirror lib/boq.ts per-item counting.
-          const ap = grp?.additionalParams as { spacing?: { ft?: number; in?: number } } | null;
-          const sp = ap?.spacing;
-          const spacingFt = sp ? getNum(sp.ft) + getNum(sp.in) / 12 : 0;
-          const ftToUnit = item.unit.includes("ft") ? 1 : 0.3048;
-          const spacing = spacingFt * ftToUnit;
-          const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
-          if (spacing > 0) {
-            const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
-            totals[item.groupId].rawQty += count;
-            totals[item.groupId].unit = "each";
-          } else {
-            // Normalise to metres so mixed ft+m groups sum correctly.
-            const toM = item.unit.includes("ft") ? 0.3048 : 1;
-            totals[item.groupId].rawQty += signedRaw * toM;
-            totals[item.groupId].unit = "m";
-          }
-        }
+      for (const [gid, items] of Array.from(itemsByGroup)) {
+        const grp = groupMap.get(gid);
+        if (!grp) continue;
+        // Multiplier is applied by the caller (panel/sidebar), not here.
+        const { qty: rawQty, unit } = computeGroupTotal(
+          { type: grp.type, additionalParams: grp.additionalParams as Record<string, unknown> | null, multiplier: 1 },
+          items,
+        );
+        totals[gid] = { rawQty, unit, count: items.length };
       }
     }
 
+    // CONTRACT: every rawQty in this response is PRE-MULTIPLIER (group.multiplier = 1).
+    // Callers (TakeoffPanel sidebar, allPageGroupTotals) must apply group.multiplier themselves.
+    // disciplines/totals applies multiplier server-side — do NOT change one without updating both.
     return NextResponse.json(totals);
   } catch (err) {
     return handleApiError(err);

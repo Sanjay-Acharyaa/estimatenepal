@@ -6,6 +6,7 @@ import { handleApiError, apiError, unauthorized, notFound, forbidden } from "@/l
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { appendAuditLog } from "@/lib/audit";
+import { Prisma } from "@prisma/client";
 
 const updateSchema = z.object({
   title: z.string().min(1).max(300).trim().optional(),
@@ -87,7 +88,7 @@ export async function PUT(
       userId: token.id as string,
       event: "task.updated",
       resourceId: params.tId,
-      meta: parsed.data as any,
+      meta: parsed.data as Prisma.InputJsonValue,
       ipAddress: ip,
     });
 
@@ -126,7 +127,7 @@ export async function DELETE(
       userId: token.id as string,
       event: "task.deleted",
       resourceId: params.tId,
-      meta: { title: task.title } as any,
+      meta: { title: task.title } as Prisma.InputJsonValue,
       ipAddress: ip,
     });
 

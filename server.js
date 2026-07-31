@@ -33,13 +33,6 @@ const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
 const prisma = new PrismaClient();
 
-// room -> Map<socketId, { userId, name, initials }>
-const roomPresence = new Map();
-// room -> Map<itemId, { socketId, userId, name }> — shape currently being edited
-const roomLocks = new Map();
-// `${roomId}:${itemId}` -> timeoutId — 30s auto-release on disconnect
-const lockTimeouts = new Map();
-
 function getInitials(name) {
   return name
     .split(" ")
@@ -49,8 +42,107 @@ function getInitials(name) {
     .slice(0, 2) || "?";
 }
 
-function presenceFor(roomId) {
-  return Array.from((roomPresence.get(roomId) ?? new Map()).values());
+// ─── Redis-backed presence + lock helpers ─────────────────────────────────────
+// Keys:
+//   pres:{roomId}           Redis Hash  field=socketId  value=JSON user data  TTL=300s
+//   shlock:{roomId}:{itemId} Redis String value=JSON lock data  TTL=30s
+//
+// Using a dedicated client (not the pub/sub pair) so HSET/GET/SET don't interfere
+// with the adapter's pub-sub traffic.
+let redisState = null;
+
+async function presenceFor(roomId) {
+  if (!redisState) return [];
+  const raw = await redisState.hgetall(`pres:${roomId}`);
+  if (!raw) return [];
+  return Object.values(raw)
+    .map((v) => { try { return JSON.parse(v); } catch { return null; } })
+    .filter(Boolean);
+}
+
+async function upsertPresence(roomId, socketId, data) {
+  if (!redisState) return;
+  await redisState.hset(`pres:${roomId}`, socketId, JSON.stringify(data));
+  await redisState.expire(`pres:${roomId}`, 300);
+}
+
+async function removePresence(roomId, socketId) {
+  if (!redisState) return;
+  await redisState.hdel(`pres:${roomId}`, socketId);
+}
+
+async function getLocksForRoom(roomId) {
+  if (!redisState) return [];
+  const prefix = `shlock:${roomId}:`;
+  const result = [];
+  let cursor = "0";
+  do {
+    const [next, keys] = await redisState.scan(cursor, "MATCH", `${prefix}*`, "COUNT", 100);
+    cursor = next;
+    if (keys.length) {
+      const vals = await redisState.mget(...keys);
+      for (let i = 0; i < keys.length; i++) {
+        if (!vals[i]) continue;
+        try {
+          const lock = JSON.parse(vals[i]);
+          const itemId = keys[i].slice(prefix.length);
+          result.push({ itemId, ...lock });
+        } catch { /* skip malformed */ }
+      }
+    }
+  } while (cursor !== "0");
+  return result;
+}
+
+async function tryAcquireLock(roomId, itemId, socketId, userId, userName) {
+  if (!redisState) return false;
+  const key = `shlock:${roomId}:${itemId}`;
+  const val = JSON.stringify({ socketId, userId, name: userName });
+  // SET NX EX is atomic: first caller wins, rest get null
+  const ok = await redisState.set(key, val, "EX", 30, "NX");
+  if (ok) return true;
+  // Lock exists — allow re-lock by the same socket (refreshes TTL)
+  const existing = await redisState.get(key);
+  if (!existing) return false;
+  try {
+    const parsed = JSON.parse(existing);
+    if (parsed.socketId === socketId) {
+      await redisState.expire(key, 30);
+      return true;
+    }
+  } catch { /* skip */ }
+  return false;
+}
+
+async function tryReleaseLock(roomId, itemId, socketId) {
+  if (!redisState) return false;
+  const key = `shlock:${roomId}:${itemId}`;
+  const existing = await redisState.get(key);
+  if (!existing) return false;
+  try {
+    const parsed = JSON.parse(existing);
+    if (parsed.socketId !== socketId) return false;
+  } catch { return false; }
+  await redisState.del(key);
+  return true;
+}
+
+// Per-userId Redis rate limiter for shape events (cross-connection, cross-worker).
+// Uses SET NX EX + INCR pipeline for atomic first-create with TTL.
+// Falls back to allow:true on Redis error so a Redis blip never freezes the canvas.
+async function allowUserShape(userId, maxPerSec) {
+  if (!redisState || !userId) return true;
+  try {
+    const key = `iorl:${userId}:shape`;
+    const results = await redisState.pipeline()
+      .set(key, "0", "EX", 1, "NX")
+      .incr(key)
+      .exec();
+    const count = results?.[1]?.[1];
+    return typeof count === "number" ? count <= maxPerSec : true;
+  } catch {
+    return true;
+  }
 }
 
 app.prepare().then(async () => {
@@ -79,6 +171,8 @@ app.prepare().then(async () => {
     const pubClient = new Redis(process.env.REDIS_URL);
     const subClient = pubClient.duplicate();
     io.adapter(createAdapter(pubClient, subClient));
+    // Dedicated client for application state (presence + locks)
+    redisState = new Redis(process.env.REDIS_URL);
   }
 
   // ─── Auth middleware — extract session from cookie ───────────────────────────
@@ -119,6 +213,11 @@ app.prepare().then(async () => {
   io.on("connection", (socket) => {
     const joinedRooms = new Set();
 
+    // Per-socket set of acquired lock keys ("${roomId}:${itemId}") for efficient
+    // disconnect cleanup. Redis TTL (30s) is the fallback if the server crashes
+    // before disconnect fires.
+    const socketLocks = new Set();
+
     // Per-socket rate limiter — drops bursts above the per-second threshold.
     // Stored in closure so it's automatically GC'd when the socket disconnects.
     const _rl = new Map(); // eventKey -> { count, resetAt }
@@ -154,62 +253,53 @@ app.prepare().then(async () => {
       socket.join(roomId);
       joinedRooms.add(roomId);
 
-      // Presence: add this user to the room
+      // Presence: add this user to the room (Redis hash, TTL 5 min)
       if (socket.data.userId) {
-        if (!roomPresence.has(roomId)) roomPresence.set(roomId, new Map());
-        roomPresence.get(roomId).set(socket.id, {
+        await upsertPresence(roomId, socket.id, {
           socketId: socket.id,
           userId: socket.data.userId,
           name: socket.data.userName ?? "Unknown",
           initials: getInitials(socket.data.userName ?? "?"),
         });
-        io.to(roomId).emit("presence:update", presenceFor(roomId));
+        io.to(roomId).emit("presence:update", await presenceFor(roomId));
       }
 
       // Send current lock state to the joining user
-      const locks = roomLocks.get(roomId);
-      if (locks && locks.size > 0) {
-        socket.emit("shape:locks:init", Array.from(locks.entries()).map(([itemId, lock]) => ({
-          itemId, userId: lock.userId, name: lock.name,
+      const locks = await getLocksForRoom(roomId);
+      if (locks.length > 0) {
+        socket.emit("shape:locks:init", locks.map((l) => ({
+          itemId: l.itemId, userId: l.userId, name: l.name,
         })));
       }
     });
 
-    socket.on("leave:room", (roomId) => {
+    socket.on("leave:room", async (roomId) => {
       if (typeof roomId !== "string") return;
       socket.leave(roomId);
       joinedRooms.delete(roomId);
 
       // Presence: remove from room
-      const room = roomPresence.get(roomId);
-      if (room) {
-        room.delete(socket.id);
-        if (room.size === 0) roomPresence.delete(roomId);
-        else io.to(roomId).emit("presence:update", presenceFor(roomId));
-      }
+      await removePresence(roomId, socket.id);
+      const presence = await presenceFor(roomId);
+      if (presence.length > 0) io.to(roomId).emit("presence:update", presence);
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       // Release all shape locks held by this socket
-      for (const [rid, locks] of roomLocks) {
-        for (const [itemId, lock] of locks) {
-          if (lock.socketId === socket.id) {
-            locks.delete(itemId);
-            const key = `${rid}:${itemId}`;
-            if (lockTimeouts.has(key)) { clearTimeout(lockTimeouts.get(key)); lockTimeouts.delete(key); }
-            io.to(rid).emit("shape:unlock", itemId);
-          }
-        }
-        if (locks.size === 0) roomLocks.delete(rid);
+      for (const lockKey of socketLocks) {
+        const colonIdx = lockKey.indexOf(":");
+        const roomId = lockKey.slice(0, colonIdx);
+        const itemId = lockKey.slice(colonIdx + 1);
+        const released = await tryReleaseLock(roomId, itemId, socket.id);
+        if (released) io.to(roomId).emit("shape:unlock", itemId);
       }
+      socketLocks.clear();
 
       // Clean up presence for all rooms this socket joined
       for (const roomId of joinedRooms) {
-        const room = roomPresence.get(roomId);
-        if (!room) continue;
-        room.delete(socket.id);
-        if (room.size === 0) roomPresence.delete(roomId);
-        else io.to(roomId).emit("presence:update", presenceFor(roomId));
+        await removePresence(roomId, socket.id);
+        const presence = await presenceFor(roomId);
+        if (presence.length > 0) io.to(roomId).emit("presence:update", presence);
       }
       joinedRooms.clear();
     });
@@ -227,41 +317,25 @@ app.prepare().then(async () => {
     });
 
     // ─── Shape lock / unlock ─────────────────────────────────────────────────
-    socket.on("shape:lock", ({ roomId, itemId }) => {
+    socket.on("shape:lock", async ({ roomId, itemId }) => {
       if (!allow("shape", 10)) return;
+      if (!(await allowUserShape(socket.data.userId, 10))) return;
       if (typeof roomId !== "string" || typeof itemId !== "string") return;
       if (!joinedRooms.has(roomId)) return;
-      if (!roomLocks.has(roomId)) roomLocks.set(roomId, new Map());
-      const locks = roomLocks.get(roomId);
-      const existing = locks.get(itemId);
-      if (existing && existing.socketId !== socket.id) return; // already locked by another user
-
-      locks.set(itemId, { socketId: socket.id, userId: socket.data.userId, name: socket.data.userName ?? "Unknown" });
-
-      const key = `${roomId}:${itemId}`;
-      if (lockTimeouts.has(key)) clearTimeout(lockTimeouts.get(key));
-      lockTimeouts.set(key, setTimeout(() => {
-        const l = roomLocks.get(roomId);
-        if (l) { l.delete(itemId); if (l.size === 0) roomLocks.delete(roomId); }
-        lockTimeouts.delete(key);
-        io.to(roomId).emit("shape:unlock", itemId);
-      }, 30000));
-
+      const acquired = await tryAcquireLock(roomId, itemId, socket.id, socket.data.userId, socket.data.userName ?? "Unknown");
+      if (!acquired) return;
+      socketLocks.add(`${roomId}:${itemId}`);
       socket.to(roomId).emit("shape:lock", { itemId, userId: socket.data.userId, name: socket.data.userName ?? "Unknown" });
     });
 
-    socket.on("shape:unlock", ({ roomId, itemId }) => {
+    socket.on("shape:unlock", async ({ roomId, itemId }) => {
       if (!allow("shape", 10)) return;
+      if (!(await allowUserShape(socket.data.userId, 10))) return;
       if (typeof roomId !== "string" || typeof itemId !== "string") return;
       if (!joinedRooms.has(roomId)) return;
-      const locks = roomLocks.get(roomId);
-      if (!locks) return;
-      const lock = locks.get(itemId);
-      if (!lock || lock.socketId !== socket.id) return;
-      locks.delete(itemId);
-      if (locks.size === 0) roomLocks.delete(roomId);
-      const key = `${roomId}:${itemId}`;
-      if (lockTimeouts.has(key)) { clearTimeout(lockTimeouts.get(key)); lockTimeouts.delete(key); }
+      const released = await tryReleaseLock(roomId, itemId, socket.id);
+      if (!released) return;
+      socketLocks.delete(`${roomId}:${itemId}`);
       socket.to(roomId).emit("shape:unlock", itemId);
     });
 
@@ -270,22 +344,25 @@ app.prepare().then(async () => {
     // joinedRooms is populated in join:room which already runs the tenant check,
     // so a socket in joinedRooms is guaranteed to belong to the correct org.
 
-    socket.on("takeoff:add", ({ roomId, item }) => {
+    socket.on("takeoff:add", async ({ roomId, item }) => {
       if (!allow("shape", 10)) return;
+      if (!(await allowUserShape(socket.data.userId, 10))) return;
       if (typeof roomId === "string" && item && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:add", item);
       }
     });
 
-    socket.on("takeoff:update", ({ roomId, item }) => {
+    socket.on("takeoff:update", async ({ roomId, item }) => {
       if (!allow("shape", 10)) return;
+      if (!(await allowUserShape(socket.data.userId, 10))) return;
       if (typeof roomId === "string" && item && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:update", item);
       }
     });
 
-    socket.on("takeoff:delete", ({ roomId, itemId }) => {
+    socket.on("takeoff:delete", async ({ roomId, itemId }) => {
       if (!allow("shape", 10)) return;
+      if (!(await allowUserShape(socket.data.userId, 10))) return;
       if (typeof roomId === "string" && typeof itemId === "string" && joinedRooms.has(roomId)) {
         socket.to(roomId).emit("takeoff:delete", itemId);
       }
@@ -297,11 +374,7 @@ app.prepare().then(async () => {
   setInterval(() => {
     const connections = io.sockets.sockets.size;
     if (connections === 0) return; // silent when idle
-    const activeLocks = Array.from(roomLocks.values())
-      .reduce((sum, locks) => sum + locks.size, 0);
-    console.log(
-      `[socket-stats] connections=${connections} rooms=${roomPresence.size} locks=${activeLocks}`
-    );
+    console.log(`[socket-stats] connections=${connections}`);
   }, 60_000);
 
   httpServer.listen(port, () => {

@@ -8,6 +8,7 @@ import { ResourceLibrary } from "./ResourceLibrary";
 import { ResourceLineAnalysis } from "./ResourceLineAnalysis";
 import { RateSettingsPanel } from "./RateSettingsPanel";
 import { fmtNum } from "@/lib/format";
+import { adToBS } from "@/lib/bs-date";
 import { ASSEMBLY_CATEGORIES } from "@/lib/nepal-constants";
 import { PAGE_SIZE, DEFAULT_ASSEMBLY_COLOUR } from "@/lib/cache-constants";
 
@@ -51,9 +52,9 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function nepalFY(): string {
-  const now = new Date();
-  const isAfterShrawan = now.getMonth() > 6 || (now.getMonth() === 6 && now.getDate() >= 17);
-  const fyStart = now.getFullYear() + (isAfterShrawan ? 57 : 56);
+  const { year, month } = adToBS(new Date());
+  // Nepal fiscal year starts Shrawan (BS month 4); before Shrawan we're in the previous FY
+  const fyStart = month >= 4 ? year : year - 1;
   return `${fyStart}/${String(fyStart + 1).slice(2)}`;
 }
 

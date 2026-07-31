@@ -11,10 +11,14 @@ import bcrypt from "bcrypt";
 
 const schema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8).max(100).regex(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-    "Password must contain uppercase, lowercase and a number."
-  ),
+  newPassword: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .max(100)
+    .refine(
+      (p) => /[A-Z]/.test(p) && /[0-9]/.test(p),
+      "Password must contain at least one uppercase letter and one number."
+    ),
 });
 
 // POST /api/auth/change-password
@@ -37,7 +41,7 @@ export async function POST(req: NextRequest) {
     const valid = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
     if (!valid) return apiError("UNAUTHORIZED", "Current password is incorrect.", 401);
 
-    const newHash = await bcrypt.hash(parsed.data.newPassword, 10);
+    const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
     const now = new Date();
     await prisma.user.update({
       where: { id: user.id },

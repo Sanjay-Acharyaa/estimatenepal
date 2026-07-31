@@ -2,28 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
-import { computeQuantity, perSegmentEffectiveScale, boundingBoxWeightedScale, type ToolData, type AdditionalParams } from "@/lib/takeoff";
+import { computeQuantity, perSegmentEffectiveScale, boundingBoxWeightedScale, MIN_SHAPE_POINTS, type ToolData, type AdditionalParams } from "@/lib/takeoff";
 import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { invalidateBOQCache } from "@/lib/boq";
 
-const pointSchema = z.object({ x: z.number(), y: z.number() });
-
-/** Minimum number of points required for each shape type to form a valid geometry. */
-const MIN_POINTS: Record<string, number> = {
-  CIRCLE: 2,   // center + radius point
-  ARC: 3,      // start + end + midpoint-on-arc
-  RECTANGLE: 4, // four corners
-  POLYGON: 3,  // at least a triangle
-  POLYLINE: 2, // at least one segment
-};
+const pointSchema = z.object({ x: z.number().finite(), y: z.number().finite() });
 
 const createSchema = z.object({
   groupId: z.string(),
-  label: z.string().min(1).max(200),
+  label: z.string().min(1).max(200).optional(), // server generates serverLabel from maxSeq; client field is ignored
   toolType: z.enum(["COUNT", "LINEAR", "COUNT_BY_DISTANCE", "AREA", "VOLUME", "VERTICAL_WALL_AREA"]),
   shapeType: z.enum(["RECTANGLE", "POLYLINE", "POLYGON", "CIRCLE", "ARC"]).optional(),
   toolData: z.object({ points: z.array(pointSchema).min(1) }),
@@ -31,12 +21,20 @@ const createSchema = z.object({
   isNegative: z.boolean().default(false),
   sortOrder: z.number().int().optional(),
 }).superRefine((val, ctx) => {
-  const min = val.shapeType ? (MIN_POINTS[val.shapeType] ?? 1) : 1;
+  const min = val.shapeType ? (MIN_SHAPE_POINTS[val.shapeType] ?? 1) : 1;
   if (val.toolData.points.length < min) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["toolData", "points"],
       message: `${val.shapeType ?? "shape"} requires at least ${min} point(s), got ${val.toolData.points.length}.`,
+    });
+  }
+  // RECTANGLE must have exactly 4 corners — no more, no fewer.
+  if (val.shapeType === "RECTANGLE" && val.toolData.points.length !== 4) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["toolData", "points"],
+      message: `RECTANGLE requires exactly 4 points, got ${val.toolData.points.length}.`,
     });
   }
 });
@@ -74,7 +72,11 @@ export async function GET(
       }),
     ]);
 
-    return NextResponse.json(paginatedResponse(items, total, pg, limit));
+    const response = paginatedResponse(items, total, pg, limit);
+    if (total > limit && pg === 1) {
+      console.warn(`[takeoff-items] Page ${params.pageId} has ${total} items but limit=${limit}; ${total - items.length} items not returned.`);
+    }
+    return NextResponse.json({ ...response, truncated: total > pg * limit });
   } catch (err) {
     console.error("[takeoff-items GET]", params, err);
     return handleApiError(err);
@@ -114,6 +116,12 @@ export async function POST(
     const group = await prisma.takeoffGroup.findUnique({ where: { id: parsed.data.groupId } });
     if (!group || group.projectId !== params.id) throw notFound("Takeoff group");
     if (group.isLocked) return apiError("FORBIDDEN", "This layer is locked. Unlock it before adding shapes.", 403);
+
+    // Ensure the submitted toolType matches the group type so rawQuantity is computed with
+    // the correct formula. VOLUME groups are exempt — server always overrides to "VOLUME".
+    if (group.type !== "VOLUME" && parsed.data.toolType !== group.type) {
+      return apiError("VALIDATION_ERROR", `Cannot draw "${parsed.data.toolType}" shapes in a "${group.type}" layer.`, 400);
+    }
 
     // POLYLINE: per-segment length-weighted scale (accurate when crossing zones).
     // Closed area shapes: bounding-box area-weighted scale (handles shapes that straddle zone boundaries).
@@ -160,7 +168,7 @@ export async function POST(
         return match ? Math.max(m, parseInt(match[1], 10)) : m;
       }, 0);
       const serverLabel = `${group.name.slice(0, 60)} #${maxSeq + 1}`;
-      return (tx.takeoffItem.create as any)({
+      return tx.takeoffItem.create({
         data: {
           pageId: params.pageId,
           groupId: parsed.data.groupId,
@@ -178,7 +186,7 @@ export async function POST(
         },
         include: { group: { select: { id: true, name: true, colour: true, type: true } } },
       });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
 
     invalidateBOQCache(params.id).catch(() => {});
     return NextResponse.json(item, { status: 201 });

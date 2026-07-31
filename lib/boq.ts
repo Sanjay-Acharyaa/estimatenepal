@@ -78,9 +78,166 @@ export interface BOQDocument {
   finalPayable: number;
   generatedAt: string;
   zeroQuantityItemCount: number;
+  unlinkedGroupCount: number; // layers that have items but no rate item linked — BOQ contribution is $0
 }
 
 // BOQ_CACHE_TTL and BOQ_MAX_CACHE_BYTES are imported from cache-constants
+
+// ─── Shared quantity computation ─────────────────────────────────────────────
+// Single implementation of the per-group aggregation formula used by the BOQ
+// export, the discipline-cost panel, and the sidebar layer-totals panel.
+// All three callers must use this function to stay in sync.
+
+export type ItemForGroupQty = {
+  rawQuantity: number;
+  isNegative: boolean;
+  unit: string;
+  shapeType: string | null | undefined;
+};
+
+export type GroupForQty = {
+  type: string;
+  additionalParams: Record<string, unknown> | null | undefined;
+  multiplier: number;
+};
+
+/**
+ * Aggregates rawQuantity values for a group's items into a total qty + unit,
+ * applying the group type's formula (fence-post, wall height, volume, etc.).
+ * Returns `excludedShapeCount` for VOLUME (shapes excluded due to method mismatch).
+ */
+export function computeGroupTotal(
+  group: GroupForQty,
+  items: ItemForGroupQty[],
+): { qty: number; unit: string; excludedShapeCount: number } {
+  const ap = group.additionalParams as {
+    volumeMethod?: string;
+    height?: { ft: number; in: number };
+    breadth?: { ft: number; in: number };
+    wall?: { enabled?: boolean; heightFt: number; heightIn: number };
+    spacing?: { ft: number; in: number };
+  } | null;
+
+  const safeNum = (v: unknown): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  if (group.type === "VOLUME") {
+    const method = ap?.volumeMethod ?? "area_x_h";
+    const validItems = items.filter(i => {
+      const st = i.shapeType ?? null;
+      const isLength = st === "POLYLINE" || st === "ARC";
+      const isArea   = st === "RECTANGLE" || st === "CIRCLE" || st === "POLYGON";
+      // null shapeType matches neither branch → excluded and counted in excludedShapeCount.
+      return method === "lbh" ? isLength : isArea;
+    });
+    const excludedShapeCount = items.length - validItems.length;
+    const heightFt = ap?.height != null ? safeNum(ap.height.ft) + safeNum(ap.height.in) / 12 : null;
+    const breadthFt = ap?.breadth != null ? safeNum(ap.breadth.ft) + safeNum(ap.breadth.in) / 12 : null;
+    let total = 0;
+    for (const i of validItems) {
+      const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
+      const ftToUnit = i.unit.includes("ft") ? 1 : 0.3048;
+      const h = heightFt != null ? heightFt * ftToUnit : null;
+      if (method === "lbh") {
+        const b = breadthFt != null ? breadthFt * ftToUnit : null;
+        total += raw * (b ?? 1) * (h ?? 1);
+      } else {
+        total += raw * (h ?? 1);
+      }
+    }
+    const qty = total * group.multiplier;
+    const firstUnit = validItems[0]?.unit ?? items[0]?.unit ?? "ft";
+    const isMetric = firstUnit.replace(/ \(set [^)]+\)/g, "").trim().endsWith("m");
+    let unit: string;
+    if (method === "lbh") {
+      unit = (breadthFt != null && breadthFt > 0) && (heightFt != null && heightFt > 0)
+        ? (isMetric ? "cu m" : "cu ft")
+        : (isMetric ? "sq m" : "sq ft");
+    } else {
+      unit = (heightFt != null && heightFt > 0) ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
+    }
+    return { qty, unit, excludedShapeCount };
+  }
+
+  if (group.type === "VERTICAL_WALL_AREA") {
+    const wallHFt = ap?.wall ? safeNum(ap.wall.heightFt) + safeNum(ap.wall.heightIn) / 12 : 0;
+    // Normalise every perimeter item to metres before summing so mixed ft+m scale-zone
+    // groups accumulate in one consistent unit (avoids sq-ft + sq-m dimension mismatch).
+    let perimM = 0;
+    for (const i of items) {
+      const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
+      const toM = i.unit.includes("ft") ? 0.3048 : 1;
+      perimM += raw * toM;
+    }
+    const wallHM = wallHFt * 0.3048;
+    const qty = wallHFt > 0 ? perimM * wallHM * group.multiplier : 0;
+    const unit = wallHFt > 0 ? "sq m" : "m (set wall height)";
+    return { qty, unit, excludedShapeCount: 0 };
+  }
+
+  if (group.type === "COUNT_BY_DISTANCE") {
+    const sp = ap?.spacing;
+    const spacingFt = sp ? safeNum(sp.ft) + safeNum(sp.in) / 12 : 0;
+    if (spacingFt > 0) {
+      let countTotal = 0;
+      for (const i of items) {
+        const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
+        const ftu = i.unit.includes("ft") ? 1 : 0.3048;
+        const spacing = spacingFt * ftu;
+        const count = raw >= 0 ? Math.floor(raw / spacing) + 1 : -(Math.floor(Math.abs(raw) / spacing) + 1);
+        countTotal += count;
+      }
+      return { qty: countTotal * group.multiplier, unit: "each", excludedShapeCount: 0 };
+    } else {
+      // Normalise to metres so ft-zone and m-zone items accumulate in the same unit.
+      let rawTotal = 0;
+      for (const i of items) {
+        const toM = i.unit.includes("ft") ? 0.3048 : 1;
+        rawTotal += safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity) * toM;
+      }
+      return { qty: rawTotal * group.multiplier, unit: "m", excludedShapeCount: 0 };
+    }
+  }
+
+  // COUNT, LINEAR, AREA
+  // Use .includes("ft") on item.unit to detect imperial scale — this is reliable even when
+  // item.unit is stale after a group type change (e.g. "ft" on an AREA group still correctly
+  // signals imperial; the full label is wrong but the ft-detector is not).
+  // Derive the display unit from group.type + the imperial flag so a stale stored unit
+  // ("ft" instead of "sq ft" after LINEAR→AREA type change) never leaks into the BOQ total.
+  const isImperial = items.some(i => i.unit.includes("ft"));
+  // Mixed-scale zones: some items in ft, some in m — need normalisation to metric.
+  const hasMixedScale = isImperial && items.some(i => !i.unit.includes("ft"));
+
+  // Conversion factor to metric for a single item — driven by group.type so that an AREA
+  // group always uses 0.3048² even if item.unit is stale "ft" (linear) rather than "sq ft".
+  const toMetricFactor = (iFt: boolean): number => {
+    if (!iFt) return 1;
+    if (group.type === "AREA") return 0.3048 * 0.3048;  // sq ft → sq m
+    return 0.3048;                                        // ft → m  (LINEAR; COUNT never needs this)
+  };
+
+  let rawTotal: number;
+  let unit: string;
+
+  if (hasMixedScale) {
+    rawTotal = items.reduce((s, i) => {
+      const iFt = i.unit.includes("ft");
+      return s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity) * toMetricFactor(iFt);
+    }, 0);
+    unit = group.type === "COUNT" ? "each"
+         : group.type === "AREA"  ? "sq m"
+         :                          "m";
+  } else {
+    rawTotal = items.reduce((s, i) => s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
+    unit = group.type === "COUNT" ? "each"
+         : group.type === "AREA"  ? (isImperial ? "sq ft" : "sq m")
+         :                          (isImperial ? "ft"    : "m");
+  }
+  return { qty: rawTotal * group.multiplier, unit, excludedShapeCount: 0 };
+}
 
 export async function invalidateBOQCache(projectId: string): Promise<void> {
   redis.del(`boq:v2:${projectId}`).catch((err: unknown) => {
@@ -93,14 +250,18 @@ export async function generateBOQ(projectId: string): Promise<BOQDocument> {
   try {
     const hit = await redis.get(cacheKey);
     if (hit) {
-      return JSON.parse(hit) as BOQDocument;
+      // Stamp generatedAt at serve time so it reflects when the BOQ was actually returned,
+      // not when the cached payload was originally built.
+      return { ...JSON.parse(hit) as BOQDocument, generatedAt: new Date().toISOString() };
     }
   } catch {
     // Redis miss or error — proceed to compute
   }
 
   const boq = await computeBOQ(projectId);
-  const serialised = JSON.stringify(boq);
+  // Exclude generatedAt from the cached blob so the timestamp reflects serve time, not cache-build time.
+  const { generatedAt: _g, ...cacheable } = boq;
+  const serialised = JSON.stringify(cacheable);
   if (serialised.length <= BOQ_MAX_CACHE_BYTES) {
     redis.set(cacheKey, serialised, "EX", BOQ_CACHE_TTL).catch(() => {});
   }
@@ -136,7 +297,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
   // Only layers (parentId set) hold takeoff items
   // Note: rateItem is fetched separately via rateMap to avoid Prisma client version issues
   const layers = await prisma.takeoffGroup.findMany({
-    where: { projectId, parentId: { not: null } },
+    where: { projectId, parentId: { not: null }, disciplineId: { not: null } },
     include: {
       items: { orderBy: { sortOrder: "asc" } },
       parent: { select: { name: true, sortOrder: true } },
@@ -207,6 +368,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       const rateItemId = layer.rateItemId ?? null;
       const rateItem = rateItemId ? rateMap.get(rateItemId) : undefined;
 
+      // ap is still needed below for per-item MB dimension computation.
       const ap = layer.additionalParams as {
         volumeMethod?: string;
         height?: { ft: number; in: number };
@@ -215,103 +377,30 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
         spacing?: { ft: number; in: number };
       } | null;
 
-      // Compute total from rawQuantity so group.multiplier is never baked into items
-      let totalQuantity: number;
-      let unit: string;
-
       const safeNum = (v: unknown): number => {
         const n = Number(v);
         return Number.isFinite(n) ? n : 0;
       };
 
-      let excludedShapeCount = 0;
-      // For VOLUME, only include shapes that match the current method in the measurement book.
-      // For all other types, use every item.
-      let mbItems = layer.items;
+      // Use the shared helper so BOQ, discipline totals, and sidebar totals all
+      // apply exactly the same formula. No inline formula duplication here.
+      let { qty: totalQuantity, unit, excludedShapeCount } = computeGroupTotal(
+        { type: layer.type, additionalParams: layer.additionalParams as Record<string, unknown> | null, multiplier: layer.multiplier },
+        layer.items,
+      );
 
-      if (layer.type === "VOLUME") {
-        const method = ap?.volumeMethod ?? "area_x_h";
-        const volumeValidItems = layer.items.filter(i => {
-          const isLength = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || !i.shapeType;
-          const isArea = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
-          return method === "lbh" ? isLength : isArea;
-        });
-        mbItems = volumeValidItems;
-        excludedShapeCount = layer.items.length - volumeValidItems.length;
-        // heights/breadths stored as feet+inches; apply per-item unit conversion so shapes
-        // drawn in ft zones and m zones within the same group are each scaled correctly.
-        const heightFt = ap?.height != null ? safeNum(ap.height.ft) + safeNum(ap.height.in) / 12 : null;
-        const breadthFt = ap?.breadth != null ? safeNum(ap.breadth.ft) + safeNum(ap.breadth.in) / 12 : null;
-        let volumeTotal = 0;
-        for (const i of volumeValidItems) {
-          const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
-          const ftToUnit = i.unit.includes("ft") ? 1 : 0.3048;
-          const h = heightFt != null ? heightFt * ftToUnit : null;
-          if (method === "lbh") {
-            const b = breadthFt != null ? breadthFt * ftToUnit : null;
-            volumeTotal += raw * (b ?? 1) * (h ?? 1);
-          } else {
-            volumeTotal += raw * (h ?? 1);
-          }
-        }
-        totalQuantity = volumeTotal * layer.multiplier;
-        // Unit display uses first valid item's unit (consistent with how items are drawn)
-        const firstUnit = volumeValidItems[0]?.unit ?? layer.items[0]?.unit ?? "ft";
-        const isMetric = firstUnit.replace(/ \(set [^)]+\)/g, "").trim().endsWith("m");
-        if (method === "lbh") {
-          unit = (breadthFt != null && breadthFt > 0) && (heightFt != null && heightFt > 0)
-            ? (isMetric ? "cu m" : "cu ft")
-            : (isMetric ? "sq m" : "sq ft");
-        } else {
-          unit = (heightFt != null && heightFt > 0) ? (isMetric ? "cu m" : "cu ft") : (isMetric ? "sq m" : "sq ft");
-        }
-      } else if (layer.type === "VERTICAL_WALL_AREA") {
-        // Per-item unit conversion: wall height stored in ft, convert to each item's scale unit.
-        const wallHFt = ap?.wall ? (safeNum(ap.wall.heightFt) + safeNum(ap.wall.heightIn) / 12) : 0;
-        let vwaTotal = 0;
-        for (const i of layer.items) {
-          const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
-          const ftToUnit = i.unit.includes("ft") ? 1 : 0.3048;
-          vwaTotal += raw * (wallHFt * ftToUnit);
-        }
-        totalQuantity = wallHFt > 0 ? vwaTotal * layer.multiplier : 0;
-        const wallItemUnit = layer.items[0]?.unit ?? "ft";
-        unit = wallHFt > 0 ? (wallItemUnit.replace(/ \(set [^)]+\)/g, "").trim().endsWith("m") ? "sq m" : "sq ft") : wallItemUnit;
-      } else if (layer.type === "COUNT_BY_DISTANCE") {
-        const sp = ap?.spacing;
-        const spacingFt = sp ? safeNum(sp.ft) + safeNum(sp.in) / 12 : 0;
-        if (spacingFt > 0) {
-          const countTotal = layer.items.reduce((s, i) => {
-            const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
-            const ftu = i.unit.includes("ft") ? 1 : 0.3048;
-            const spacing = spacingFt * ftu;
-            // Fence-post correction (+1) counts one object at each endpoint of a span.
-            // Deduction layers (raw < 0) represent voids/openings; no extra post at the boundary.
-            const count = raw >= 0
-              ? Math.floor(raw / spacing) + 1
-              : Math.ceil(raw / spacing);
-            return s + count;
-          }, 0);
-          totalQuantity = countTotal * layer.multiplier;
-          unit = "each";
-        } else {
-          // Normalise to metres so ft-zone and m-zone items accumulate in the same unit.
-          // Items drawn while spacing was set carry an "each|ft" sentinel; .includes("ft")
-          // still detects that correctly and applies the ft→m factor.
-          const rawTotal = layer.items.reduce((s, i) => {
-            const toM = i.unit.includes("ft") ? 0.3048 : 1;
-            return s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity) * toM;
-          }, 0);
-          totalQuantity = rawTotal * layer.multiplier;
-          unit = "m";
-        }
-      } else {
-        // COUNT, LINEAR, AREA
-        const rawTotal = layer.items.reduce((s, i) => s + safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity), 0);
-        totalQuantity = rawTotal * layer.multiplier;
-        unit = (layer.items[0]?.unit ?? "").replace(/ \(set [^)]+\)/g, "").trim()
-          || (layer.type === "COUNT" ? "each" : layer.type === "AREA" ? "sq m" : "m");
-      }
+      // mbItems drives the measurement-book rows. For VOLUME, only shapes that
+      // match the current method appear; for all other types every item appears.
+      const mbItems = layer.type === "VOLUME"
+        ? (() => {
+            const method = ap?.volumeMethod ?? "area_x_h";
+            return layer.items.filter(i => {
+              const isLength = i.shapeType === "POLYLINE" || i.shapeType === "ARC";
+              const isArea = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
+              return method === "lbh" ? isLength : isArea;
+            });
+          })()
+        : layer.items;
 
       // Attempt unit conversion to match rateItem.unit
       let originalQuantity = totalQuantity;
@@ -320,7 +409,12 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
 
       if (rateItem) {
         const factor = getConversionFactor(unit, rateItem.unit);
-        if (factor !== null && factor !== 1) {
+        if (factor === null) {
+          // Unit pair unknown — zeroing the quantity makes the line visibly wrong (zero amount)
+          // rather than silently wrong (unconverted qty × mismatched rate unit).
+          totalQuantity = 0;
+          originalQuantity = 0;
+        } else if (factor !== 1) {
           conversionFactor = factor;
           totalQuantity = totalQuantity * factor;
           unit = rateItem.unit;
@@ -378,17 +472,21 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           let mbBreadth: number | null = null;
           let mbHeight: number | null = null;
           let effectiveQty: number;
+          let mbUnit = item.unit; // overridden per branch when the stored unit is not the output unit
           const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
 
           if (layer.type === "VERTICAL_WALL_AREA") {
             const wH_ft = ap?.wall != null
               ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12
               : null;
-            const wFtToUnit = item.unit.includes("ft") ? 1 : 0.3048;
-            const wH = wH_ft !== null ? wH_ft * wFtToUnit : null;
-            mbLength = item.rawQuantity;
-            if (wH !== null && wH > 0) mbHeight = wH;
-            effectiveQty = wH !== null ? signedRaw * wH * layer.multiplier : signedRaw * layer.multiplier;
+            // Normalise perimeter and wall height to metres so MB row matches computeGroupTotal (H-01).
+            const toM = item.unit.includes("ft") ? 0.3048 : 1;
+            const wHM = wH_ft !== null ? wH_ft * 0.3048 : null;
+            mbLength = item.rawQuantity * toM; // unsigned perimeter in metres for L column
+            if (wHM !== null && wHM > 0) mbHeight = wHM;
+            // signedRaw carries deduction sign; MB multiplier sign is flipped at line 519
+            effectiveQty = wHM !== null ? signedRaw * toM * wHM * layer.multiplier : signedRaw * toM * layer.multiplier;
+            mbUnit = wHM !== null && wHM > 0 ? "sq m" : "m (set wall height)";
           } else if (layer.type === "VOLUME") {
             const method = ap?.volumeMethod ?? "area_x_h";
             const vFtToUnit = item.unit.includes("ft") ? 1 : 0.3048;
@@ -415,11 +513,13 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             if (spacing > 0) {
               const count = signedRaw >= 0
                 ? Math.floor(signedRaw / spacing) + 1
-                : Math.ceil(signedRaw / spacing);
+                : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
               effectiveQty = count * layer.multiplier;
             } else {
               effectiveQty = signedRaw * layer.multiplier;
             }
+            // Strip the "each|ft" scale sentinel — display unit is always "each".
+            mbUnit = "each";
           } else {
             // COUNT, LINEAR, AREA — recompute from rawQuantity × current group multiplier;
             // item.quantity bakes in the multiplier at draw time and goes stale after a group multiplier change.
@@ -439,7 +539,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             breadth: mbBreadth,
             height: mbHeight,
             quantity: effectiveQty,
-            unit: item.unit,
+            unit: mbUnit,
             siteLocation: item.siteLocation,
             measuredDate: item.measuredDate,
             notes: item.notes,
@@ -476,10 +576,14 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
     });
   }
 
-  const zeroQuantityItemCount = layers.reduce(
-    (total, layer) => total + layer.items.filter(i => i.rawQuantity === 0).length,
-    0
-  );
+  // Only count items from discipline-assigned layers — those are the ones that appear in
+  // the BOQ output. Layers without a disciplineId are not exported and should not inflate this count.
+  const disciplineLayers = layers.filter(layer => layer.disciplineId !== null);
+  const zeroQuantityItemCount = disciplineLayers
+    .reduce((total, layer) => total + layer.items.filter(i => i.rawQuantity === 0).length, 0);
+  // Layers with items but no rate link contribute $0 to the BOQ — flag them so the UI can warn.
+  const unlinkedGroupCount = disciplineLayers
+    .filter(layer => !layer.rateItemId && layer.items.length > 0).length;
 
   const grandTotal = boqDisciplines.reduce((s, d) => s + d.subtotal, 0);
   const contingencyPct = project.contingencyPct ?? 0;
@@ -489,6 +593,10 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
   const vatAmount = project.vatEnabled
     ? subtotalAfterAdditions * (project.vatRate / 100)
     : 0;
+  // TDS is applied to the PRE-VAT subtotal (subtotalAfterAdditions), matching Nepal
+  // Income Tax Act practice for government contracts (TDS withheld on contract value
+  // before VAT). Some private/donor contracts apply TDS on the post-VAT total instead;
+  // if that is required, change the base to (subtotalAfterAdditions + vatAmount).
   const tdsAmount = project.tdsEnabled
     ? subtotalAfterAdditions * (project.tdsRate / 100)
     : 0;
@@ -519,5 +627,6 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
     finalPayable: subtotalAfterAdditions + vatAmount - tdsAmount,
     generatedAt: new Date().toISOString(),
     zeroQuantityItemCount,
+    unlinkedGroupCount,
   };
 }

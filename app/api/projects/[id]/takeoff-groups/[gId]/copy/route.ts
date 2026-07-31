@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, notFound } from "@/lib/errors";
 import { withTenantGuard } from "@/lib/auth";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { appendAuditLog } from "@/lib/audit";
 import { invalidateBOQCache } from "@/lib/boq";
+import { computeQuantity, perSegmentEffectiveScale, boundingBoxWeightedScale, type AdditionalParams } from "@/lib/takeoff";
 import { randomUUID } from "crypto";
 
 const copySchema = z.object({
   targetDisciplineId: z.string(),
   withObjects: z.boolean().default(false),
   targetGroupId: z.string().optional(),
+  colour: z.string().optional(), // override colour for single-layer copies; ignored for categories
 });
 
 // Copies all TakeoffItems from originalGroupId to newGroupId using createMany (no N+1).
@@ -21,9 +24,11 @@ async function copyItems(originalGroupId: string, newGroupId: string) {
   const originals = await prisma.takeoffItem.findMany({ where: { groupId: originalGroupId } });
   if (originals.length === 0) return [];
   const newIds = originals.map(() => randomUUID());
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (prisma.takeoffItem.createMany as any)({
-    data: originals.map((item, i) => ({
+  // Prisma's CreateManyInput omits `id` (auto-generated field), but explicit IDs are valid
+  // and allow us to build `newIds` up front for the findMany return instead of a second query.
+  // UncheckedCreateManyInput includes `id`.
+  await prisma.takeoffItem.createMany({
+    data: originals.map((item, i): Prisma.TakeoffItemUncheckedCreateInput => ({
       id: newIds[i],
       pageId: item.pageId,
       groupId: newGroupId,
@@ -45,7 +50,7 @@ async function copyItems(originalGroupId: string, newGroupId: string) {
       unit: item.unit,
       scaleUsed: item.scaleUsed,
       sortOrder: item.sortOrder,
-      toolData: item.toolData,
+      toolData: item.toolData as Prisma.InputJsonValue,
     })),
   });
   // Return the actual created records (not originals) so callers have correct IDs and groupId.
@@ -112,7 +117,9 @@ export async function POST(
           multiplier: original.multiplier,
           additionalParams: original.additionalParams ?? undefined,
           preamble: original.preamble ?? undefined,
-          rateItemId: original.rateItemId ?? undefined,
+          // rateItemId is intentionally omitted: categories (parentId=null) are not used in
+          // BOQ calculation — only their child layers are. Copying the category's rateItemId
+          // would produce dead data that could mislead future code.
           isLocked: false,
           isVisible: true,
           sortOrder: (maxCatSort?.sortOrder ?? -1) + 1,
@@ -216,7 +223,8 @@ export async function POST(
                 lineWidth: origParent.lineWidth,
                 additionalParams: origParent.additionalParams ?? undefined,
                 preamble: origParent.preamble ?? undefined,
-                rateItemId: origParent.rateItemId ?? undefined,
+                // rateItemId omitted: auto-created parent categories are category-level
+                // placeholders — their rateItemId is dead data (BOQ only reads child layers).
                 isLocked: false,
                 isVisible: true,
                 sortOrder: (maxParentSort?.sortOrder ?? -1) + 1,
@@ -241,7 +249,7 @@ export async function POST(
           parentId: targetParentId,
           name: `${original.name} (Copy)`,
           type: original.type,
-          colour: original.colour,
+          colour: parsed.data.colour ?? original.colour,
           lineWidth: original.lineWidth,
           tag: original.tag,
           multiplier: original.multiplier,
@@ -255,7 +263,61 @@ export async function POST(
         include: { _count: { select: { items: true } }, rateItem: { select: { code: true, source: true } } },
       });
 
-      const copiedItems = withObjects ? await copyItems(original.id, newLayer.id) : [];
+      let copiedItems = withObjects ? await copyItems(original.id, newLayer.id) : [];
+
+      // When copying into an EXISTING layer (targetGroupId), that layer may have different
+      // additionalParams than the source (e.g. different wall height, spacing, volume depth).
+      // Recompute quantity/unit for the newly created items so the MB export and detail panel
+      // show correct values for the target group's params.
+      // rawQuantity is NOT updated here — it reflects correct geometry regardless of params.
+      if (withObjects && targetGroupId && copiedItems.length > 0) {
+        const targetGroup = await prisma.takeoffGroup.findUnique({
+          where: { id: newLayer.id },
+          select: { type: true, multiplier: true, additionalParams: true },
+        });
+        if (targetGroup) {
+          const tgType = targetGroup.type as string;
+          const tgParams = targetGroup.additionalParams as AdditionalParams | undefined;
+          const tgMult = targetGroup.multiplier ?? 1;
+
+          const itemsWithPages = await prisma.takeoffItem.findMany({
+            where: { id: { in: copiedItems.map(i => i.id) } },
+            include: { page: { include: { scaleZones: true } } },
+          });
+
+          const CHUNK = 100;
+          const updateOps: ReturnType<typeof prisma.takeoffItem.update>[] = [];
+          for (const item of itemsWithPages) {
+            if (!item.page) continue;
+            const pts = ((item.toolData as { points?: Array<{ x: number; y: number }> })?.points ?? []);
+            const zones = item.page.scaleZones.map(z => ({
+              x: z.x, y: z.y, width: z.width, height: z.height, scale: z.scale, scaleUnit: z.scaleUnit,
+            }));
+            const eff = item.shapeType === "POLYLINE"
+              ? perSegmentEffectiveScale(pts, item.page.scale, item.page.scaleUnit, zones)
+              : boundingBoxWeightedScale(pts, item.page.scale, item.page.scaleUnit, zones, item.shapeType ?? null);
+            if (!eff) continue;
+            const { quantity, unit } = computeQuantity(
+              tgType as any,
+              { points: pts },
+              eff.scale,
+              eff.scaleUnit,
+              tgMult,
+              tgParams,
+              item.shapeType ?? null,
+            );
+            updateOps.push(prisma.takeoffItem.update({ where: { id: item.id }, data: { quantity, unit } }));
+          }
+          for (let i = 0; i < updateOps.length; i += CHUNK) {
+            await prisma.$transaction(updateOps.slice(i, i + CHUNK));
+          }
+          // Refresh copiedItems to return updated quantities in the response
+          copiedItems = await prisma.takeoffItem.findMany({
+            where: { id: { in: copiedItems.map(i => i.id) } },
+            orderBy: { sortOrder: "asc" },
+          });
+        }
+      }
 
       appendAuditLog({
         orgId: project.orgId,

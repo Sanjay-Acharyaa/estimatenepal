@@ -56,9 +56,14 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
         timeout,
       ]);
       if (res?.error) {
-        setError("Incorrect email or password. If you forgot your password, use the 'Forgot password?' link above.");
-        setShowResend(true);
-        setResendEmail(email);
+        if (res.error === "EMAIL_NOT_VERIFIED") {
+          setError("Please verify your email before signing in. Check your inbox or resend the link below.");
+          setShowResend(true);
+          setResendEmail(email);
+        } else {
+          setError("Incorrect email or password. If you forgot your password, use the 'Forgot password?' link above.");
+          setShowResend(false);
+        }
       } else {
         router.push(callbackUrl);
       }

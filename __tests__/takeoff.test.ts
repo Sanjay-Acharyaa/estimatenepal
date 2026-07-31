@@ -1,4 +1,4 @@
-import { computeQuantity, effectiveScale, perSegmentEffectiveScale } from "../lib/takeoff";
+import { computeQuantity, effectiveScale, perSegmentEffectiveScale, boundingBoxWeightedScale, arcSvgPath } from "../lib/takeoff";
 
 const NO_ZONES: never[] = [];
 
@@ -220,5 +220,266 @@ describe("computeQuantity — COUNT_BY_DISTANCE", () => {
     const expected = Math.floor(lengthM / spacingM) + 1;
     expect(quantity).toBe(expected);
     expect(unit).toBe("each");
+  });
+});
+
+// ── computeGroupTotal ──────────────────────────────────────────────────────────
+import { computeGroupTotal } from "../lib/boq";
+
+const item = (rawQuantity: number, unit: string, shapeType?: string | null, isNegative = false) =>
+  ({ rawQuantity, unit, shapeType: shapeType ?? null, isNegative });
+
+describe("computeGroupTotal — LINEAR / AREA / COUNT (passthrough)", () => {
+  it("sums rawQuantity for LINEAR items and applies multiplier", () => {
+    const group = { type: "LINEAR", additionalParams: null, multiplier: 2 };
+    const items = [item(3, "m"), item(2, "m")];
+    const { qty, unit } = computeGroupTotal(group, items);
+    expect(qty).toBeCloseTo(10, 6); // (3+2)*2
+    expect(unit).toBe("m");
+  });
+
+  it("subtracts isNegative items", () => {
+    const group = { type: "AREA", additionalParams: null, multiplier: 1 };
+    const items = [item(10, "sq m"), item(3, "sq m", null, true)];
+    const { qty } = computeGroupTotal(group, items);
+    expect(qty).toBeCloseTo(7, 6);
+  });
+
+  it("normalises mixed ft/m units to metric", () => {
+    const group = { type: "LINEAR", additionalParams: null, multiplier: 1 };
+    const items = [item(1, "m"), item(1, "ft")]; // 1 m + 0.3048 m
+    const { qty, unit } = computeGroupTotal(group, items);
+    expect(qty).toBeCloseTo(1.3048, 4);
+    expect(unit).toBe("m");
+  });
+
+  // Stale unit tests — Issue #9: unit field survives group type changes
+  it("AREA group with stale 'ft' unit (LINEAR→AREA type change, ft scale) returns sq ft", () => {
+    // After LINEAR→AREA type change, items may briefly have unit="ft" (stale) instead of "sq ft".
+    // computeGroupTotal must derive the display unit from group.type + imperial flag,
+    // not from the stale stored unit string.
+    const group = { type: "AREA", additionalParams: null, multiplier: 1 };
+    const items = [item(10, "ft"), item(5, "ft")]; // stale LINEAR unit; rawQuantity is sq ft after recompute
+    const { qty, unit } = computeGroupTotal(group, items);
+    expect(qty).toBe(15);
+    expect(unit).toBe("sq ft"); // must NOT be "ft"
+  });
+
+  it("AREA group with stale 'm' unit (LINEAR→AREA type change, m scale) returns sq m", () => {
+    const group = { type: "AREA", additionalParams: null, multiplier: 1 };
+    const items = [item(10, "m"), item(5, "m")]; // stale LINEAR unit
+    const { qty, unit } = computeGroupTotal(group, items);
+    expect(qty).toBe(15);
+    expect(unit).toBe("sq m"); // must NOT be "m"
+  });
+
+  it("LINEAR group with stale 'sq ft' unit (AREA→LINEAR type change) returns ft", () => {
+    const group = { type: "LINEAR", additionalParams: null, multiplier: 1 };
+    const items = [item(10, "sq ft")]; // stale AREA unit
+    const { qty, unit } = computeGroupTotal(group, items);
+    expect(qty).toBe(10);
+    expect(unit).toBe("ft"); // must NOT be "sq ft"
+  });
+
+  it("AREA mixed-zone normalisation uses area factor (0.3048²) not linear (0.3048)", () => {
+    // One item from ft-scale zone (sq ft), one from m-scale zone (sq m).
+    // The ft item must be converted with 0.3048² (area), not 0.3048 (linear).
+    // 10 sq ft = 10 × 0.09290304 = 0.9290304 sq m  →  total ≈ 1.9290304 sq m
+    const group = { type: "AREA", additionalParams: null, multiplier: 1 };
+    const items = [item(10, "sq ft"), item(1, "sq m")];
+    const { qty, unit } = computeGroupTotal(group, items);
+    expect(qty).toBeCloseTo(10 * 0.3048 * 0.3048 + 1, 4);
+    expect(unit).toBe("sq m");
+  });
+});
+
+describe("computeGroupTotal — VERTICAL_WALL_AREA", () => {
+  it("returns perimeter unit when wall height is zero", () => {
+    const group = { type: "VERTICAL_WALL_AREA", additionalParams: null, multiplier: 1 };
+    const { qty, unit } = computeGroupTotal(group, [item(5, "m")]);
+    expect(qty).toBe(0);
+    expect(unit).toBe("m (set wall height)");
+  });
+
+  it("area = perimeter × wall_height × multiplier", () => {
+    // 10 m perimeter × 3 ft wall height (0.9144 m) × multiplier 2 = 18.288 sq m
+    const group = {
+      type: "VERTICAL_WALL_AREA",
+      additionalParams: { wall: { enabled: true, heightFt: 3, heightIn: 0 } },
+      multiplier: 2,
+    };
+    const { qty, unit } = computeGroupTotal(group, [item(10, "m")]);
+    expect(qty).toBeCloseTo(10 * 3 * 0.3048 * 2, 4);
+    expect(unit).toBe("sq m");
+  });
+});
+
+describe("computeGroupTotal — COUNT_BY_DISTANCE", () => {
+  it("sums raw length when no spacing", () => {
+    const group = { type: "COUNT_BY_DISTANCE", additionalParams: null, multiplier: 1 };
+    const { qty, unit } = computeGroupTotal(group, [item(5, "m")]);
+    expect(qty).toBeCloseTo(5, 6);
+    expect(unit).toBe("m");
+  });
+
+  it("computes fence-post count: floor(L/spacing)+1 per item", () => {
+    // 6 m at 1 m spacing → floor(6/1)+1 = 7 each
+    const group = {
+      type: "COUNT_BY_DISTANCE",
+      additionalParams: { spacing: { ft: 3.28084, in: 0 } }, // ~1 m in ft
+      multiplier: 1,
+    };
+    const ftSpacing = 3.28084 * 0.3048; // ≈1 m
+    const { qty, unit } = computeGroupTotal(group, [item(6, "m")]);
+    expect(qty).toBe(Math.floor(6 / ftSpacing) + 1);
+    expect(unit).toBe("each");
+  });
+});
+
+describe("computeGroupTotal — VOLUME area_x_h", () => {
+  it("returns sq-m unit when height not set", () => {
+    const group = { type: "VOLUME", additionalParams: { volumeMethod: "area_x_h" }, multiplier: 1 };
+    const { qty, unit } = computeGroupTotal(group, [item(4, "sq m", "RECTANGLE")]);
+    // height=null → factor 1, unit falls back to area unit
+    expect(qty).toBeCloseTo(4, 6);
+    expect(unit).toBe("sq m");
+  });
+
+  it("area × height × multiplier = cu m", () => {
+    // area=4 sq m, height=2 ft=0.6096 m, multiplier=3 → 4*0.6096*3
+    const group = {
+      type: "VOLUME",
+      additionalParams: { volumeMethod: "area_x_h", height: { ft: 2, in: 0 } },
+      multiplier: 3,
+    };
+    const { qty, unit } = computeGroupTotal(group, [item(4, "sq m", "RECTANGLE")]);
+    expect(qty).toBeCloseTo(4 * 2 * 0.3048 * 3, 4);
+    expect(unit).toBe("cu m");
+  });
+
+  it("excludes POLYLINE items in area_x_h mode and counts them", () => {
+    const group = { type: "VOLUME", additionalParams: { volumeMethod: "area_x_h", height: { ft: 1, in: 0 } }, multiplier: 1 };
+    const { qty, excludedShapeCount } = computeGroupTotal(group, [
+      item(4, "sq m", "RECTANGLE"),
+      item(3, "m", "POLYLINE"), // should be excluded
+    ]);
+    expect(excludedShapeCount).toBe(1);
+    expect(qty).toBeCloseTo(4 * 0.3048, 4); // only rectangle counted
+  });
+});
+
+describe("computeGroupTotal — VOLUME lbh", () => {
+  it("length × breadth × height × multiplier = cu m", () => {
+    // 5 m POLYLINE, breadth=1 ft=0.3048 m, height=2 ft=0.6096 m, multiplier=2
+    const group = {
+      type: "VOLUME",
+      additionalParams: { volumeMethod: "lbh", breadth: { ft: 1, in: 0 }, height: { ft: 2, in: 0 } },
+      multiplier: 2,
+    };
+    const { qty, unit } = computeGroupTotal(group, [item(5, "m", "POLYLINE")]);
+    expect(qty).toBeCloseTo(5 * 0.3048 * 2 * 0.3048 * 2, 4);
+    expect(unit).toBe("cu m");
+  });
+
+  it("excludes non-POLYLINE/ARC items in lbh mode", () => {
+    const group = {
+      type: "VOLUME",
+      additionalParams: { volumeMethod: "lbh", breadth: { ft: 1, in: 0 }, height: { ft: 1, in: 0 } },
+      multiplier: 1,
+    };
+    const { excludedShapeCount } = computeGroupTotal(group, [
+      item(5, "m", "POLYLINE"),
+      item(4, "sq m", "RECTANGLE"), // should be excluded
+    ]);
+    expect(excludedShapeCount).toBe(1);
+  });
+});
+
+// ── boundingBoxWeightedScale ───────────────────────────────────────────────────
+
+describe("boundingBoxWeightedScale", () => {
+  const zone = { x: 0, y: 0, width: 200, height: 200, scale: 0.05, scaleUnit: "m" };
+
+  it("falls back to centroid when no zones", () => {
+    const pts = [{ x: 10, y: 10 }, { x: 100, y: 100 }];
+    const result = boundingBoxWeightedScale(pts, 0.01, "m", []);
+    expect(result).toEqual({ scale: 0.01, scaleUnit: "m" });
+  });
+
+  it("returns zone scale when entire bbox is inside one zone", () => {
+    const pts = [{ x: 10, y: 10 }, { x: 100, y: 50 }, { x: 50, y: 100 }];
+    const result = boundingBoxWeightedScale(pts, 0.01, "m", [zone]);
+    expect(result).not.toBeNull();
+    expect(result!.scale).toBeCloseTo(0.05, 6);
+  });
+
+  it("area-weights scale across two adjacent zones", () => {
+    // Shape straddles zoneA (scale 0.01) and zoneB (scale 0.02) equally
+    const zoneA = { x: 0, y: 0, width: 100, height: 100, scale: 0.01, scaleUnit: "m" };
+    const zoneB = { x: 100, y: 0, width: 100, height: 100, scale: 0.02, scaleUnit: "m" };
+    // Rectangle [50,0]→[150,100] overlaps 50×100=5000 of zoneA and 50×100=5000 of zoneB
+    const pts = [{ x: 50, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 100 }, { x: 50, y: 100 }];
+    const result = boundingBoxWeightedScale(pts, null, "m", [zoneA, zoneB]);
+    expect(result).not.toBeNull();
+    expect(result!.scale).toBeCloseTo(0.015, 6); // (0.01+0.02)/2
+  });
+
+  it("uses circular bbox for CIRCLE shapeType", () => {
+    // center (100,100), edge (200,100) → r=100; bbox [0,0,200,200] = all in zone
+    const circlePts = [{ x: 100, y: 100 }, { x: 200, y: 100 }];
+    const result = boundingBoxWeightedScale(circlePts, 0.01, "m", [zone], "CIRCLE");
+    expect(result).not.toBeNull();
+    expect(result!.scale).toBeCloseTo(0.05, 6);
+  });
+
+  it("uncovered area uses page scale in weighted average", () => {
+    // Shape [0,0]→[300,100]: 200×100 inside zone (scale 0.05), 100×100 outside (page scale 0.01)
+    const pts = [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 300, y: 100 }, { x: 0, y: 100 }];
+    const result = boundingBoxWeightedScale(pts, 0.01, "m", [zone]);
+    expect(result).not.toBeNull();
+    // Weighted: (20000*0.05 + 10000*0.01) / 30000 = (1000+100)/30000 ≈ 0.03667
+    expect(result!.scale).toBeCloseTo((20000 * 0.05 + 10000 * 0.01) / 30000, 5);
+  });
+});
+
+// ── arcSvgPath ────────────────────────────────────────────────────────────────
+
+describe("arcSvgPath", () => {
+  it("returns a line fallback when points are collinear", () => {
+    // A=(0,0), B=(100,0), C=(50,0) — all on the same horizontal line
+    const path = arcSvgPath({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 0 });
+    expect(path).toBe("M 0 0 L 100 0");
+  });
+
+  it("produces an SVG A-command path for a quarter-circle arc", () => {
+    // Unit circle: A=(1,0), B=(0,1), C midpoint on CCW arc ≈ (cos45°, sin45°) = (√2/2, √2/2)
+    const m = Math.SQRT2 / 2;
+    const path = arcSvgPath({ x: 1, y: 0 }, { x: 0, y: 1 }, { x: m, y: m });
+    // format: M x y A rx ry x-rot large-arc sweep ex ey (11 space-separated tokens)
+    expect(path).toMatch(/^M 1 0 A /);
+    const parts = path.split(" ");
+    // parts: [M, 1, 0, A, rx, ry, 0, largeArcFlag, sweepFlag, ex, ey]
+    const rx = parseFloat(parts[4]);
+    expect(rx).toBeCloseTo(1, 3); // radius ≈ 1 for unit circle
+  });
+
+  it("sets large-arc-flag=0 for a minor arc (sweep < π)", () => {
+    // Quarter-circle sweep = π/2 < π → large-arc-flag must be 0
+    const m = Math.SQRT2 / 2;
+    const path = arcSvgPath({ x: 1, y: 0 }, { x: 0, y: 1 }, { x: m, y: m });
+    const parts = path.split(" ");
+    // parts: [M, x, y, A, rx, ry, xrot, largeArcFlag, sweepFlag, ex, ey]
+    const largeArcFlag = parts[7];
+    expect(largeArcFlag).toBe("0");
+  });
+
+  it("sets large-arc-flag=1 for a major arc (sweep > π)", () => {
+    // Three-quarter-circle: A=(1,0), B=(0,1), midpoint on CW (long) arc at 225° = (-√2/2, -√2/2)
+    // CCW sweep A→B is π/2; the midpoint at 225° is outside that arc so the CW sweep (3π/2) is used.
+    const m = -Math.SQRT2 / 2;
+    const path = arcSvgPath({ x: 1, y: 0 }, { x: 0, y: 1 }, { x: m, y: m });
+    const parts = path.split(" ");
+    const largeArcFlag = parts[7];
+    expect(largeArcFlag).toBe("1");
   });
 });

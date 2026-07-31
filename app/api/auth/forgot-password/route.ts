@@ -21,10 +21,15 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid email.", 400);
 
-    // Per-email rate limit: max 3 password reset requests per hour
+    // Per-email rate limit: max 3 password reset requests per hour.
+    // Pipeline SET NX EX + INCR: SET creates the key with TTL atomically on the first
+    // hit so a crash between INCR and EXPIRE can never leave a key without a TTL.
     const emailKey = `rl:pwreset:${parsed.data.email.toLowerCase()}`;
-    const emailCount = await redis.incr(emailKey);
-    if (emailCount === 1) await redis.expire(emailKey, 3600);
+    const rlResults = await redis.pipeline()
+      .set(emailKey, "0", "EX", 3600, "NX")
+      .incr(emailKey)
+      .exec();
+    const emailCount = (rlResults?.[1]?.[1] as number | null) ?? 0;
     if (emailCount > 3) {
       return NextResponse.json({ message: SUCCESS_MSG });
     }

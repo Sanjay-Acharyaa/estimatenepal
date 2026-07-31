@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CatalogBrowser } from "@/components/rates/CatalogBrowser";
 import type { CatalogItem } from "@/components/rates/CatalogBrowser";
 import type { RateItem } from "@/components/rates/RateSelector";
@@ -18,6 +18,7 @@ type TakeoffItem = {
   shapeType: string | null;
   pageId: string;
   isNegative: boolean;
+  page?: { drawingId: string } | null;
 };
 
 type Group = {
@@ -34,6 +35,7 @@ type Group = {
   rateItem?: { id?: string; code: string; description?: string; unit?: string; baseRate?: number; source: string; fiscalYear?: string } | null;
   multiplier: number;
   additionalParams: Record<string, unknown> | null;
+  version?: number;
   _count: { items: number };
   items?: TakeoffItem[];
 };
@@ -70,6 +72,8 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   const [paramsSaved, setParamsSaved] = useState(false);
   const [showCatalogBrowser, setShowCatalogBrowser] = useState(false);
   const [showThisPage, setShowThisPage] = useState(true);
+  // Track the version seen in the last GET response so it can be echoed back on PUT.
+  const serverVersionRef = useRef<number | undefined>(group.version);
 
   useEffect(() => { setShowThisPage(true); }, [group.id]);
 
@@ -113,7 +117,9 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((d: Group) => {
         setDetail(d);
-        if (d.rateItem && !selectedRate) {
+        serverVersionRef.current = d.version;
+        // Sync selectedRate from server if not yet populated or if missing id (stale from old PUT)
+        if (d.rateItem && (!selectedRate || !selectedRate.id)) {
           setSelectedRate(d.rateItem as RateItem);
         }
       })
@@ -144,11 +150,18 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name, tag: tag || null, preamble: preamble.trim() || null,
-          rateItemId: selectedRate?.id ?? null, multiplier: mult, colour, lineWidth,
+          // Preserve existing link when selectedRate has no id (stale parent state from old PUT response)
+          rateItemId: selectedRate === null ? null : (selectedRate.id ?? group.rateItemId ?? null),
+          multiplier: mult, colour, lineWidth,
           ...((group.type === "COUNT" || group.type === "COUNT_BY_DISTANCE") && { additionalParams: { ...(group.additionalParams ?? {}), countShape } }),
+          ...(serverVersionRef.current !== undefined && { version: serverVersionRef.current }),
         }),
       });
-      if (res.ok) { onGroupUpdated(await res.json()); }
+      if (res.ok) {
+        const updated = await res.json();
+        serverVersionRef.current = updated.version;
+        onGroupUpdated(updated);
+      }
       else { const d = await res.json().catch(() => ({})); setSaveError(d?.error?.message ?? "Failed to save."); }
     } catch { setSaveError("Network error."); }
     setSaving(false);
@@ -178,9 +191,17 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
       const res = await fetch(`/api/projects/${projectId}/takeoff-groups/${group.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ additionalParams: newParams }),
+        body: JSON.stringify({
+          additionalParams: newParams,
+          ...(serverVersionRef.current !== undefined && { version: serverVersionRef.current }),
+        }),
       });
-      if (res.ok) { onGroupUpdated(await res.json()); setParamsSaved(true); setTimeout(() => setParamsSaved(false), 2000); }
+      if (res.ok) {
+        const updated = await res.json();
+        serverVersionRef.current = updated.version;
+        onGroupUpdated(updated);
+        setParamsSaved(true); setTimeout(() => setParamsSaved(false), 2000);
+      }
       else { const d = await res.json().catch(() => ({})); setSaveError(d?.error?.message ?? "Failed to save."); }
     } catch { setSaveError("Network error."); }
     setSaving(false);
@@ -191,7 +212,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   const totalRaw = detail?.items?.reduce((s, i) => {
     const signed = i.isNegative ? -(i.rawQuantity ?? 0) : (i.rawQuantity ?? 0);
     if (group.type === "VOLUME") {
-      const isLengthShape = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || i.shapeType === null;
+      const isLengthShape = i.shapeType === "POLYLINE" || i.shapeType === "ARC";
       const isAreaShape = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
       if (volumeMethod === "lbh" && isLengthShape) return s + signed;
       if (volumeMethod !== "lbh" && isAreaShape) return s + signed;
@@ -256,7 +277,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         const ftu = item.unit.includes("ft") ? 1 : 0.3048;
         const spacing = currentSpacing * ftu;
-        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
+        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
         total += count * currentMult;
       }
       return { qty: total, unit: "each" };
@@ -273,7 +294,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         const ftu = item.unit.includes("ft") ? 1 : 0.3048;
         const spacing = currentSpacing * ftu;
-        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
+        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
         total += count * currentMult;
       }
       return { qty: total, unit: "each" };
@@ -562,10 +583,14 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                   {(() => {
                     const items = detail?.items ?? [];
                     const mismatchedCount = items.filter(i => {
-                      const isLengthShape = i.shapeType === "POLYLINE" || i.shapeType === "ARC" || i.shapeType === null;
-                      const isAreaShape = i.shapeType === "RECTANGLE" || i.shapeType === "CIRCLE" || i.shapeType === "POLYGON";
-                      if (volumeMethod === "lbh") return !isLengthShape && isAreaShape;
-                      return !isAreaShape && isLengthShape;
+                      const st = i.shapeType;
+                      const isLengthShape = st === "POLYLINE" || st === "ARC";
+                      const isAreaShape = st === "RECTANGLE" || st === "CIRCLE" || st === "POLYGON";
+                      // null shapeType (legacy items without geometry tag) mirrors computeGroupTotal:
+                      // excluded from both methods, so always counts as mismatched.
+                      if (st === null) return true;
+                      if (volumeMethod === "lbh") return !isLengthShape;
+                      return !isAreaShape;
                     }).length;
                     if (mismatchedCount === 0) return null;
                     const correctShape = volumeMethod === "lbh" ? "polylines" : "rectangles or polygons";
@@ -708,7 +733,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       const ftu = item.unit.includes("ft") ? 1 : 0.3048;
                       const spacing = currentSpacing * ftu;
                       if (spacing > 0) {
-                        total += signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
+                        total += signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
                       }
                     }
                     previewCount = total * currentMult;
@@ -755,22 +780,42 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         )}
 
         {/* ── Drawings ── */}
-        {tab === "drawings" && (
-          <div className="space-y-1">
-            <p className="text-xs text-gray-600 mb-3">Drawings containing shapes from this layer.</p>
-            {allDrawings.length === 0 ? (
-              <p className="text-xs text-gray-600 text-center py-4">No drawings in this project.</p>
-            ) : (
-              allDrawings.map(d => (
-                <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
-                  <a href={`/dashboard/projects/${projectId}/drawings/${d.id}`}
-                    className="text-xs text-blue-600 hover:underline truncate flex-1 mr-2">{d.fileName}</a>
-                  <span className="text-xs text-gray-600">—</span>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+        {tab === "drawings" && (() => {
+          if (!detail) {
+            return (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-600 mb-3">Drawings containing shapes from this layer.</p>
+                <p className="text-xs text-gray-400 text-center py-4">Loading…</p>
+              </div>
+            );
+          }
+          // Count items per drawing using the page→drawing mapping included in detail.items.
+          const countByDrawing = new Map<string, number>();
+          for (const item of detail.items ?? []) {
+            const did = item.page?.drawingId;
+            if (did) countByDrawing.set(did, (countByDrawing.get(did) ?? 0) + 1);
+          }
+          const drawingsWithShapes = allDrawings.filter(d => (countByDrawing.get(d.id) ?? 0) > 0);
+          return (
+            <div className="space-y-1">
+              <p className="text-xs text-gray-600 mb-3">Drawings containing shapes from this layer.</p>
+              {drawingsWithShapes.length === 0 ? (
+                <p className="text-xs text-gray-600 text-center py-4">No shapes placed in any drawing.</p>
+              ) : (
+                drawingsWithShapes.map(d => {
+                  const cnt = countByDrawing.get(d.id) ?? 0;
+                  return (
+                    <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+                      <a href={`/dashboard/projects/${projectId}/drawings/${d.id}`}
+                        className="text-xs text-blue-600 hover:underline truncate flex-1 mr-2">{d.fileName}</a>
+                      <span className="text-xs text-gray-500">{cnt} shape{cnt !== 1 ? "s" : ""}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Footer — only Main Details has a save button */}

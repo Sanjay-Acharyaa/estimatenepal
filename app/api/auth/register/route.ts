@@ -50,8 +50,9 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw conflict("Email already registered.");
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const verifyToken = crypto.randomBytes(32).toString("hex");
+    const verifyTokenAt = new Date();
 
     const trialDays = await getConfigNum("trial_days");
     const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest) {
       const user = await tx.user.create({
         data: {
           name, email, phone, passwordHash, role: "OWNER", orgId: org.id,
+          verifyToken, verifyTokenAt,
           referralSource:   utmSource,
           referralMedium:   utmMedium,
           referralCampaign: utmCampaign,

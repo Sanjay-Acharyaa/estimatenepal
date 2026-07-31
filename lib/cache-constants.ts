@@ -28,7 +28,7 @@ export const RESOURCES_FETCH_LIMIT = 500;
 export const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 // How long withTenantGuard caches user identity in Redis (seconds)
-export const TENANT_CACHE_TTL = 60;
+export const TENANT_CACHE_TTL = 30;
 
 // Cron audit-cleanup: rows deleted per batch and how far back to keep
 export const AUDIT_CLEANUP_BATCH_SIZE = 5_000;

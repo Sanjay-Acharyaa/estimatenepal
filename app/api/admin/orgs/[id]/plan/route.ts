@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getToken } from "next-auth/jwt";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 
@@ -13,16 +13,7 @@ const schema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) throw unauthorized();
-    if (!token.isSuperAdmin) throw forbidden();
-
-    // Re-verify in DB — guards against stale JWT after isSuperAdmin was revoked
-    const dbUser = await prisma.user.findUnique({
-      where: { id: token.id as string },
-      select: { isSuperAdmin: true },
-    });
-    if (!dbUser?.isSuperAdmin) throw forbidden();
+    const token = await requireSuperAdmin(req);
 
     const body = await req.json();
     const parsed = schema.safeParse(body);

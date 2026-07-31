@@ -206,6 +206,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Length": (buffer as ArrayBuffer).byteLength.toString(),
         },
       });
     });

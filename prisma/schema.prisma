@@ -15,6 +15,8 @@ model User {
   phone          String?
   passwordHash   String
   emailVerified      Boolean         @default(false)
+  verifyToken        String?         @unique
+  verifyTokenAt      DateTime?
   passwordChangedAt  DateTime?
   role               UserRole        @default(MEMBER)
   isSuperAdmin   Boolean         @default(false)
@@ -181,7 +183,7 @@ model Project {
 model ProjectMember {
   id          String      @id @default(cuid())
   projectId   String
-  project     Project     @relation(fields: [projectId], references: [id])
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId      String
   user        User        @relation(fields: [userId], references: [id])
   projectRole ProjectRole @default(ESTIMATOR)
@@ -219,7 +221,7 @@ model ShareLink {
 model Drawing {
   id              String        @id @default(cuid())
   projectId       String
-  project         Project       @relation(fields: [projectId], references: [id])
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   fileName        String
   fileUrl         String
   pageCount       Int
@@ -246,7 +248,7 @@ model Drawing {
 model DrawingPage {
   id              String           @id @default(cuid())
   drawingId       String
-  drawing         Drawing          @relation(fields: [drawingId], references: [id])
+  drawing         Drawing          @relation(fields: [drawingId], references: [id], onDelete: Cascade)
   pageNumber      Int
   label           String?
   scale           Float?
@@ -283,7 +285,7 @@ model DrawingComment {
 model ScaleZone {
   id        String      @id @default(cuid())
   pageId    String
-  page      DrawingPage @relation(fields: [pageId], references: [id])
+  page      DrawingPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
   label     String?
   scale     Float
   scaleUnit String
@@ -299,7 +301,7 @@ model ScaleZone {
 model Discipline {
   id            String         @id @default(cuid())
   projectId     String
-  project       Project        @relation(fields: [projectId], references: [id])
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name          String
   sortOrder     Int            @default(0)
   isPrimary     Boolean        @default(false)
@@ -313,9 +315,9 @@ model Discipline {
 model TakeoffGroup {
   id               String        @id @default(cuid())
   projectId        String
-  project          Project       @relation("ProjectTakeoffGroups", fields: [projectId], references: [id])
+  project          Project       @relation("ProjectTakeoffGroups", fields: [projectId], references: [id], onDelete: Cascade)
   parentId         String?
-  parent           TakeoffGroup?  @relation("TakeoffGroupChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  parent           TakeoffGroup?  @relation("TakeoffGroupChildren", fields: [parentId], references: [id], onDelete: Cascade)
   children         TakeoffGroup[] @relation("TakeoffGroupChildren")
   disciplineId     String?
   discipline       Discipline?   @relation(fields: [disciplineId], references: [id])
@@ -334,8 +336,9 @@ model TakeoffGroup {
   rateItem         RateItem?     @relation("GroupRateItem", fields: [rateItemId], references: [id], onDelete: SetNull)
   assemblyId       String?
   assembly         Assembly?     @relation("TakeoffGroupAssembly", fields: [assemblyId], references: [id], onDelete: SetNull)
-  countShape       String?
+  version          Int           @default(0)
   items            TakeoffItem[]
+  estimateOverrides EstimateLineOverride[]
 
   @@index([projectId])
   @@index([projectId, disciplineId])
@@ -349,7 +352,7 @@ model TakeoffGroup {
 model TakeoffItem {
   id           String        @id @default(cuid())
   pageId       String
-  page         DrawingPage   @relation(fields: [pageId], references: [id])
+  page         DrawingPage   @relation(fields: [pageId], references: [id], onDelete: Cascade)
   groupId      String?
   group        TakeoffGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   label        String
@@ -372,12 +375,15 @@ model TakeoffItem {
   sortOrder    Int           @default(0)
   toolData     Json
   isLocked     Boolean       @default(false)
+  // rateItemId is a legacy per-item rate field that was never wired up in BOQ/pricing.
+  // Rate linkage is done at the group level (TakeoffGroup.rateItemId). This column has
+  // no @relation (no FK constraint) and no code reads it. Do not use without adding a
+  // proper @relation and migrating existing data.
   rateItemId   String?
   createdAt    DateTime      @default(now())
 
   @@index([pageId])
   @@index([groupId])
-  @@index([rateItemId])
   @@index([pageId, sortOrder])
   @@index([groupId, sortOrder])            // BOQ roll-up queries ordered by group + sortOrder
 }
@@ -474,7 +480,7 @@ model RateItem {
 model DistrictRate {
   id         String   @id @default(cuid())
   rateItemId String
-  rateItem   RateItem @relation(fields: [rateItemId], references: [id])
+  rateItem   RateItem @relation(fields: [rateItemId], references: [id], onDelete: Cascade)
   district   String
   rate       Float
 
@@ -488,7 +494,7 @@ model RateAnalysis {
   rateItemId        String
   rateItem          RateItem @relation(fields: [rateItemId], references: [id], onDelete: Cascade)
   projectId         String
-  project           Project  @relation(fields: [projectId], references: [id])
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   materialCost      Float    @default(0)
   skilledLabour     Float    @default(0)
   semiSkilledLabour Float    @default(0)
@@ -507,20 +513,22 @@ model RateAnalysis {
 
 // Estimating Sheet line overrides (markup, waste, notes per takeoff group)
 model EstimateLineOverride {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   orgId     String
   projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   groupId   String
-  markupPct Float    @default(0)
-  wastePct  Float    @default(0)
-  notes     String?  @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  group     TakeoffGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  markupPct Float        @default(0)
+  wastePct  Float        @default(0)
+  notes     String?      @db.Text
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   @@unique([projectId, groupId])
   @@index([projectId])
   @@index([orgId])
+  @@index([groupId])
 }
 
 // BOQ Overrides
@@ -529,7 +537,7 @@ model BOQOverride {
   projectId     String
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   rateItemId    String
-  rateItem      RateItem       @relation(fields: [rateItemId], references: [id], onDelete: Cascade)
+  rateItem      RateItem       @relation(fields: [rateItemId], references: [id], onDelete: Restrict)
   field         String
   originalValue String
   proposedValue String
@@ -916,6 +924,8 @@ model OrgResource {
 
 // One line in a resource-based rate analysis template (org + rate item level).
 // Multiple lines build up the full cost breakdown for a unit of work.
+// orgId is a denormalized filter field (no @relation / FK) — used only for index-scoped queries.
+// If org isolation or cascade deletes are ever needed here, add a proper Org @relation.
 model RateAnalysisLine {
   id             String      @id @default(cuid())
   orgId          String

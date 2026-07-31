@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, unauthorized, forbidden, apiError } from "@/lib/errors";
-import { withTenantGuard } from "@/lib/auth";
+import { withTenantGuard, invalidateUserCache } from "@/lib/auth";
 import { appendAuditLog } from "@/lib/audit";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { z } from "zod";
@@ -34,6 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { userId: st
       data: { role: body.role },
       select: { id: true, name: true, email: true, role: true },
     });
+    await invalidateUserCache(params.userId);
 
     appendAuditLog({ orgId, userId: token.id as string, event: "member.role_changed",
       resourceId: params.userId, meta: { newRole: body.role }, ipAddress: ip });
@@ -66,6 +67,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { userId: s
       where: { id: params.userId },
       data: { orgId: null },
     });
+    await invalidateUserCache(params.userId);
 
     appendAuditLog({ orgId, userId: token.id as string, event: "member.removed",
       resourceId: params.userId, meta: { removedEmail: target.email }, ipAddress: ip });

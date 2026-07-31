@@ -18,13 +18,13 @@ export function getSecurityHeaders(): Record<string, string> {
     "https://www.google-analytics.com",
   ].filter(Boolean).join(" ");
 
-  // Note: 'unsafe-eval' is required by PDF.js (uses eval() for its JS engine internally).
   // 'unsafe-inline' is required by Next.js (injects inline scripts for hydration).
-  // A nonce-based CSP would remove both but requires significant Next.js configuration.
+  // 'wasm-unsafe-eval' is required by PDF.js v4+ (uses WebAssembly for its JS evaluator
+  // instead of eval(); replacing 'unsafe-eval' with this is a strict security improvement).
   const csp = [
     "default-src 'self'",
     // Facebook Pixel + Google Tag Manager load external scripts
-    `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://www.googletagmanager.com`,
+    `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://connect.facebook.net https://www.googletagmanager.com`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src ${imgSrc}`,
     "font-src 'self' data:",

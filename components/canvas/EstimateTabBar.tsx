@@ -11,6 +11,7 @@ type Props = {
   disciplines: Discipline[];
   activeDisciplineId: string | null;
   disciplineTotals?: Record<string, number>;
+  unitErrorDisciplines?: string[];
   onSwitch: (id: string) => void;
   onCreated: (d: Discipline) => void;
   onUpdated: (d: Discipline) => void;
@@ -22,6 +23,7 @@ const NRS = (n: number) => fmtNPRDecimal(n, 2);
 
 export function EstimateTabBar({
   projectId, disciplines, activeDisciplineId, disciplineTotals = {},
+  unitErrorDisciplines = [],
   onSwitch, onCreated, onUpdated, onDeleted, onGroupsRefreshNeeded,
 }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -167,6 +169,15 @@ export function EstimateTabBar({
                       {NRS(disciplineTotals[d.id])}
                     </span>
                   ) : null}
+                  {unitErrorDisciplines.includes(d.id) && (
+                    <span
+                      title="One or more layers have an unrecognised unit — check the rate catalogue unit matches the takeoff unit"
+                      className="text-[10px] leading-none text-yellow-400"
+                      aria-label="Unit mismatch warning"
+                    >
+                      ⚠
+                    </span>
+                  )}
                 </button>
               )}
 

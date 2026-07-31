@@ -6,7 +6,7 @@ import { Stage, Layer, Image as KonvaImage, Rect, Line, Text, Group, Circle, Pat
 import Konva from "konva";
 import * as pdfjsLib from "pdfjs-dist";
 import { computeScale, scaleLabel } from "@/lib/scale";
-import { perSegmentEffectiveScale, boundingBoxWeightedScale } from "@/lib/takeoff";
+import { perSegmentEffectiveScale, boundingBoxWeightedScale, arcSvgPath } from "@/lib/takeoff";
 import { DrawingScalePanel } from "./DrawingScalePanel";
 import { ScaleZonePanel } from "./ScaleZonePanel";
 import { TakeoffPanel, type TakeoffGroup } from "./TakeoffPanel";
@@ -86,28 +86,7 @@ function shapeCrossesZones(points: Point[], zones: ScaleZone[]): boolean {
   return points.some(p => pointZoneId(p.x, p.y, zones) !== firstZone);
 }
 
-// Generates an SVG arc path through A (start), B (end), C (midpoint on arc).
-// Uses the circumscribed circle — consistent with arcLengthPx in lib/takeoff.ts.
-function arcSvgPath(A: { x: number; y: number }, B: { x: number; y: number }, C: { x: number; y: number }): string {
-  const D = 2 * (A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y));
-  if (Math.abs(D) < 1e-10) return `M ${A.x} ${A.y} L ${B.x} ${B.y}`;
-  const A2 = A.x ** 2 + A.y ** 2, B2 = B.x ** 2 + B.y ** 2, C2 = C.x ** 2 + C.y ** 2;
-  const ux = (A2 * (B.y - C.y) + B2 * (C.y - A.y) + C2 * (A.y - B.y)) / D;
-  const uy = (A2 * (C.x - B.x) + B2 * (A.x - C.x) + C2 * (B.x - A.x)) / D;
-  const r = Math.sqrt((A.x - ux) ** 2 + (A.y - uy) ** 2);
-  const norm = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  const na1 = norm(Math.atan2(A.y - uy, A.x - ux));
-  const na2 = norm(Math.atan2(B.y - uy, B.x - ux));
-  const nam = norm(Math.atan2(C.y - uy, C.x - ux));
-  let ccwSweep = na2 - na1; if (ccwSweep < 0) ccwSweep += 2 * Math.PI;
-  let namRel = nam - na1; if (namRel < 0) namRel += 2 * Math.PI;
-  // midpoint on CCW (math) arc → CW in screen (y-down) → SVG sweep-flag 1
-  const midOnCcwArc = namRel <= ccwSweep;
-  const sweep = midOnCcwArc ? ccwSweep : 2 * Math.PI - ccwSweep;
-  const sweepFlag = midOnCcwArc ? 1 : 0;
-  const largeArcFlag = sweep > Math.PI ? 1 : 0;
-  return `M ${A.x} ${A.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${B.x} ${B.y}`;
-}
+// arcSvgPath is imported from @/lib/takeoff — single source of truth shared with the geometry engine.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -172,11 +151,14 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
   // Takeoff items (current page)
   const [takeoffItems, setTakeoffItems] = useState<TakeoffItem[]>([]);
   const [itemsLoadError, setItemsLoadError] = useState<string | null>(null);
+  const [itemsTruncated, setItemsTruncated] = useState(false);
   // All-pages totals per group (fetched from server, refreshed after add/delete)
   const [allPageGroupTotals, setAllPageGroupTotals] = useState<Record<string, { rawQty: number; unit: string; count: number }>>({});
 
   // NRS totals per discipline tab
   const [disciplineTotals, setDisciplineTotals] = useState<Record<string, number>>({});
+  // Discipline IDs that have at least one group with an unresolvable qty→rate unit pair.
+  const [disciplineUnitErrors, setDisciplineUnitErrors] = useState<string[]>([]);
 
   // Page activity indicators: { [pageId]: { hasAnnotations, hasTakeoff } }
   const [pageActivity, setPageActivity] = useState<Record<string, { hasAnnotations: boolean; hasTakeoff: boolean }>>({});
@@ -507,7 +489,10 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     setSelectedAnnotationIds(new Set());
     annotationHistoryRef.current = [loaded];
     annotationHistoryIdxRef.current = 0;
-    annotationCountRef.current = loaded.length;
+    annotationCountRef.current = loaded.reduce((max, ann) => {
+      const match = typeof ann.id === "string" ? ann.id.match(/(\d+)$/) : null;
+      return match ? Math.max(max, parseInt(match[1], 10)) : max;
+    }, 0);
   }, [currentPage?.id]); // eslint-disable-line
 
   // ─── Load / refresh takeoff items ────────────────────────────────────
@@ -525,9 +510,11 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         }
         const d = await r.json();
         const items = d.data ?? [];
-        if (items.length >= 2000) {
-          toast.warning("Only the first 2000 shapes are shown on this page — some shapes may not be visible.", { id: "items-truncated" });
+        const truncated = items.length >= 2000;
+        if (truncated) {
+          toast.warning("Only the first 2000 shapes are shown — see the banner for details.", { id: "items-truncated" });
         }
+        setItemsTruncated(truncated);
         setTakeoffItems(items);
         historyRef.current = [items];
         historyIdxRef.current = 0;
@@ -560,7 +547,12 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
   function refreshDisciplineTotals() {
     fetch(`/api/projects/${projectId}/disciplines/totals`)
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setDisciplineTotals(d); })
+      .then((d) => {
+        if (d) {
+          setDisciplineTotals(d.totals ?? d);
+          setDisciplineUnitErrors(Array.isArray(d.unitErrorDisciplines) ? d.unitErrorDisciplines : []);
+        }
+      })
       .catch(() => {});
   }
 
@@ -578,6 +570,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
   useEffect(() => {
     if (!currentPage) return;
     setItemsLoadError(null);
+    setItemsTruncated(false);
     // Share the same AbortController as refreshItems so either path cancels the other.
     refreshItemsAbortRef.current?.abort();
     refreshItemsAbortRef.current = new AbortController();
@@ -593,9 +586,11 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         }
         const d = await r.json();
         const items = d.data ?? [];
-        if (items.length >= 2000) {
-          toast.warning("Only the first 2000 shapes are shown on this page — some shapes may not be visible.", { id: "items-truncated" });
+        const truncated = items.length >= 2000;
+        if (truncated) {
+          toast.warning("Only the first 2000 shapes are shown — see the banner for details.", { id: "items-truncated" });
         }
+        setItemsTruncated(truncated);
         setTakeoffItems(items);
         historyRef.current = [items];
         historyIdxRef.current = 0;
@@ -968,7 +963,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
   // (linear scan per mousemove). Items added after the cap are silently skipped.
   const MAX_SNAP_CANDIDATES = 4000;
 
-  function buildSnapCandidates(): SnapCandidate[] {
+  const buildSnapCandidates = useCallback((snapPts: SnapCandidate[]): SnapCandidate[] => {
     const candidates: SnapCandidate[] = [];
 
     for (const item of takeoffItemsRef.current) {
@@ -1013,7 +1008,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     }
 
     // PDF vector geometry snap points (walls, lines, corners from the drawing itself)
-    for (const c of pdfSnapPoints) {
+    for (const c of snapPts) {
       if (candidates.length >= MAX_SNAP_CANDIDATES) break;
       candidates.push(c as SnapCandidate);
     }
@@ -1021,15 +1016,13 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     return candidates;
     // Note: in-progress linearPoints are NOT included here — they are appended fresh
     // inside findSnapCandidate to avoid stale values in the cached snapshot.
-  }
+  }, []); // stable: reads only from takeoffItemsRef (a ref) + explicit snapPts param
 
   // Rebuild static snap candidates whenever committed items or PDF snap points change.
   // This runs at most once per item save/delete, not on every mousemove.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    snapCandidatesRef.current = buildSnapCandidates();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [takeoffItems, pdfSnapPoints]);
+    snapCandidatesRef.current = buildSnapCandidates(pdfSnapPoints as SnapCandidate[]);
+  }, [buildSnapCandidates, takeoffItems, pdfSnapPoints]);
 
   function findSnapCandidate(imgPos: Point): SnapCandidate | null {
     const threshold = SNAP_RADIUS / scale;
@@ -1112,6 +1105,19 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const firstFail = results.find(r => r.status === "fulfilled" && !r.value.ok) as PromiseFulfilledResult<Response> | undefined;
         const errBody = firstFail ? await firstFail.value.json().catch(() => ({})) : {};
         toast.error(errBody?.error?.message ?? "Undo failed — item could not be deleted.");
+        // On partial success some items were deleted from the server.  Purge them from the
+        // current history slot so a retry undo doesn't attempt to re-delete already-gone items
+        // (which would always fail with 404 and keep the undo permanently broken).
+        const allTargets = [...toDelete, ...crossPageToDelete];
+        const deletedIds = new Set(
+          results
+            .map((r, i) => (r.status === "fulfilled" && r.value.ok ? allTargets[i].id : null))
+            .filter((id): id is string => id !== null)
+        );
+        if (deletedIds.size > 0) {
+          historyRef.current[historyIdxRef.current] =
+            historyRef.current[historyIdxRef.current].filter(item => !deletedIds.has(item.id));
+        }
         refreshItems();
         return;
       }
@@ -1126,6 +1132,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     }
     historyIdxRef.current--;
     setTakeoffItems(historyRef.current[historyIdxRef.current]);
+    refreshAllPageTotals(); refreshDisciplineTotals();
   }
 
   function redo() {
@@ -1140,9 +1147,6 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     const group = takeoffGroups.find((g) => g.id === selectedGroupId);
     if (!group) { toast.warning("No takeoff layer selected. Select a layer in the Takeoff panel first."); return false; }
     if (group.isLocked) { toast.warning(`Layer "${group.name}" is locked. Unlock it first to draw shapes.`); return false; }
-    // Use all-pages count so label numbers are unique across pages, not just the current one.
-    const existingCount = allPageGroupTotals[group.id]?.count ?? takeoffItems.filter(i => i.groupId === group.id).length;
-    const label = `${group.name} #${existingCount + 1}`;
     try {
       const res = await fetch(
         `/api/projects/${projectId}/drawings/${drawing.id}/pages/${currentPage.id}/takeoff-items`,
@@ -1151,7 +1155,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             groupId: group.id,
-            label,
+            // label is omitted — the server generates it from the max existing sequence number
             toolType,
             shapeType,
             toolData: { points },
@@ -1786,79 +1790,83 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
   }
 
   // ─── Keyboard shortcuts ───────────────────────────────────────────────
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        resetDrawingState();
-        nodeEditRef.current = null;
-        setNodeEditState(null);
-        isRubberBandingRef.current = false;
-        rubberBandStart.current = null;
-        setRubberBand(null);
-        setMeasureAnchor(null);
-        setSelectedMeasurementIds(new Set());
-        measureNodeEditRef.current = null;
-        isPenDrawingRef.current = false; penDraftRef.current = []; setPenDraft(null);
-        arrowStartRef.current = null; setArrowDraft(null);
-        xlineStartRef.current = null; setXlineDraft(null);
-        highlightStartRef.current = null; setHighlightDraft(null);
-        setTextInput(null);
+  // Keep handler in a ref so the stable event listener always calls the latest
+  // closure without needing to re-register on every state change.
+  const handleKeyRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+  handleKeyRef.current = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      resetDrawingState();
+      nodeEditRef.current = null;
+      setNodeEditState(null);
+      isRubberBandingRef.current = false;
+      rubberBandStart.current = null;
+      setRubberBand(null);
+      setMeasureAnchor(null);
+      setSelectedMeasurementIds(new Set());
+      measureNodeEditRef.current = null;
+      isPenDrawingRef.current = false; penDraftRef.current = []; setPenDraft(null);
+      arrowStartRef.current = null; setArrowDraft(null);
+      xlineStartRef.current = null; setXlineDraft(null);
+      highlightStartRef.current = null; setHighlightDraft(null);
+      setTextInput(null);
+      setSelectedAnnotationIds(new Set());
+      setMeasureNodeEdit(null);
+      if (mode !== "select") setMode("select");
+      setSelectedItemIds(new Set());
+    }
+    if (e.key === "Enter") { e.preventDefault(); finishPolyline(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+      e.preventDefault();
+      if (mode === "select") {
+        // Select all visible, unlocked takeoff items on this page
+        const allIds = takeoffItemsRef.current
+          .filter(i => {
+            const grp = takeoffGroupsRef.current.find(g => g.id === i.groupId);
+            return !i.isLocked && !grp?.isLocked && grp?.isVisible !== false;
+          })
+          .map(i => i.id);
+        setSelectedItemIds(new Set(allIds));
         setSelectedAnnotationIds(new Set());
-        setMeasureNodeEdit(null);
-        if (mode !== "select") setMode("select");
-        setSelectedItemIds(new Set());
-      }
-      if (e.key === "Enter") { e.preventDefault(); finishPolyline(); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
-        e.preventDefault();
-        if (mode === "select") {
-          // Select all visible, unlocked takeoff items on this page
-          const allIds = takeoffItemsRef.current
-            .filter(i => {
-              const grp = takeoffGroupsRef.current.find(g => g.id === i.groupId);
-              return !i.isLocked && !grp?.isLocked && grp?.isVisible !== false;
-            })
-            .map(i => i.id);
-          setSelectedItemIds(new Set(allIds));
-          setSelectedAnnotationIds(new Set());
-        }
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        if (["pen","markup-text","highlight","arrow","xline"].includes(mode)) undoAnnotation();
-        else undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedAnnotationIdsRef.current.size > 0) {
-          const delIds = selectedAnnotationIdsRef.current;
-          const next = annotationsRef.current.filter(a => !delIds.has(a.id));
-          commitAnnotations(next);
-          return;
-        }
-        if (selectedMeasurementIdsRef.current.size > 0) {
-          const delIds = selectedMeasurementIdsRef.current;
-          setMeasurements(prev => prev.filter(m => !delIds.has(m.id)));
-          setSelectedMeasurementIds(new Set());
-        } else if (mode === "polyline" && linearPointsRef.current.length > 0) {
-          setLinearPts(linearPointsRef.current.slice(0, -1));
-        } else if (mode === "arc" && arcPointsRef.current.length > 0) {
-          setArcPts(arcPointsRef.current.slice(0, -1));
-        } else if (mode === "select" && selectedItemIdsRef.current.size > 0) {
-          const ids = Array.from(selectedItemIdsRef.current);
-          const n = ids.length;
-          const msg = n === 1 ? "Delete this shape?" : `Delete ${n} shapes?`;
-          toast(msg, {
-            action: { label: "Delete", onClick: () => { setSelectedItemIds(new Set()); void deleteMultiple(ids); } },
-            cancel: { label: "Cancel", onClick: () => {} },
-            duration: 5000,
-          });
-        }
       }
     }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [mode]); // eslint-disable-line
+    if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      if (["pen","markup-text","highlight","arrow","xline"].includes(mode)) undoAnnotation();
+      else undo();
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+    if ((e.key === "Delete" || e.key === "Backspace") && !e.repeat) {
+      if (selectedAnnotationIdsRef.current.size > 0) {
+        const delIds = selectedAnnotationIdsRef.current;
+        const next = annotationsRef.current.filter(a => !delIds.has(a.id));
+        commitAnnotations(next);
+        return;
+      }
+      if (selectedMeasurementIdsRef.current.size > 0) {
+        const delIds = selectedMeasurementIdsRef.current;
+        setMeasurements(prev => prev.filter(m => !delIds.has(m.id)));
+        setSelectedMeasurementIds(new Set());
+      } else if (mode === "polyline" && linearPointsRef.current.length > 0) {
+        setLinearPts(linearPointsRef.current.slice(0, -1));
+      } else if (mode === "arc" && arcPointsRef.current.length > 0) {
+        setArcPts(arcPointsRef.current.slice(0, -1));
+      } else if (mode === "select" && selectedItemIdsRef.current.size > 0) {
+        const ids = Array.from(selectedItemIdsRef.current);
+        const n = ids.length;
+        const msg = n === 1 ? "Delete this shape?" : `Delete ${n} shapes?`;
+        toast(msg, {
+          action: { label: "Delete", onClick: () => { setSelectedItemIds(new Set()); void deleteMultiple(ids); } },
+          cancel: { label: "Cancel", onClick: () => {} },
+          duration: 5000,
+        });
+      }
+    }
+  };
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => handleKeyRef.current?.(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []); // stable: listener registered once, always calls the latest ref
 
   // ─── Scale save helpers ───────────────────────────────────────────────
   async function saveScale(pageScale: number, unit: string) {
@@ -1888,7 +1896,15 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     calibAnchor.current = null;
   }
 
-  function handleApplyCommon(scaleVal: number, unit: "ft") { saveScale(scaleVal, unit); }
+  function handleApplyCommon(scaleFtPerPx: number) {
+    // Common presets are defined in ft/px. When the page's current unit is not "ft"
+    // (default is "m"), convert so shapes drawn with this calibration measure in metres.
+    if (currentPage.scaleUnit === "ft") {
+      saveScale(scaleFtPerPx, "ft");
+    } else {
+      saveScale(scaleFtPerPx * 0.3048, "m");
+    }
+  }
   function handleApplyManual(realFt: number) {
     if (!calibLine) return;
     const dx = calibLine.x2 - calibLine.x1;
@@ -1933,7 +1949,9 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
   // ─── Live quantity display (uses rawQuantity + current group params) ──
   // This means canvas labels update immediately when params change — no redraw needed.
   function liveQty(item: TakeoffItem, group: TakeoffGroup | undefined): { qty: number; unit: string } {
-    if (!group) return { qty: item.isNegative ? -item.quantity : item.quantity, unit: item.unit };
+    // group not in state yet — use rawQuantity without multiplier rather than the stale
+    // item.quantity (which was baked at draw time and goes stale if the group multiplier changes).
+    if (!group) return { qty: item.isNegative ? -item.rawQuantity : item.rawQuantity, unit: item.unit };
     const raw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
     const mult = group.multiplier ?? 1;
     const ap = group.additionalParams as Record<string, unknown> | null;
@@ -1965,7 +1983,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const spacingFt = spObj ? (Number(spObj.ft ?? 0) + Number(spObj.in ?? 0) / 12) : 0;
         const spacing = spacingFt * ftToUnit;
         if (!spacing) return { qty: raw * mult, unit: `${lenUnit} (set spacing)` };
-        const count = raw >= 0 ? Math.floor(raw / spacing) + 1 : Math.ceil(raw / spacing);
+        const count = raw >= 0 ? Math.floor(raw / spacing) + 1 : -(Math.floor(Math.abs(raw) / spacing) + 1);
         return { qty: count * mult, unit: "each" };
       }
 
@@ -1973,7 +1991,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const ftToUnit = itemIsFt ? 1 : 0.3048;
         const lenUnit = itemIsFt ? "ft" : "m";
         const method = (ap?.volumeMethod as string) ?? "area_x_h";
-        const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
+        const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC";
         const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
         // Shape type must match the method — mismatched items are excluded from the BOQ total.
         if (method === "lbh" && !isLengthShape) return { qty: 0, unit: lenUnit + " (excluded)" };
@@ -2002,9 +2020,10 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     }
   }
 
-  // ─── Stable item-click handler (defined once per mode change, not per map item) ──
+  // ─── Stable item-click handler (uses ref so mode is always fresh without recreating) ──
   // Reads item ID from the Konva Group's id prop so it doesn't need a per-item closure.
-  const handleItemClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleItemClickRef = useRef<((e: Konva.KonvaEventObject<MouseEvent>) => void) | null>(null);
+  handleItemClickRef.current = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (mode !== "select") return;
     e.cancelBubble = true;
     const clickedId = (e.currentTarget as Konva.Group).id();
@@ -2020,10 +2039,17 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         prev.size === 1 && prev.has(clickedId) ? new Set() : new Set([clickedId])
       );
     }
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+  const handleItemClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => handleItemClickRef.current?.(e),
+    []
+  );
 
   // Reads annotation ID from the Konva node's id prop — no per-item closure needed.
-  const handleAnnotationClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+  // Ref pattern keeps the callback stable across mode changes so Konva does not
+  // unbind/rebind listeners on every tool switch (same pattern as handleItemClick).
+  const handleAnnotationClickRef = useRef<((e: Konva.KonvaEventObject<MouseEvent>) => void) | null>(null);
+  handleAnnotationClickRef.current = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (mode !== "select") return;
     e.cancelBubble = true;
     const annId = (e.currentTarget as Konva.Node).id();
@@ -2033,7 +2059,11 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     } else {
       setSelectedAnnotationIds(prev => prev.size === 1 && prev.has(annId) ? new Set() : new Set([annId]));
     }
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+  const handleAnnotationClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => handleAnnotationClickRef.current?.(e),
+    []
+  );
 
 
   // ─── Cursor ───────────────────────────────────────────────────────────
@@ -2119,8 +2149,9 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
       if (grp?.type === "VOLUME") {
         const ap = grp.additionalParams as Record<string, unknown> | null;
         const method = (ap?.volumeMethod as string) ?? "area_x_h";
-        // lbh method uses polyline (length-based); area_x_h uses rectangle/polygon (area-based)
-        const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC" || item.shapeType === null;
+        // lbh method uses polyline (length-based); area_x_h uses rectangle/polygon (area-based).
+        // null shapeType items are excluded (contribute 0) to match computeGroupTotal behaviour.
+        const isLengthShape = item.shapeType === "POLYLINE" || item.shapeType === "ARC";
         const isAreaShape = item.shapeType === "RECTANGLE" || item.shapeType === "CIRCLE" || item.shapeType === "POLYGON";
         if ((method === "lbh" && isLengthShape) || (method !== "lbh" && isAreaShape)) {
           totals[item.groupId].rawQty += item.isNegative ? -item.rawQuantity : item.rawQuantity;
@@ -2135,7 +2166,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const spacing = spacingFt * (itemIsFt ? 1 : 0.3048);
         const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         if (spacing > 0) {
-          const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : Math.ceil(signedRaw / spacing);
+          const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
           totals[item.groupId].rawQty += count;
           totals[item.groupId].unit = "each";
         } else {
@@ -2543,6 +2574,11 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-red-900/90 border border-red-600 text-red-200 text-xs px-3 py-2 rounded-lg shadow-lg">
               <span>⚠ {itemsLoadError}</span>
               <button onClick={refreshItems} className="underline hover:text-white ml-1">Retry</button>
+            </div>
+          )}
+          {itemsTruncated && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-amber-900/90 border border-amber-600 text-amber-100 text-xs px-3 py-2 rounded-lg shadow-lg max-w-md">
+              <span>⚠ This page has more than 2 000 shapes. Only the first 2 000 are shown here — the full set is still counted in the BOQ. Split the drawing or reduce shapes per page.</span>
             </div>
           )}
 
@@ -3346,6 +3382,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
           disciplines={disciplines}
           activeDisciplineId={activeDisciplineId}
           disciplineTotals={disciplineTotals}
+          unitErrorDisciplines={disciplineUnitErrors}
           onSwitch={(id) => {
             setActiveDisciplineId(id);
             localStorage.setItem(`active-discipline-${projectId}`, id);

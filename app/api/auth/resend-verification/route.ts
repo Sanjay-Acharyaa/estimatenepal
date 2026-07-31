@@ -34,7 +34,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "If this email exists and is unverified, a new link has been sent." });
     }
     const verifyToken = crypto.randomBytes(32).toString("hex");
-    await redis.set(`verify:${verifyToken}`, user.id, "EX", 86400);
+    await Promise.all([
+      redis.set(`verify:${verifyToken}`, user.id, "EX", 86400),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { verifyToken, verifyTokenAt: new Date() },
+      }),
+    ]);
 
     const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${verifyToken}`;
     sendEmail({

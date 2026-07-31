@@ -14,9 +14,19 @@ export const TOOL_TYPES = [
   { value: "VOLUME",             label: "Volume",             desc: "Cu.m / Cu.ft — excavation, concrete, masonry" },
 ] as const;
 
-const PRESET_COLORS = [
-  "#3B82F6","#EF4444","#10B981","#F59E0B","#8B5CF6",
-  "#EC4899","#06B6D4","#84CC16","#F97316","#6366F1",
+// Ordered for maximum visual separation: each successive colour is as far as possible
+// from the previous in hue space so sibling layers are always easy to tell apart at a glance.
+export const PRESET_COLORS = [
+  "#EF4444", // red
+  "#3B82F6", // blue
+  "#10B981", // green
+  "#F97316", // orange
+  "#A855F7", // purple
+  "#EAB308", // yellow
+  "#06B6D4", // cyan
+  "#EC4899", // pink
+  "#84CC16", // lime
+  "#6366F1", // indigo
 ];
 
 type TakeoffType = (typeof TOOL_TYPES)[number]["value"];
@@ -44,6 +54,10 @@ type SaveData = {
 
 type Props = {
   initial?: Omit<SaveData, "rateItemId">;
+  /** Suggested colour for a brand-new layer; ignored when `initial` is provided. */
+  defaultColour?: string;
+  /** Currently linked rate item — shown as read-only info in edit mode. */
+  currentRateItem?: { code: string; source: string } | null;
   onSave: (data: SaveData) => void;
   onCancel: () => void;
   title?: string;
@@ -51,7 +65,7 @@ type Props = {
 
 const NRS = (n: number) => fmtNum(n, 2);
 
-export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create New Takeoff Layer" }: Props) {
+export function TakeoffGroupDialog({ initial, defaultColour, currentRateItem, onSave, onCancel, title = "Create New Takeoff Layer" }: Props) {
   // Catalog
   const [catalogItem, setCatalogItem] = useState<CatalogItem | null>(null);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -66,7 +80,7 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
   const [name, setName] = useState(initial?.name ?? "");
   const [nameManuallyEdited, setNameManuallyEdited] = useState(false);
   const [type, setType] = useState<TakeoffType>(initial?.type ?? "LINEAR");
-  const [colour, setColour] = useState(initial?.colour ?? "#3B82F6");
+  const [colour, setColour] = useState(initial?.colour ?? defaultColour ?? PRESET_COLORS[0]);
   const [lineWidth, setLineWidth] = useState(initial?.lineWidth ?? 2);
   const [countShape, setCountShape] = useState<CountShape>("circle");
   const [tag, setTag] = useState(initial?.tag ?? "");
@@ -165,6 +179,15 @@ export function TakeoffGroupDialog({ initial, onSave, onCancel, title = "Create 
 
           <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
             {error && <p role="alert" className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+
+            {/* ── Rate item badge (edit mode only) ── */}
+            {!isNew && currentRateItem && (
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <span className="font-mono text-xs font-bold text-gray-700">{currentRateItem.code}</span>
+                <span className="text-xs text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">{currentRateItem.source}</span>
+                <span className="text-xs text-gray-500 ml-auto">Rate linked — use layer detail to change</span>
+              </div>
+            )}
 
             {/* ── Catalog Item (new layers only) ── */}
             {isNew && (

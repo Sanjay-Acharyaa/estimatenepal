@@ -1,7 +1,7 @@
 ﻿export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
-import { getToken } from "next-auth/jwt";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
@@ -9,6 +9,7 @@ import { sendEmail } from "@/lib/email";
 import { logEmail } from "@/lib/email-log";
 import { getTemplates, renderTemplate, TEMPLATE_TYPES, TemplateType } from "@/lib/email-templates";
 import { getConfig } from "@/lib/config";
+import { redis } from "@/lib/redis";
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? "https://estimatenepal.com";
 
@@ -44,9 +45,7 @@ export async function POST(req: NextRequest) {
     const limited = await checkApiRateLimit(ip);
     if (limited) return limited;
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) throw unauthorized();
-    if (!token.isSuperAdmin) throw forbidden();
+    const token = await requireSuperAdmin(req);
 
     const body = await req.json();
     const { userEmail, emailType } = body as { userEmail: string; emailType: string };
@@ -56,6 +55,17 @@ export async function POST(req: NextRequest) {
     }
     if (!TEMPLATE_TYPES.includes(emailType as TemplateType)) {
       return NextResponse.json({ error: "Unknown emailType." }, { status: 400 });
+    }
+
+    // Per-recipient rate limit: max 3 manual admin emails per hour to the same address
+    const rlKey = `rl:adminsend:${userEmail.toLowerCase()}`;
+    const rlResults = await redis.pipeline().set(rlKey, "0", "EX", 3600, "NX").incr(rlKey).exec();
+    const rlCount = (rlResults?.[1]?.[1] as number | null) ?? 0;
+    if (rlCount > 3) {
+      return NextResponse.json(
+        { error: `Rate limit: this address has already received ${rlCount - 1} admin emails in the last hour.` },
+        { status: 429 }
+      );
     }
 
     const [user, price] = await Promise.all([

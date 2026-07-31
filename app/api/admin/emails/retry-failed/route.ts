@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 // POST /api/admin/emails/retry-failed
 // Admin-only. Triggers the cron to re-run, which will pick up any failed emails
@@ -10,6 +11,13 @@ import { authOptions } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!(session?.user as any)?.isSuperAdmin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const dbUser = await prisma.user.findUnique({
+    where: { email: session!.user!.email! },
+    select: { isSuperAdmin: true },
+  });
+  if (!dbUser?.isSuperAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

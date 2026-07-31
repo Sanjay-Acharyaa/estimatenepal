@@ -13,6 +13,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!session?.user?.isSuperAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const dbUser = await prisma.user.findUnique({
+    where: { email: session!.user!.email! },
+    select: { isSuperAdmin: true },
+  });
+  if (!dbUser?.isSuperAdmin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { notes } = await req.json();
   if (typeof notes !== "string") {

@@ -22,11 +22,6 @@ const updateSchema = z.object({
   multiplier: z.number().positive().optional(),
   additionalParams: z.record(z.string(), z.unknown()).optional().superRefine((ap, ctx) => {
     if (!ap) return;
-    // Validate feet-and-inches sub-objects wherever they appear in additionalParams.
-    // Covers height/breadth (VOLUME), wall (VERTICAL_WALL_AREA), and spacing (COUNT_BY_DISTANCE).
-    const feetInchPairs: Array<{ ftKey: string; inKey: string; label: string }> = [
-      { ftKey: "ft", inKey: "in", label: "spacing" },
-    ];
     const checkFtIn = (obj: Record<string, unknown>, ftKey: string, inKey: string, label: string) => {
       const ft = obj[ftKey];
       const inches = obj[inKey];
@@ -53,10 +48,10 @@ const updateSchema = z.object({
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["wall", "heightIn"], message: "wall.heightIn must be between 0 and 11." });
       }
     }
-    void feetInchPairs; // declared but only used inline above; suppress lint
   }),
   disciplineId: z.string().nullable().optional(),
   sortOrder: z.number().int().optional(),
+  version: z.number().int().optional(), // optimistic lock: client echoes back the version it last saw
 });
 
 export async function GET(
@@ -82,7 +77,7 @@ export async function GET(
         _count: { select: { items: true } },
         rateItem: { select: { id: true, code: true, description: true, unit: true, baseRate: true, source: true, fiscalYear: true } },
         items: {
-          select: { id: true, pageId: true, rawQuantity: true, quantity: true, unit: true, label: true, toolType: true, shapeType: true, isNegative: true },
+          select: { id: true, pageId: true, rawQuantity: true, quantity: true, unit: true, label: true, toolType: true, shapeType: true, isNegative: true, page: { select: { drawingId: true } } },
           orderBy: { sortOrder: "asc" },
         },
       },
@@ -120,15 +115,38 @@ export async function PUT(
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
 
+    // Optimistic lock: reject stale updates when the client echoes a version.
+    // version column exists in the schema but types not yet regenerated locally (migration pending on server).
+    const storedVersion = (group as unknown as { version: number }).version;
+    if (parsed.data.version !== undefined && storedVersion !== parsed.data.version) {
+      return apiError("CONFLICT", "This layer was modified by another user. Please refresh.", 409);
+    }
+
+    // Validate that the requested rateItemId is accessible to this org (public DUDBC item OR
+    // owned by the same org). Prevents a tenant from linking another org's private rate.
+    if (parsed.data.rateItemId) {
+      const rateItem = await prisma.rateItem.findUnique({
+        where: { id: parsed.data.rateItemId },
+        select: { orgId: true },
+      });
+      if (!rateItem || (rateItem.orgId !== null && rateItem.orgId !== project.orgId)) {
+        return apiError("NOT_FOUND", "Rate item not found.", 404);
+      }
+    }
+
+    const { version: _v, ...dataWithoutVersion } = parsed.data;
     const updated = await prisma.takeoffGroup.update({
       where: { id: params.gId },
+      // version is not yet in the generated Prisma types (migration pending on server);
+      // cast to any so the build passes locally until prisma generate can run.
       data: {
-        ...parsed.data,
+        ...dataWithoutVersion,
         additionalParams: parsed.data.additionalParams as any,
-      },
+        version: { increment: 1 },
+      } as any,
       include: {
         _count: { select: { items: true } },
-        rateItem: { select: { code: true, source: true } },
+        rateItem: { select: { id: true, code: true, description: true, unit: true, baseRate: true, source: true, fiscalYear: true } },
       },
     });
 
@@ -139,50 +157,71 @@ export async function PUT(
     // not on params).  quantity and unit must stay in sync with current params so the
     // Measurement Book and UI detail panels show correct per-item figures.
     const PARAMS_AFFECTING_TYPES = new Set(["VERTICAL_WALL_AREA", "COUNT_BY_DISTANCE", "VOLUME"]);
+    const typeChanged = parsed.data.type !== undefined && parsed.data.type !== group.type;
     const needsRecompute =
-      !!parsed.data.type ||
+      typeChanged ||
       (parsed.data.additionalParams !== undefined && PARAMS_AFFECTING_TYPES.has(updated.type)) ||
       parsed.data.multiplier !== undefined;
 
     if (needsRecompute) {
+      // Invalidate BOQ cache before the multi-chunk recompute begins so any concurrent
+      // BOQ read goes to DB (which recomputes from rawQuantity + current group params)
+      // rather than returning a stale cached result that was built before the group change.
+      invalidateBOQCache(params.id).catch(() => {});
+
       const newType = (parsed.data.type ?? group.type) as typeof group.type;
       const newParams = (parsed.data.additionalParams ?? group.additionalParams) as AdditionalParams | undefined;
       const newMultiplier = updated.multiplier ?? 1;
-      const items = await prisma.takeoffItem.findMany({
-        where: { groupId: params.gId },
-        include: { page: { include: { scaleZones: true } } },
-      });
-      const updateOps: ReturnType<typeof prisma.takeoffItem.update>[] = [];
-      for (const item of items) {
-        if (!item.page) continue;
-        const pts = ((item.toolData as { points?: Array<{ x: number; y: number }> })?.points ?? []);
-        const zoneShapes = item.page.scaleZones.map(z => ({
-          x: z.x, y: z.y, width: z.width, height: z.height, scale: z.scale, scaleUnit: z.scaleUnit,
-        }));
-        const eff = item.shapeType === "POLYLINE"
-          ? perSegmentEffectiveScale(pts, item.page.scale, item.page.scaleUnit, zoneShapes)
-          : boundingBoxWeightedScale(pts, item.page.scale, item.page.scaleUnit, zoneShapes, item.shapeType ?? null);
-        if (!eff) continue;
-        const { quantity, rawQuantity, unit } = computeQuantity(
-          newType,
-          { points: pts },
-          eff.scale,
-          eff.scaleUnit,
-          newMultiplier,
-          newParams,
-          item.shapeType,
-        );
-        // Only write rawQuantity (geometry-dependent) when the type itself changed.
-        const dataUpdate = parsed.data.type
-          ? { toolType: newType, rawQuantity, quantity, unit, scaleUsed: eff.scale, version: { increment: 1 } }
-          : { quantity, unit, version: { increment: 1 } };
-        updateOps.push(prisma.takeoffItem.update({ where: { id: item.id }, data: dataUpdate }));
-      }
-      if (updateOps.length > 0) {
-        const CHUNK = 100;
+      // Fetch and update items in pages so a group with thousands of shapes does not
+      // spike memory all at once. Each 500-item page is fully updated before the next
+      // page is fetched, keeping peak allocation bounded.
+      const PAGE = 500;
+      const CHUNK = 100;
+      let cursor: string | undefined;
+      while (true) {
+        const items = await prisma.takeoffItem.findMany({
+          where: { groupId: params.gId },
+          include: { page: { include: { scaleZones: true } } },
+          take: PAGE,
+          ...(cursor !== undefined ? { cursor: { id: cursor }, skip: 1 } : {}),
+          orderBy: { id: "asc" },
+        });
+        if (items.length === 0) break;
+        const updateOps: ReturnType<typeof prisma.takeoffItem.update>[] = [];
+        for (const item of items) {
+          if (!item.page) continue;
+          const pts = ((item.toolData as { points?: Array<{ x: number; y: number }> })?.points ?? []);
+          const zoneShapes = item.page.scaleZones.map(z => ({
+            x: z.x, y: z.y, width: z.width, height: z.height, scale: z.scale, scaleUnit: z.scaleUnit,
+          }));
+          const eff = item.shapeType === "POLYLINE"
+            ? perSegmentEffectiveScale(pts, item.page.scale, item.page.scaleUnit, zoneShapes)
+            : boundingBoxWeightedScale(pts, item.page.scale, item.page.scaleUnit, zoneShapes, item.shapeType ?? null);
+          if (!eff) continue;
+          const { quantity, rawQuantity, unit } = computeQuantity(
+            newType,
+            { points: pts },
+            eff.scale,
+            eff.scaleUnit,
+            newMultiplier,
+            newParams,
+            item.shapeType,
+          );
+          // Only write rawQuantity (geometry-dependent) when the type itself changed.
+          // Bump version only on type changes (rawQuantity change = collaborators' shapes
+          // are truly stale). Params-only recomputes (wall height, spacing, multiplier)
+          // update quantity/unit only — no version bump so concurrent editors are not
+          // kicked off the canvas.
+          const dataUpdate = typeChanged
+            ? { toolType: newType, rawQuantity, quantity, unit, scaleUsed: eff.scale, version: { increment: 1 } }
+            : { quantity, unit };
+          updateOps.push(prisma.takeoffItem.update({ where: { id: item.id }, data: dataUpdate }));
+        }
         for (let i = 0; i < updateOps.length; i += CHUNK) {
           await prisma.$transaction(updateOps.slice(i, i + CHUNK));
         }
+        if (items.length < PAGE) break;
+        cursor = items[items.length - 1].id;
       }
     }
 
@@ -217,11 +256,12 @@ export async function DELETE(
 
     const project = await prisma.project.findUnique({ where: { id: params.id } });
     if (!project) throw notFound("Project");
-    await withTenantGuard(token.id as string, project.orgId);
+    const guardUser = await withTenantGuard(token.id as string, project.orgId);
 
     if (project.isPricingLocked) return apiError("FORBIDDEN", "Estimate pricing is locked. Unlock it in project settings before making takeoff changes.", 403);
 
-    if (!["OWNER", "ADMIN"].includes(token.role as string)) throw forbidden();
+    // Use guardUser.role (Redis/DB) not token.role (JWT) so revoked/demoted users are denied immediately.
+    if (!["OWNER", "ADMIN"].includes(guardUser.role)) throw forbidden();
 
     const group = await prisma.takeoffGroup.findUnique({
       where: { id: params.gId },
@@ -229,18 +269,19 @@ export async function DELETE(
     });
     if (!group || group.projectId !== params.id) throw notFound("Takeoff group");
 
-    const childIds = ((group as any).children as { id: string }[]).map(c => c.id);
+    // children is included via the query above; cast narrows the inferred type.
+    const childIds = (group as typeof group & { children: { id: string }[] }).children.map(c => c.id);
 
-    // Delete all takeoff items belonging to children and the group itself first,
-    // so no orphaned items (groupId=null) are left behind after group deletion.
+    // Delete items, child layers, and the group itself atomically so a mid-flight
+    // crash cannot leave orphaned items or dangling child groups.
     const allGroupIds = [...childIds, params.gId];
-    await prisma.takeoffItem.deleteMany({ where: { groupId: { in: allGroupIds } } });
-
-    // Now delete child layers (Restrict FK requires manual cascade on the group tree)
-    if (childIds.length > 0) {
-      await prisma.takeoffGroup.deleteMany({ where: { parentId: params.gId } });
-    }
-    await prisma.takeoffGroup.delete({ where: { id: params.gId } });
+    await prisma.$transaction([
+      prisma.takeoffItem.deleteMany({ where: { groupId: { in: allGroupIds } } }),
+      ...(childIds.length > 0
+        ? [prisma.takeoffGroup.deleteMany({ where: { parentId: params.gId } })]
+        : []),
+      prisma.takeoffGroup.delete({ where: { id: params.gId } }),
+    ]);
 
     invalidateBOQCache(params.id).catch(() => {});
 

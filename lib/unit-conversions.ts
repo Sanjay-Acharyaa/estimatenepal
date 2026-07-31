@@ -15,6 +15,9 @@ const UNIT_ALIAS_MAP: Record<string, string> = {
   m: "rm",
   ft: "ft", lft: "ft", rft: "ft", feet: "ft",
   nos: "ea", no: "ea", ea: "ea", each: "ea", pcs: "ea",
+  // "each|ft" is the COUNT_BY_DISTANCE sentinel — rawQuantity is a length in ft but the
+  // display/billing unit is "each". Treat it as "ea" so conversion lookups don't return null.
+  "each|ft": "ea",
   kg: "kg",
   ton: "ton", mt: "ton", tonne: "ton",
   hr: "hr", hour: "hr", hrs: "hr",
