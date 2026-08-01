@@ -646,7 +646,7 @@ export function TakeoffPanel({
                                 {layer.rateItem ? (
                                   <>
                                     <span className="font-mono text-blue-400 font-semibold flex-shrink-0">{layer.rateItem.code}</span>
-                                    {(layer.rateItem._count?.analysisLines ?? 0) > 0 ? (
+                                    {(layer.rateItem.source === "DUDBC" || layer.rateItem.source === "DISTRICT" || (layer.rateItem._count?.analysisLines ?? 0) > 0) ? (
                                       <span className="text-[10px] px-1 py-0.5 rounded flex-shrink-0 bg-green-900/40 text-green-400">linked</span>
                                     ) : (
                                       <span className="text-[10px] px-1 py-0.5 rounded flex-shrink-0 bg-blue-900/40 text-blue-400">CUSTOM</span>
