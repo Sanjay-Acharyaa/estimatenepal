@@ -1983,7 +1983,11 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const spacingFt = spObj ? (Number(spObj.ft ?? 0) + Number(spObj.in ?? 0) / 12) : 0;
         const spacing = spacingFt * ftToUnit;
         if (!spacing) return { qty: raw * mult, unit: `${lenUnit} (set spacing)` };
-        const count = raw >= 0 ? Math.floor(raw / spacing) + 1 : -(Math.floor(Math.abs(raw) / spacing) + 1);
+        // Closed shapes (RECTANGLE, POLYGON, CIRCLE) wrap back to start — no +1 fence-post.
+        const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
+        const count = raw >= 0
+          ? (closedShape ? Math.floor(raw / spacing) : Math.floor(raw / spacing) + 1)
+          : -(closedShape ? Math.floor(Math.abs(raw) / spacing) : Math.floor(Math.abs(raw) / spacing) + 1);
         return { qty: count * mult, unit: "each" };
       }
 
@@ -2166,7 +2170,10 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const spacing = spacingFt * (itemIsFt ? 1 : 0.3048);
         const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         if (spacing > 0) {
-          const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
+          const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
+          const count = signedRaw >= 0
+            ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
+            : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
           totals[item.groupId].rawQty += count;
           totals[item.groupId].unit = "each";
         } else {
@@ -2233,7 +2240,18 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
             disciplines={disciplines}
             selectedGroupId={selectedGroupId}
             activeDisciplineId={activeDisciplineId}
-            onSelectGroup={setSelectedGroupId}
+            onSelectGroup={(id) => {
+              setSelectedGroupId(id);
+              // If same group re-selected the useEffect won't re-fire (dep unchanged).
+              // Force mode switch so the user isn't left stuck in "select" mode.
+              if (id === selectedGroupIdRef.current) {
+                const grp = takeoffGroupsRef.current.find(g => g.id === id);
+                if (grp && !grp.isLocked) {
+                  resetDrawingState();
+                  setMode(grp.type === "COUNT" ? "count" : "polyline");
+                }
+              }
+            }}
             onGroupsChange={setTakeoffGroups}
             groupTotals={groupTotals}
             liveItemCounts={liveItemCounts}

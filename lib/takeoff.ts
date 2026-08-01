@@ -159,7 +159,9 @@ export function computeQuantity(
         // No spacing set — show raw length with hint so user knows to set it
         return { rawQuantity: lengthReal, quantity: lengthReal * multiplier, unit: `${scaleUnit} (set spacing)` };
       }
-      const count = Math.floor(lengthReal / spacingInUnit) + 1;
+      // Closed shapes wrap back to start — no +1 fence-post needed.
+      const closedShape = shapeType === "RECTANGLE" || shapeType === "POLYGON" || shapeType === "CIRCLE";
+      const count = closedShape ? Math.floor(lengthReal / spacingInUnit) : Math.floor(lengthReal / spacingInUnit) + 1;
       return { rawQuantity: lengthReal, quantity: count * multiplier, unit: scaleUnit === "ft" ? "each|ft" : "each" };
     }
 

@@ -277,7 +277,10 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         const ftu = item.unit.includes("ft") ? 1 : 0.3048;
         const spacing = currentSpacing * ftu;
-        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
+        const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
+        const count = signedRaw >= 0
+          ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
+          : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
         total += count * currentMult;
       }
       return { qty: total, unit: "each" };
@@ -294,7 +297,10 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         const ftu = item.unit.includes("ft") ? 1 : 0.3048;
         const spacing = currentSpacing * ftu;
-        const count = signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
+        const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
+        const count = signedRaw >= 0
+          ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
+          : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
         total += count * currentMult;
       }
       return { qty: total, unit: "each" };
@@ -733,7 +739,10 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       const ftu = item.unit.includes("ft") ? 1 : 0.3048;
                       const spacing = currentSpacing * ftu;
                       if (spacing > 0) {
-                        total += signedRaw >= 0 ? Math.floor(signedRaw / spacing) + 1 : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
+                        const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
+                        total += signedRaw >= 0
+                          ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
+                          : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
                       }
                     }
                     previewCount = total * currentMult;

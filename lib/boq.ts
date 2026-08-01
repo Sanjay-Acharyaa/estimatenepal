@@ -186,7 +186,10 @@ export function computeGroupTotal(
         const raw = safeNum(i.isNegative ? -i.rawQuantity : i.rawQuantity);
         const ftu = i.unit.includes("ft") ? 1 : 0.3048;
         const spacing = spacingFt * ftu;
-        const count = raw >= 0 ? Math.floor(raw / spacing) + 1 : -(Math.floor(Math.abs(raw) / spacing) + 1);
+        const closedShape = i.shapeType === "RECTANGLE" || i.shapeType === "POLYGON" || i.shapeType === "CIRCLE";
+        const count = raw >= 0
+          ? (closedShape ? Math.floor(raw / spacing) : Math.floor(raw / spacing) + 1)
+          : -(closedShape ? Math.floor(Math.abs(raw) / spacing) : Math.floor(Math.abs(raw) / spacing) + 1);
         countTotal += count;
       }
       return { qty: countTotal * group.multiplier, unit: "each", excludedShapeCount: 0 };
