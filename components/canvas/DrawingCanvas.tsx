@@ -1855,6 +1855,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const n = ids.length;
         const msg = n === 1 ? "Delete this shape?" : `Delete ${n} shapes?`;
         toast(msg, {
+          id: "delete-shape-confirm",
           action: { label: "Delete", onClick: () => { setSelectedItemIds(new Set()); void deleteMultiple(ids); } },
           cancel: { label: "Cancel", onClick: () => {} },
           duration: 5000,
