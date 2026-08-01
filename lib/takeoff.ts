@@ -160,8 +160,9 @@ export function computeQuantity(
         return { rawQuantity: lengthReal, quantity: lengthReal * multiplier, unit: `${scaleUnit} (set spacing)` };
       }
       // Closed shapes wrap back to start — no +1 fence-post needed.
+      // ceil(...- 1e-9) handles exact multiples (e.g. 10/2=5) without floating-point creep.
       const closedShape = shapeType === "RECTANGLE" || shapeType === "POLYGON" || shapeType === "CIRCLE";
-      const count = closedShape ? Math.floor(lengthReal / spacingInUnit) : Math.floor(lengthReal / spacingInUnit) + 1;
+      const count = Math.ceil(lengthReal / spacingInUnit - 1e-9) + (closedShape ? 0 : 1);
       return { rawQuantity: lengthReal, quantity: count * multiplier, unit: scaleUnit === "ft" ? "each|ft" : "each" };
     }
 

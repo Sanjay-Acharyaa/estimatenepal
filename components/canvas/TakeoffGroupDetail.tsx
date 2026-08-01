@@ -239,7 +239,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
     }
     if (group.type === "COUNT_BY_DISTANCE") {
       const spacingU = currentSpacing * ftu;
-      if (spacingU > 0) return { qty: (Math.floor(raw / spacingU) + 1) * currentMult, unit: "each" };
+      if (spacingU > 0) return { qty: (Math.ceil(raw / spacingU - 1e-9) + 1) * currentMult, unit: "each" };
       return { qty: raw * currentMult, unit: "(set spacing)" };
     }
     if (group.type === "VERTICAL_WALL_AREA") {
@@ -278,9 +278,9 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         const ftu = item.unit.includes("ft") ? 1 : 0.3048;
         const spacing = currentSpacing * ftu;
         const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
-        const count = signedRaw >= 0
-          ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
-          : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
+        const absSignedRaw = Math.abs(signedRaw);
+        const cnt = Math.ceil(absSignedRaw / spacing - 1e-9) + (closedShape ? 0 : 1);
+        const count = signedRaw >= 0 ? cnt : -cnt;
         total += count * currentMult;
       }
       return { qty: total, unit: "each" };
@@ -298,9 +298,9 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
         const ftu = item.unit.includes("ft") ? 1 : 0.3048;
         const spacing = currentSpacing * ftu;
         const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
-        const count = signedRaw >= 0
-          ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
-          : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
+        const absSignedRaw2 = Math.abs(signedRaw);
+        const cnt2 = Math.ceil(absSignedRaw2 / spacing - 1e-9) + (closedShape ? 0 : 1);
+        const count = signedRaw >= 0 ? cnt2 : -cnt2;
         total += count * currentMult;
       }
       return { qty: total, unit: "each" };
@@ -740,9 +740,9 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                       const spacing = currentSpacing * ftu;
                       if (spacing > 0) {
                         const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
-                        total += signedRaw >= 0
-                          ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
-                          : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
+                        const absRaw3 = Math.abs(signedRaw);
+                        const cnt3 = Math.ceil(absRaw3 / spacing - 1e-9) + (closedShape ? 0 : 1);
+                        total += signedRaw >= 0 ? cnt3 : -cnt3;
                       }
                     }
                     previewCount = total * currentMult;

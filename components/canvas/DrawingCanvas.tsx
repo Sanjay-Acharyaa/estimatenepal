@@ -1143,7 +1143,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
   }
 
   // ─── Save takeoff item to server ──────────────────────────────────────
-  async function saveItem(toolType: string, shapeType: string, points: Point[]): Promise<boolean> {
+  async function saveItem(toolType: string, shapeType: string | null, points: Point[]): Promise<boolean> {
     const group = takeoffGroups.find((g) => g.id === selectedGroupId);
     if (!group) { toast.warning("No takeoff layer selected. Select a layer in the Takeoff panel first."); return false; }
     if (group.isLocked) { toast.warning(`Layer "${group.name}" is locked. Unlock it first to draw shapes.`); return false; }
@@ -1157,7 +1157,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
             groupId: group.id,
             // label is omitted — the server generates it from the max existing sequence number
             toolType,
-            shapeType,
+            ...(shapeType != null ? { shapeType } : {}),
             toolData: { points },
             multiplier: group.multiplier ?? 1,
           }),
@@ -1464,7 +1464,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         ) < 8
       );
       if (tooClose) return;
-      saveItem("COUNT", "CIRCLE", [snapped]);
+      saveItem("COUNT", null, [snapped]);
       return;
     }
 
@@ -1985,9 +1985,9 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         if (!spacing) return { qty: raw * mult, unit: `${lenUnit} (set spacing)` };
         // Closed shapes (RECTANGLE, POLYGON, CIRCLE) wrap back to start — no +1 fence-post.
         const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
-        const count = raw >= 0
-          ? (closedShape ? Math.floor(raw / spacing) : Math.floor(raw / spacing) + 1)
-          : -(closedShape ? Math.floor(Math.abs(raw) / spacing) : Math.floor(Math.abs(raw) / spacing) + 1);
+        const absRaw = Math.abs(raw);
+        const cnt = Math.ceil(absRaw / spacing - 1e-9) + (closedShape ? 0 : 1);
+        const count = raw >= 0 ? cnt : -cnt;
         return { qty: count * mult, unit: "each" };
       }
 
@@ -2171,9 +2171,9 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
         const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
         if (spacing > 0) {
           const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
-          const count = signedRaw >= 0
-            ? (closedShape ? Math.floor(signedRaw / spacing) : Math.floor(signedRaw / spacing) + 1)
-            : -(closedShape ? Math.floor(Math.abs(signedRaw) / spacing) : Math.floor(Math.abs(signedRaw) / spacing) + 1);
+          const absSignedRaw = Math.abs(signedRaw);
+          const cnt = Math.ceil(absSignedRaw / spacing - 1e-9) + (closedShape ? 0 : 1);
+          const count = signedRaw >= 0 ? cnt : -cnt;
           totals[item.groupId].rawQty += count;
           totals[item.groupId].unit = "each";
         } else {

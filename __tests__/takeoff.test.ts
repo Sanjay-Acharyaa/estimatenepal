@@ -210,14 +210,14 @@ describe("computeQuantity — COUNT_BY_DISTANCE", () => {
     expect(unit).toContain("set spacing");
   });
 
-  it("computes fence-post count (length / spacing + 1)", () => {
-    // 5 m line, spacing = 1 ft = 0.3048 m → count = floor(5/0.3048) + 1 = 16 + 1 = 17
+  it("computes fence-post count including endpoint (ceil(L/S)+1)", () => {
+    // 5 m line, spacing = 1 ft = 0.3048 m → ceil(5/0.3048)+1 = 17+1 = 18 (endpoint included)
     const pts = [{ x: 0, y: 0 }, { x: 500, y: 0 }];
     const ap = { spacing: { ft: 1, in: 0 } };
     const { quantity, unit } = computeQuantity("COUNT_BY_DISTANCE", { points: pts }, 0.01, "m", 1, ap);
     const lengthM = 5.0;
     const spacingM = 0.3048;
-    const expected = Math.floor(lengthM / spacingM) + 1;
+    const expected = Math.ceil(lengthM / spacingM - 1e-9) + 1;
     expect(quantity).toBe(expected);
     expect(unit).toBe("each");
   });
@@ -322,8 +322,8 @@ describe("computeGroupTotal — COUNT_BY_DISTANCE", () => {
     expect(unit).toBe("m");
   });
 
-  it("computes fence-post count: floor(L/spacing)+1 per item", () => {
-    // 6 m at 1 m spacing → floor(6/1)+1 = 7 each
+  it("computes fence-post count including endpoint: ceil(L/spacing)+1 per item", () => {
+    // 6 m at ~1 m spacing → ceil(6/1)+1 = 7 each (endpoint always included)
     const group = {
       type: "COUNT_BY_DISTANCE",
       additionalParams: { spacing: { ft: 3.28084, in: 0 } }, // ~1 m in ft
@@ -331,7 +331,7 @@ describe("computeGroupTotal — COUNT_BY_DISTANCE", () => {
     };
     const ftSpacing = 3.28084 * 0.3048; // ≈1 m
     const { qty, unit } = computeGroupTotal(group, [item(6, "m")]);
-    expect(qty).toBe(Math.floor(6 / ftSpacing) + 1);
+    expect(qty).toBe(Math.ceil(6 / ftSpacing - 1e-9) + 1);
     expect(unit).toBe("each");
   });
 });

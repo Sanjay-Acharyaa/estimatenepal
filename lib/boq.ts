@@ -187,9 +187,9 @@ export function computeGroupTotal(
         const ftu = i.unit.includes("ft") ? 1 : 0.3048;
         const spacing = spacingFt * ftu;
         const closedShape = i.shapeType === "RECTANGLE" || i.shapeType === "POLYGON" || i.shapeType === "CIRCLE";
-        const count = raw >= 0
-          ? (closedShape ? Math.floor(raw / spacing) : Math.floor(raw / spacing) + 1)
-          : -(closedShape ? Math.floor(Math.abs(raw) / spacing) : Math.floor(Math.abs(raw) / spacing) + 1);
+        const absRaw = Math.abs(raw);
+        const cnt = Math.ceil(absRaw / spacing - 1e-9) + (closedShape ? 0 : 1);
+        const count = raw >= 0 ? cnt : -cnt;
         countTotal += count;
       }
       return { qty: countTotal * group.multiplier, unit: "each", excludedShapeCount: 0 };
