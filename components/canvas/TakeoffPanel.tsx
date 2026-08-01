@@ -22,7 +22,7 @@ export type TakeoffGroup = {
   tag: string | null;
   preamble: string | null;
   rateItemId: string | null;
-  rateItem?: { code: string; source: string } | null;
+  rateItem?: { code: string; source: string; _count?: { analysisLines: number } } | null;
   multiplier: number;
   additionalParams: Record<string, unknown> | null;
   parentId: string | null;
@@ -646,11 +646,11 @@ export function TakeoffPanel({
                                 {layer.rateItem ? (
                                   <>
                                     <span className="font-mono text-blue-400 font-semibold flex-shrink-0">{layer.rateItem.code}</span>
-                                    <span className={`text-[10px] px-1 py-0.5 rounded flex-shrink-0 ${
-                                      layer.rateItem.source === "DUDBC" ? "bg-green-900/40 text-green-400" :
-                                      layer.rateItem.source === "DISTRICT" ? "bg-yellow-900/40 text-yellow-400" :
-                                      "bg-blue-900/40 text-blue-400"
-                                    }`}>{layer.rateItem.source}</span>
+                                    {(layer.rateItem._count?.analysisLines ?? 0) > 0 ? (
+                                      <span className="text-[10px] px-1 py-0.5 rounded flex-shrink-0 bg-green-900/40 text-green-400">linked</span>
+                                    ) : (
+                                      <span className="text-[10px] px-1 py-0.5 rounded flex-shrink-0 bg-blue-900/40 text-blue-400">CUSTOM</span>
+                                    )}
                                   </>
                                 ) : (
                                   <span className="text-green-400 text-xs">linked</span>

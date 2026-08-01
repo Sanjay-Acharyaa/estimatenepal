@@ -75,7 +75,7 @@ export async function GET(
       include: {
         discipline: { select: { id: true, name: true } },
         _count: { select: { items: true } },
-        rateItem: { select: { id: true, code: true, description: true, unit: true, baseRate: true, source: true, fiscalYear: true } },
+        rateItem: { select: { id: true, code: true, description: true, unit: true, baseRate: true, source: true, fiscalYear: true, _count: { select: { analysisLines: true } } } },
         items: {
           select: { id: true, pageId: true, rawQuantity: true, quantity: true, unit: true, label: true, toolType: true, shapeType: true, isNegative: true, page: { select: { drawingId: true } } },
           orderBy: { sortOrder: "asc" },
@@ -146,7 +146,7 @@ export async function PUT(
       } as any,
       include: {
         _count: { select: { items: true } },
-        rateItem: { select: { id: true, code: true, description: true, unit: true, baseRate: true, source: true, fiscalYear: true } },
+        rateItem: { select: { id: true, code: true, description: true, unit: true, baseRate: true, source: true, fiscalYear: true, _count: { select: { analysisLines: true } } } },
       },
     });
 

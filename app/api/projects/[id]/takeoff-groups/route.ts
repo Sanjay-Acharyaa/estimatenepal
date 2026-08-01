@@ -44,7 +44,7 @@ export async function GET(
       include: {
         discipline: { select: { id: true, name: true } },
         _count: { select: { items: true } },
-        rateItem: { select: { code: true, source: true } },
+        rateItem: { select: { code: true, source: true, _count: { select: { analysisLines: true } } } },
         assembly: { select: { id: true, name: true } },
       },
       orderBy: { sortOrder: "asc" },
