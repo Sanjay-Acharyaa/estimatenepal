@@ -253,18 +253,14 @@ export async function generateBOQ(projectId: string): Promise<BOQDocument> {
   try {
     const hit = await redis.get(cacheKey);
     if (hit) {
-      // Stamp generatedAt at serve time so it reflects when the BOQ was actually returned,
-      // not when the cached payload was originally built.
-      return { ...JSON.parse(hit) as BOQDocument, generatedAt: new Date().toISOString() };
+      return JSON.parse(hit) as BOQDocument;
     }
   } catch {
     // Redis miss or error — proceed to compute
   }
 
   const boq = await computeBOQ(projectId);
-  // Exclude generatedAt from the cached blob so the timestamp reflects serve time, not cache-build time.
-  const { generatedAt: _g, ...cacheable } = boq;
-  const serialised = JSON.stringify(cacheable);
+  const serialised = JSON.stringify(boq);
   if (serialised.length <= BOQ_MAX_CACHE_BYTES) {
     redis.set(cacheKey, serialised, "EX", BOQ_CACHE_TTL).catch(() => {});
   }

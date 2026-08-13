@@ -477,7 +477,15 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     const room = roomId(activeDisciplineId, currentPage.id);
     const socket = getSocket(currentUser);
     socket.emit("shape:lock", { roomId: room, itemId });
-    return () => { socket.emit("shape:unlock", { roomId: room, itemId }); };
+    // Refresh the 30-second Redis lock TTL every 15 s so long node-drag sessions
+    // do not silently expire and allow a second user to acquire the same lock.
+    const hb = setInterval(() => {
+      socket.emit("shape:heartbeat", { roomId: room, itemId });
+    }, 15_000);
+    return () => {
+      clearInterval(hb);
+      socket.emit("shape:unlock", { roomId: room, itemId });
+    };
   }, [selectedItemIds, mode, currentPage?.id, activeDisciplineId]); // eslint-disable-line
 
   // ─── Load annotations when page changes ──────────────────────────────

@@ -63,9 +63,13 @@ export async function GET(
       // Conversion factor to a canonical unit (metric) for each raw unit.
       // COUNT / dimensionless units return factor 1 and keep their unit.
       const toMetric = (unit: string): { factor: number; canonicalUnit: string } => {
-        if (unit === "ft" || unit === "Rm." || unit === "rm") return { factor: 0.3048, canonicalUnit: "m" };
-        if (unit === "sqft" || unit === "sq ft") return { factor: 0.3048 * 0.3048, canonicalUnit: "sq m" };
-        if (unit === "cu ft" || unit === "cuft") return { factor: 0.3048 ** 3, canonicalUnit: "cu m" };
+        const base = unit.replace(/\s*\(.*\)$/, "").trim();
+        if (base === "ft" || base === "Rm." || base === "rm" || base === "lft" || base === "rft" || base === "rmt")
+          return { factor: 0.3048, canonicalUnit: "m" };
+        if (base === "sqft" || base === "sq ft" || base === "sft")
+          return { factor: 0.3048 * 0.3048, canonicalUnit: "sq m" };
+        if (base === "cu ft" || base === "cuft" || base === "cft")
+          return { factor: 0.3048 ** 3, canonicalUnit: "cu m" };
         return { factor: 1, canonicalUnit: unit };
       };
 

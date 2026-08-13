@@ -507,7 +507,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                 <div>
                   <p className="text-xs text-gray-600 mb-0.5">This page</p>
                   <p className="text-sm font-semibold text-gray-700">
-                    {thisPageDisplay.toFixed(2)}
+                    {thisPageUnit === "each" ? String(Math.round(thisPageDisplay)) : thisPageDisplay.toFixed(2)}
                     <span className="text-xs font-normal text-gray-600 ml-1">{thisPageUnit}</span>
                   </p>
                 </div>
@@ -529,7 +529,7 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                   <span className="text-xs text-blue-500 font-medium">All pages total</span>
                 </div>
                 <p className="text-xl font-bold text-gray-800">
-                  {displayTotal.toFixed(2)}
+                  {qtyUnit === "each" ? String(Math.round(displayTotal)) : displayTotal.toFixed(2)}
                   <span className="text-sm font-normal text-gray-500 ml-1">{qtyUnit}</span>
                 </p>
                 {group.type === "VOLUME" && currentHInUnit > 0 ? (

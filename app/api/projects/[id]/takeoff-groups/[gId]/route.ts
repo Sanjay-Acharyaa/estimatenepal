@@ -164,11 +164,6 @@ export async function PUT(
       parsed.data.multiplier !== undefined;
 
     if (needsRecompute) {
-      // Invalidate BOQ cache before the multi-chunk recompute begins so any concurrent
-      // BOQ read goes to DB (which recomputes from rawQuantity + current group params)
-      // rather than returning a stale cached result that was built before the group change.
-      invalidateBOQCache(params.id).catch(() => {});
-
       const newType = (parsed.data.type ?? group.type) as typeof group.type;
       const newParams = (parsed.data.additionalParams ?? group.additionalParams) as AdditionalParams | undefined;
       const newMultiplier = updated.multiplier ?? 1;

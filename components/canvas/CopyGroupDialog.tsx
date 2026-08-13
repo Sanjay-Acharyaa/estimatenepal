@@ -65,7 +65,11 @@ export function CopyGroupDialog({ group, isCategory, childLayerCount, discipline
   const availableGroups = groups.filter(g => g.parentId === null && g.disciplineId === targetDisciplineId);
   const selectedGroup = availableGroups.find(g => g.id === targetGroupId) ?? null;
   const selectedGroupName = selectedGroup?.name ?? "";
-  const typeMismatch = !isCategory && withObjects && !!targetGroupId && !!selectedGroup && selectedGroup.type !== group.type;
+  // Type mismatch only matters when copying a layer into another layer of different type.
+  // The destination picker shows categories only (parentId === null), which are type-agnostic
+  // containers, so comparing their stale .type field to the source layer's type is meaningless.
+  const typeMismatch = !isCategory && withObjects && !!targetGroupId && !!selectedGroup
+    && selectedGroup.parentId !== null && selectedGroup.type !== group.type;
 
   return (
     <div

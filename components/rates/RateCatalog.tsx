@@ -10,7 +10,7 @@ import { RateSettingsPanel } from "./RateSettingsPanel";
 import { fmtNum } from "@/lib/format";
 import { adToBS } from "@/lib/bs-date";
 import { ASSEMBLY_CATEGORIES } from "@/lib/nepal-constants";
-import { PAGE_SIZE, DEFAULT_ASSEMBLY_COLOUR } from "@/lib/cache-constants";
+import { PAGE_SIZE, DEFAULT_ASSEMBLY_COLOUR, MAX_IMPORT_FILE_BYTES } from "@/lib/cache-constants";
 
 type CatalogTab = "rates" | "resources" | "settings";
 
@@ -144,12 +144,21 @@ export function RateCatalog({ isAdmin }: Props) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      setImportError(
+        `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). ` +
+        `Maximum allowed size is ${Math.round(MAX_IMPORT_FILE_BYTES / 1024 / 1024)} MB. ` +
+        `Please reduce the number of rows or split the file into smaller batches.`
+      );
+      setShowImportDialog(true);
+      return;
+    }
     setImportFile(file);
     if (!importBatchName) {
       setImportBatchName(file.name.replace(/\.(xlsx|xls)$/i, ""));
     }
     setShowImportDialog(true);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const runImport = async () => {
@@ -162,10 +171,14 @@ export function RateCatalog({ isAdmin }: Props) {
       form.append("batchType", importBatchType);
       const res = await fetch("/api/rates/import", { method: "POST", body: form });
 
-      // Parse JSON safely — server may return HTML on 502/session-expiry
+      // Parse JSON safely — server may return HTML on 502/413 (nginx body-size limit) or session-expiry
       let data: unknown = {};
       try { data = await res.json(); } catch {
-        setImportError(`Server returned an unexpected response (HTTP ${res.status}). Please refresh the page and try again.`);
+        const hint =
+          res.status === 502 || res.status === 413
+            ? " The file may exceed the server\u2019s upload size limit. Try a smaller file (under 5 MB) or split it into batches."
+            : " Please refresh the page and try again.";
+        setImportError(`Server returned an unexpected response (HTTP ${res.status}).${hint}`);
         return;
       }
 
@@ -185,8 +198,9 @@ export function RateCatalog({ isAdmin }: Props) {
         setImportFile(null);
         setImportBatchName("");
         loadBatches();
+        setPage(1);
+        setSearch("");
         setSelectedBatchId(ok.batchId ?? "all");
-        loadRates();
       }
     } catch (err) {
       setImportError(err instanceof TypeError

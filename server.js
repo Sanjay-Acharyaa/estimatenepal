@@ -339,6 +339,19 @@ app.prepare().then(async () => {
       socket.to(roomId).emit("shape:unlock", itemId);
     });
 
+    socket.on("shape:heartbeat", async ({ roomId, itemId }) => {
+      if (typeof roomId !== "string" || typeof itemId !== "string") return;
+      if (!joinedRooms.has(roomId)) return;
+      if (!redisState) return;
+      const key = `shlock:${roomId}:${itemId}`;
+      try {
+        const existing = await redisState.get(key);
+        if (!existing) return;
+        const parsed = JSON.parse(existing);
+        if (parsed.socketId === socket.id) await redisState.expire(key, 30);
+      } catch { /* ignore */ }
+    });
+
     // ─── Shape events ────────────────────────────────────────────────────────
     // Guard: only relay if this socket has actually joined the room.
     // joinedRooms is populated in join:room which already runs the tenant check,

@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,7 @@ import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 import { invalidateRatesCache } from "@/lib/rates";
 import { MAX_IMPORT_FILE_BYTES } from "@/lib/cache-constants";
 import ExcelJS from "exceljs";
+import { normalizeUnit } from "@/lib/unit-conversions";
 
 // POST /api/rates/import
 // Accepts: multipart/form-data, field "file" (.xlsx)
@@ -152,7 +154,7 @@ export async function POST(req: NextRequest) {
       if (!code) continue;
 
       const description = toStr(rowArr[1]);
-      const unit = toStr(rowArr[2]);
+      const unit = normalizeUnit(toStr(rowArr[2]));
       const baseRate = toNum(rowArr[3]);
       const fiscalYear = toStr(rowArr[4]) || `${new Date().getFullYear()}/${String(new Date().getFullYear() + 1).slice(2)}`;
 

@@ -7,6 +7,7 @@ import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors"
 import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { invalidateDudbcCaches } from "@/lib/rates";
 import ExcelJS from "exceljs";
+import { normalizeUnit } from "@/lib/unit-conversions";
 
 // POST /api/admin/rates/import
 // Super admin only. Accepts multipart/form-data with field "file" (.xlsx / .xls).
@@ -130,7 +131,7 @@ export async function POST(req: NextRequest) {
       if (rowNum <= headerRow) return;
       const code = cellStr(row, cols.code);
       const description = cellStr(row, cols.description);
-      const unit = cellStr(row, cols.unit);
+      const unit = normalizeUnit(cellStr(row, cols.unit));
       const baseRate = cellNum(row, cols.baseRate);
       const fy = (cols.fiscalYear ? cellStr(row, cols.fiscalYear) : "") || fiscalYear;
 
@@ -139,7 +140,7 @@ export async function POST(req: NextRequest) {
       if (!code) { errors.push(`Row ${rowNum}: Code is required.`); return; }
       if (!description) { errors.push(`Row ${rowNum}: Description is required.`); return; }
       if (!unit) { errors.push(`Row ${rowNum}: Unit is required.`); return; }
-      if (baseRate === null || baseRate < 0) { errors.push(`Row ${rowNum}: Base Rate must be = 0.`); return; }
+      if (baseRate === null || baseRate < 0) { errors.push(`Row ${rowNum}: Base Rate must be >= 0.`); return; }
 
       rows.push({ code, description, unit, baseRate, fiscalYear: fy });
     });

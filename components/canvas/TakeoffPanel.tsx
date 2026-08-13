@@ -764,7 +764,7 @@ export function TakeoffPanel({
           onClose={() => setDetailGroup(null)}
           onGroupUpdated={updated => {
             updateGroups(groups.map(g => g.id === updated.id ? { ...g, ...updated } : g));
-            setDetailGroup(null);
+            setDetailGroup(prev => prev?.id === updated.id ? { ...prev, ...updated } as TakeoffGroup : prev);
           }}
         />
       )}
@@ -827,6 +827,12 @@ export function TakeoffPanel({
                 <label htmlFor="tp-assembly-name" className="block text-xs text-gray-700 mb-1">Assembly Name</label>
                 <input id="tp-assembly-name" required value={saveAssemblyForm.name} onChange={e => setSaveAssemblyForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Standard RCC Frame" autoFocus className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label htmlFor="tp-assembly-desc" className="block text-xs text-gray-700 mb-1">Description (optional)</label>
+                <textarea id="tp-assembly-desc" value={saveAssemblyForm.description} onChange={e => setSaveAssemblyForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="e.g. Applicable scope, build type, or relevant standards" rows={2}
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
