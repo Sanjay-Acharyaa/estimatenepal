@@ -6,7 +6,7 @@ import { appendAuditLog } from "@/lib/audit";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { invalidateDudbcCaches } from "@/lib/rates";
-import ExcelJS from "exceljs";
+import * as XLSX from "xlsx";
 import { normalizeUnit } from "@/lib/unit-conversions";
 
 // POST /api/admin/rates/import
@@ -28,18 +28,13 @@ async function requireSuperAdmin(req: NextRequest) {
   return token;
 }
 
-function cellStr(row: ExcelJS.Row, col: number): string {
-  const val = row.getCell(col).value;
+function cellStr(val: unknown): string {
   if (val === null || val === undefined) return "";
-  if (typeof val === "object" && "richText" in (val as any))
-    return ((val as any).richText as any[]).map((r: any) => r.text).join("").trim();
-  if (typeof val === "object" && "result" in (val as any))
-    return String((val as any).result ?? "").trim();
+  if (typeof val === "string") return val.trim();
   return String(val).trim();
 }
 
-function cellNum(row: ExcelJS.Row, col: number): number | null {
-  const val = row.getCell(col).value;
+function cellNum(val: unknown): number | null {
   if (val === null || val === undefined) return null;
   const n = typeof val === "number" ? val : parseFloat(String(val).replace(/,/g, ""));
   return isNaN(n) ? null : n;
@@ -49,19 +44,17 @@ function normalize(s: string) {
   return s.toLowerCase().replace(/[\s._\-/]/g, "");
 }
 
+// All column indices are 0-based (SheetJS array positions)
 type ColMap = { code: number; description: number; unit: number; baseRate: number; fiscalYear: number | null };
 
-function findHeaderRow(ws: ExcelJS.Worksheet): { rowNum: number; cols: ColMap } | null {
-  let found: { rowNum: number; cols: ColMap } | null = null;
-
-  ws.eachRow((row, rowNum) => {
-    if (found || rowNum > 50) return;
-
+function findHeaderRow(aoa: unknown[][]): { rowIdx: number; cols: ColMap } | null {
+  for (let i = 0; i < Math.min(aoa.length, 50); i++) {
+    const row = aoa[i];
     const cells: Record<string, number> = {};
-    row.eachCell((cell, colNum) => {
-      const key = normalize(String(cell.value ?? ""));
-      if (key) cells[key] = colNum;
-    });
+    for (let c = 0; c < row.length; c++) {
+      const key = normalize(cellStr(row[c]));
+      if (key) cells[key] = c;
+    }
 
     const codeCol = cells["code"] ?? cells["itemcode"] ?? cells["sn"];
     const descCol = cells["description"] ?? cells["descriptionofwork"] ?? cells["desc"];
@@ -69,21 +62,20 @@ function findHeaderRow(ws: ExcelJS.Worksheet): { rowNum: number; cols: ColMap } 
     const rateCol = cells["baserate"] ?? cells["rate"] ?? cells["unitrate"];
     const fyCol = cells["fiscalyear"] ?? cells["fy"] ?? cells["year"];
 
-    if (codeCol && descCol) {
-      found = {
-        rowNum,
+    if (codeCol !== undefined && descCol !== undefined) {
+      return {
+        rowIdx: i,
         cols: {
           code: codeCol,
           description: descCol,
-          unit: unitCol ?? 3,
-          baseRate: rateCol ?? 4,
+          unit: unitCol ?? 2,
+          baseRate: rateCol ?? 3,
           fiscalYear: fyCol ?? null,
         },
       };
     }
-  });
-
-  return found;
+  }
+  return null;
 }
 
 type ParsedRow = {
@@ -114,36 +106,38 @@ export async function POST(req: NextRequest) {
     if (!fiscalYear)
       return apiError("VALIDATION_ERROR", "fiscalYear is required.", 400);
 
-    const arrayBuf = await file.arrayBuffer();
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(arrayBuf as any);
-    const ws = wb.worksheets[0];
-    if (!ws) return apiError("VALIDATION_ERROR", "Workbook has no sheets.", 400);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const wb = XLSX.read(buffer, { type: "buffer" });
+    if (!wb.SheetNames.length) return apiError("VALIDATION_ERROR", "Workbook has no sheets.", 400);
 
-    const header = findHeaderRow(ws);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const aoa: unknown[][] = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+
+    const header = findHeaderRow(aoa);
     if (!header) return apiError("VALIDATION_ERROR", "Could not find header row (need Code + Description columns).", 400);
 
-    const { rowNum: headerRow, cols } = header;
+    const { rowIdx: headerRowIdx, cols } = header;
     const rows: ParsedRow[] = [];
     const errors: string[] = [];
 
-    ws.eachRow((row, rowNum) => {
-      if (rowNum <= headerRow) return;
-      const code = cellStr(row, cols.code);
-      const description = cellStr(row, cols.description);
-      const unit = normalizeUnit(cellStr(row, cols.unit));
-      const baseRate = cellNum(row, cols.baseRate);
-      const fy = (cols.fiscalYear ? cellStr(row, cols.fiscalYear) : "") || fiscalYear;
+    for (let i = headerRowIdx + 1; i < aoa.length; i++) {
+      const row = aoa[i];
+      const rowNum = i + 1; // 1-indexed for error messages
+      const code = cellStr(row[cols.code]);
+      const description = cellStr(row[cols.description]);
+      const unit = normalizeUnit(cellStr(row[cols.unit]));
+      const baseRate = cellNum(row[cols.baseRate]);
+      const fy = (cols.fiscalYear !== null ? cellStr(row[cols.fiscalYear]) : "") || fiscalYear;
 
-      if (!code && !description) return; // blank row
+      if (!code && !description) continue; // blank row
 
-      if (!code) { errors.push(`Row ${rowNum}: Code is required.`); return; }
-      if (!description) { errors.push(`Row ${rowNum}: Description is required.`); return; }
-      if (!unit) { errors.push(`Row ${rowNum}: Unit is required.`); return; }
-      if (baseRate === null || baseRate < 0) { errors.push(`Row ${rowNum}: Base Rate must be >= 0.`); return; }
+      if (!code) { errors.push(`Row ${rowNum}: Code is required.`); continue; }
+      if (!description) { errors.push(`Row ${rowNum}: Description is required.`); continue; }
+      if (!unit) { errors.push(`Row ${rowNum}: Unit is required.`); continue; }
+      if (baseRate === null || baseRate < 0) { errors.push(`Row ${rowNum}: Base Rate must be >= 0.`); continue; }
 
       rows.push({ code, description, unit, baseRate, fiscalYear: fy });
-    });
+    }
 
     if (errors.length > 0)
       return NextResponse.json({ success: false, errors }, { status: 422 });
@@ -192,6 +186,7 @@ export async function POST(req: NextRequest) {
       userId: token!.id as string,
       event: "dudbc_rates.imported",
       resourceId: fiscalYear,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       meta: { fiscalYear, imported: toInsert.length, skipped } as any,
       ipAddress: ip,
     });

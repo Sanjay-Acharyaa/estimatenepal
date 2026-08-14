@@ -8,7 +8,7 @@ import { checkUploadRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, unauthorized, forbidden } from "@/lib/errors";
 import { invalidateRatesCache } from "@/lib/rates";
 import { MAX_IMPORT_FILE_BYTES } from "@/lib/cache-constants";
-import ExcelJS from "exceljs";
+import * as XLSX from "xlsx";
 import { normalizeUnit } from "@/lib/unit-conversions";
 
 // POST /api/rates/import
@@ -81,42 +81,15 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     _log("buffer ready");
 
-    const wb = new ExcelJS.Workbook();
-    // ExcelJS's .load() signature predates Node's generic Buffer<T>; cast to any
-    // so the structurally identical newer Buffer<ArrayBufferLike> is accepted.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await wb.xlsx.load(buffer as any);
+    const wb = XLSX.read(buffer, { type: "buffer" });
     _log("workbook loaded");
 
-    const ws = wb.worksheets[0];
-    if (!ws) {
+    if (!wb.SheetNames.length) {
       return NextResponse.json({ error: { message: "File has no worksheets." } }, { status: 400 });
     }
 
-    // Build array-of-arrays matching the shape SheetJS produced:
-    // each row is an array of cell values as strings (empty string for missing cells).
-    const aoa: unknown[][] = [];
-    ws.eachRow({ includeEmpty: false }, (row) => {
-      const arr: unknown[] = [];
-      const cellCount = typeof row.cellCount === "number" ? row.cellCount : 10;
-      for (let c = 1; c <= Math.max(cellCount, 5); c++) {
-        const cell = row.getCell(c);
-        let val: unknown = "";
-        if (cell.value !== null && cell.value !== undefined) {
-          if (typeof cell.value === "object" && "result" in (cell.value as object)) {
-            // Formula cell — use the cached result
-            val = (cell.value as ExcelJS.CellFormulaValue).result ?? "";
-          } else if (typeof cell.value === "object" && "richText" in (cell.value as object)) {
-            // Rich text cell — join all runs into a plain string.
-            val = (cell.value as ExcelJS.CellRichTextValue).richText.map(rt => rt.text).join("") || "";
-          } else {
-            val = cell.value;
-          }
-        }
-        arr.push(val);
-      }
-      aoa.push(arr);
-    });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const aoa: unknown[][] = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
     _log(`sheet parsed, aoa=${aoa.length}`);
 
     interface ParsedRow { code: string; description: string; unit: string; baseRate: number; fiscalYear: string; rowNum: number; }
