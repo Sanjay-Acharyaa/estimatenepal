@@ -45,6 +45,7 @@ type Props = {
   allDrawings: { id: string; fileName: string; folderId?: string | null; folderName?: string }[];
   currentUser: { id: string; name: string };
   isPricingLocked?: boolean;
+  unitSystem?: string;
 };
 
 type ActiveUser = { socketId: string; userId: string; name: string; initials: string };
@@ -90,7 +91,29 @@ function shapeCrossesZones(points: Point[], zones: ScaleZone[]): boolean {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function DrawingCanvas({ projectId, drawing, initialGroups, initialDisciplines, allDrawings, currentUser, isPricingLocked = false }: Props) {
+export function DrawingCanvas({ projectId, drawing, initialGroups, initialDisciplines, allDrawings, currentUser, isPricingLocked = false, unitSystem = "IMPERIAL" }: Props) {
+  const isMetricProject = unitSystem === "METRIC";
+
+  // Display helpers — convert drawing-native units to the project's preferred unit system.
+  // drawingUnit is the scaleUnit of the page or zone ("ft" or "m").
+  function displayLen(realValue: number, drawingUnit: string): string {
+    if (drawingUnit === "ft" && isMetricProject) return `${(realValue * 0.3048).toFixed(2)} m`;
+    if (drawingUnit === "ft") return ftToFeetIn(realValue);
+    return `${realValue.toFixed(2)} m`;
+  }
+  function displayArea(sqValue: number, drawingUnit: string): string {
+    if (drawingUnit === "ft" && isMetricProject) return `${(sqValue / 10.7639104).toFixed(2)} sq m`;
+    if (drawingUnit === "ft") return `${sqValue.toFixed(2)} sq ft`;
+    return `${sqValue.toFixed(2)} sq m`;
+  }
+  function displayQty(qty: number, unit: string): { qty: number; unit: string } {
+    if (!isMetricProject) return { qty, unit };
+    if (unit === "sq ft") return { qty: qty / 10.7639104, unit: "sq m" };
+    if (unit === "cu ft") return { qty: qty / 35.314667, unit: "cu m" };
+    if (unit === "ft") return { qty: qty * 0.3048, unit: "m" };
+    return { qty, unit };
+  }
+
   // PDF state
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [pdfImage, setPdfImage] = useState<HTMLImageElement | null>(null);
@@ -1905,21 +1928,23 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     calibAnchor.current = null;
   }
 
-  function handleApplyCommon(scaleFtPerPx: number) {
-    // Common presets are defined in ft/px. When the page's current unit is not "ft"
-    // (default is "m"), convert so shapes drawn with this calibration measure in metres.
-    if (currentPage.scaleUnit === "ft") {
-      saveScale(scaleFtPerPx, "ft");
-    } else {
-      saveScale(scaleFtPerPx * 0.3048, "m");
-    }
+  function handleApplyCommon(scaleValue: number) {
+    // DrawingScalePanel sends ft/px for imperial presets, m/px for metric presets.
+    // Save with the unit that matches the project so downstream areaUnit() produces the right string.
+    saveScale(scaleValue, isMetricProject ? "m" : "ft");
   }
   function handleApplyManual(realFt: number) {
     if (!calibLine) return;
     const dx = calibLine.x2 - calibLine.x1;
     const dy = calibLine.y2 - calibLine.y1;
     const pxLen = Math.sqrt(dx * dx + dy * dy);
-    saveScale(computeScale(pxLen, realFt), "ft");
+    if (isMetricProject) {
+      // DrawingScalePanel converts meters → feet before calling here; convert back to get m/px.
+      const realM = realFt * 0.3048;
+      saveScale(computeScale(pxLen, realM), "m");
+    } else {
+      saveScale(computeScale(pxLen, realFt), "ft");
+    }
   }
 
   // ─── Zone save ────────────────────────────────────────────────────────
@@ -2137,7 +2162,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
       totalPx += Math.sqrt(dx * dx + dy * dy);
     }
     const real = totalPx * sr.scale;
-    return sr.scaleUnit === "ft" ? ftToFeetIn(real) : `${real.toFixed(2)} ${sr.scaleUnit}`;
+    return displayLen(real, sr.scaleUnit);
   }
 
   function previewArea(rect: { x: number; y: number; width: number; height: number }): string {
@@ -2148,8 +2173,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
     const sr = boundingBoxWeightedScale(corners, currentPage.scale, currentPage.scaleUnit, currentPage.scaleZones, "RECTANGLE");
     if (!sr) return "";
     const area = rect.width * rect.height * sr.scale * sr.scale;
-    const unit = sr.scaleUnit === "ft" ? "sq ft" : "sq m";
-    return `${area.toFixed(2)} ${unit}`;
+    return displayArea(area, sr.scaleUnit);
   }
 
   // ─── Compute group totals (volume-aware, filtered by method) ─────────
@@ -2267,6 +2291,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
             allPageGroupTotals={allPageGroupTotals}
             sidebarWidth={isMobile ? Math.min(sidebarWidth, 320) : sidebarWidth}
             scaleUnit={currentPage?.scaleUnit ?? "ft"}
+            projectUnitSystem={unitSystem}
             onRefreshItems={() => { refreshItems(); refreshAllPageTotals(); refreshDisciplineTotals(); }}
             onItemsAppended={appendCopiedItems}
           />
@@ -2544,7 +2569,11 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
               );
             })()}
             {currentPage.scale
-              ? <span className="text-gray-500">Scale: <span className="text-gray-300">{scaleLabel(currentPage.scale, currentPage.scaleUnit)}</span></span>
+              ? <span className="text-gray-500">Scale: <span className="text-gray-300">{
+                isMetricProject && currentPage.scaleUnit === "ft"
+                  ? scaleLabel(currentPage.scale * 0.3048, "m")
+                  : scaleLabel(currentPage.scale, currentPage.scaleUnit)
+              }</span></span>
               : <span className="text-yellow-500">No scale set</span>}
 
             {/* Connection status — only show when disconnected */}
@@ -2674,7 +2703,8 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
                   // Use live pts during node drag, otherwise use stored pts
                   const pts = nodeEditState?.itemId === item.id ? nodeEditState.pts : item.toolData.points;
                   const { qty: _lqQty, unit: _lqUnit } = liveQty(item, groupDef);
-                  const qtyText = `${_lqUnit === "each" ? Math.round(_lqQty) : _lqQty.toFixed(2)} ${_lqUnit}`;
+                  const { qty: _dQty, unit: _dUnit } = displayQty(_lqQty, _lqUnit);
+                  const qtyText = `${_dUnit === "each" ? Math.round(_dQty) : _dQty.toFixed(2)} ${_dUnit}`;
                   // Draggable node circles — only for single selection (multi-select disables node drag)
                   const showNodes = mode === "select" && isSelected && !isLocked && selectedItemIds.size === 1;
                   const draggableNodes = showNodes ? pts.map((p, nodeIdx) => (
@@ -2861,7 +2891,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
                       const dx = e2.x - s.x, dy = e2.y - s.y;
                       const pxLen = Math.sqrt(dx * dx + dy * dy);
                       const lbl = currentPage.scale
-                        ? (currentPage.scaleUnit === "ft" ? ftToFeetIn(pxLen * currentPage.scale) : `${(pxLen * currentPage.scale).toFixed(2)} ${currentPage.scaleUnit}`)
+                        ? displayLen(pxLen * currentPage.scale, currentPage.scaleUnit)
                         : `${pxLen.toFixed(0)} px`;
                       const mx = (s.x + e2.x) / 2, my = (s.y + e2.y) / 2;
                       const isSel = selectedMeasurementIds.has(m.id);
@@ -2939,7 +2969,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
                       const dx = end.x - measureAnchor.x, dy = end.y - measureAnchor.y;
                       const pxLen = Math.sqrt(dx * dx + dy * dy);
                       const lbl = currentPage.scale
-                        ? (currentPage.scaleUnit === "ft" ? ftToFeetIn(pxLen * currentPage.scale) : `${(pxLen * currentPage.scale).toFixed(2)} ${currentPage.scaleUnit}`)
+                        ? displayLen(pxLen * currentPage.scale, currentPage.scaleUnit)
                         : `${pxLen.toFixed(0)} px`;
                       const mx = (measureAnchor.x + end.x) / 2, my = (measureAnchor.y + end.y) / 2;
                       return (
@@ -3006,7 +3036,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
                         fill={col + "22"} dash={[6 / scale, 3 / scale]} />
                       <Circle x={cx} y={cy} radius={4 / scale} fill={col} />
                       <Text x={cx + r + 4 / scale} y={cy - 14 / scale}
-                        text={currentPage.scale ? `r = ${(r * currentPage.scale).toFixed(2)} ${currentPage.scaleUnit}` : ""}
+                        text={currentPage.scale ? `r = ${displayLen(r * currentPage.scale, currentPage.scaleUnit)}` : ""}
                         fontSize={11 / scale} fill="#60A5FA" />
                     </Group>
                   );
@@ -3236,7 +3266,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
                   ? Math.sqrt((calibLine.x2 - calibLine.x1) ** 2 + (calibLine.y2 - calibLine.y1) ** 2)
                   : null
               }
-              currentUnit={currentPage.scaleUnit}
+              currentUnit={isMetricProject ? "m" : "ft"}
               onSubModeChange={handleCalibPanelModeChange}
               onApplyCommon={handleApplyCommon}
               onApplyManual={handleApplyManual}
@@ -3247,7 +3277,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
           {/* Zone panel */}
           {showZonePanel && zoneRect && (
             <ScaleZonePanel
-              defaultUnit={currentPage.scaleUnit || "m"}
+              defaultUnit={isMetricProject ? "m" : "ft"}
               defaultScale={currentPage.scale ?? undefined}
               onSave={handleZoneSaved}
               onCancel={() => { setShowZonePanel(false); setZoneRect(null); setMode("select"); }}

@@ -47,6 +47,7 @@ type Props = {
   allPageGroupTotals?: Record<string, { rawQty: number; unit: string; count: number }>;
   sidebarWidth?: number;
   scaleUnit?: string;
+  projectUnitSystem?: string;
   onRefreshItems?: () => void;
   onItemsAppended?: (items: unknown[]) => void;
 };
@@ -121,6 +122,17 @@ function wallAreaDisplay(group: TakeoffGroup, rawPerim: number, rawUnit: string)
   return { qty: areaSqM, unit: "sq m" };
 }
 
+// Converts a display {qty, unit} from the drawing's native unit to the project's unit system.
+// Applied only when the drawing is ft-calibrated but the project expects metric output.
+// Exact-string matches only so hint strings like "ft (set spacing)" pass through unchanged.
+function convertToProjectUnit(qty: number, unit: string, isMetric: boolean): { qty: number; unit: string } {
+  if (!isMetric) return { qty, unit };
+  if (unit === "sq ft") return { qty: qty / 10.7639104, unit: "sq m" };
+  if (unit === "cu ft") return { qty: qty / 35.314667, unit: "cu m" };
+  if (unit === "ft")    return { qty: qty * 0.3048, unit: "m" };
+  return { qty, unit };
+}
+
 function EyeOpen() {
   return (
     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -153,8 +165,9 @@ function GripIcon() {
 export function TakeoffPanel({
   projectId, initialGroups, allDrawings, disciplines,
   selectedGroupId, activeDisciplineId, onSelectGroup, onGroupsChange,
-  groupTotals = {}, liveItemCounts = {}, allPageGroupTotals = {}, sidebarWidth = 224, scaleUnit = "ft", onRefreshItems, onItemsAppended,
+  groupTotals = {}, liveItemCounts = {}, allPageGroupTotals = {}, sidebarWidth = 224, scaleUnit = "ft", projectUnitSystem, onRefreshItems, onItemsAppended,
 }: Props) {
+  const isMetricDisplay = projectUnitSystem === "METRIC";
   const [groups, setGroups] = useState<TakeoffGroup[]>(initialGroups);
 
   // Sync internal groups when the parent pushes a server-refreshed list (e.g. after refreshGroups()).
@@ -661,13 +674,14 @@ export function TakeoffPanel({
                             {allPageGroupTotals[layer.id] ? (() => {
                               const raw = allPageGroupTotals[layer.id].rawQty;
                               const storedUnit = allPageGroupTotals[layer.id].unit;
-                              const { qty, unit } = layer.type === "VOLUME"
+                              const computed = layer.type === "VOLUME"
                                 ? volumeDisplay(layer, raw, storedUnit)
                                 : layer.type === "COUNT_BY_DISTANCE"
                                 ? countByDistanceDisplay(layer, raw, storedUnit)
                                 : layer.type === "VERTICAL_WALL_AREA"
                                 ? wallAreaDisplay(layer, raw, storedUnit)
                                 : { qty: raw * layer.multiplier, unit: allPageGroupTotals[layer.id].unit.replace(" (set spacing)", "").replace(" (set height)", "").replace(" (set breadth+height)", "").replace(" (set wall height)", "") };
+                              const { qty, unit } = convertToProjectUnit(computed.qty, computed.unit, isMetricDisplay);
                               return (
                                 <p className="text-xs text-blue-400 font-medium truncate" title="All pages total">
                                   {unit === "each" ? Math.round(qty) : qty.toFixed(2)} {unit}

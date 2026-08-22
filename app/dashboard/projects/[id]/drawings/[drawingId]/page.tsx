@@ -21,7 +21,7 @@ export default async function DrawingViewerPage({
 
   const project = await prisma.project.findUnique({
     where: { id: params.id },
-    select: { id: true, name: true, orgId: true, isPricingLocked: true },
+    select: { id: true, name: true, orgId: true, isPricingLocked: true, unitSystem: true },
   });
 
   if (!project || project.orgId !== session.user.orgId) notFound();
@@ -126,6 +126,7 @@ export default async function DrawingViewerPage({
             fileName: d.fileName,
           }))}
           isPricingLocked={project.isPricingLocked}
+          unitSystem={project.unitSystem}
           currentUser={{ id: session.user.id, name: session.user.name ?? "Unknown" }}
         />
       </div>
