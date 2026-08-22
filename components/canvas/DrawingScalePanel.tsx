@@ -1,56 +1,92 @@
 "use client";
 
 import { useState } from "react";
-import { COMMON_SCALES, presetToFtPerPx, type CommonScalePreset } from "@/lib/scale";
+import {
+  COMMON_SCALES,
+  METRIC_SCALES,
+  presetToFtPerPx,
+  presetToMPerPx,
+  type CommonScalePreset,
+  type MetricScalePreset,
+} from "@/lib/scale";
 
 type Props = {
   /** Non-null once user has drawn a manual reference line */
   pixelLength: number | null;
+  /** "m" for metric projects, "ft" for imperial — drives which presets and inputs to show */
   currentUnit: string;
   /** Fired when user switches between Common / Manual so parent can gate line drawing */
   onSubModeChange: (mode: "common" | "manual") => void;
-  /** Called for common scale — scale is ft/px; the handler converts to the page unit if needed */
-  onApplyCommon: (scaleFtPerPx: number) => void;
-  /** Called for manual calibration — realFt is the real-world length in feet */
+  /**
+   * Called for common scale.
+   * For imperial: value is ft/px. For metric: value is m/px.
+   * The parent applies it with the page's current scaleUnit.
+   */
+  onApplyCommon: (scale: number) => void;
+  /** Called for manual calibration — realFt is the real-world length in feet (always feet internally) */
   onApplyManual: (realFt: number) => void;
   onCancel: () => void;
 };
 
-const DEFAULT_PRESET = COMMON_SCALES.find((s) => s.label === '1/8" = 1\'') ?? COMMON_SCALES[5];
-const GROUPS: Array<"Architectural" | "Civil"> = ["Architectural", "Civil"];
+const DEFAULT_IMPERIAL = COMMON_SCALES.find((s) => s.label === '1/8" = 1\'') ?? COMMON_SCALES[5];
+const DEFAULT_METRIC = METRIC_SCALES.find((s) => s.label === "1:100") ?? METRIC_SCALES[3];
+const IMPERIAL_GROUPS: Array<"Architectural" | "Civil"> = ["Architectural", "Civil"];
 
 export function DrawingScalePanel({
   pixelLength,
+  currentUnit,
   onSubModeChange,
   onApplyCommon,
   onApplyManual,
   onCancel,
 }: Props) {
+  const isMetric = currentUnit === "m";
   const [mode, setMode] = useState<"common" | "manual">("common");
+
+  // Imperial state
+  const [imperialPreset, setImperialPreset] = useState<CommonScalePreset>(DEFAULT_IMPERIAL);
+  const [feet, setFeet] = useState("");
+  const [inches, setInches] = useState("");
+
+  // Metric state
+  const [metricPreset, setMetricPreset] = useState<MetricScalePreset>(DEFAULT_METRIC);
+  const [meters, setMeters] = useState("");
 
   function switchMode(m: "common" | "manual") {
     setMode(m);
     onSubModeChange(m);
   }
-  const [preset, setPreset] = useState<CommonScalePreset>(DEFAULT_PRESET);
-  const [feet, setFeet] = useState("");
-  const [inches, setInches] = useState("");
+
   const manualReady =
     mode === "manual" &&
     pixelLength !== null &&
-    (parseFloat(feet) > 0 || parseFloat(inches) > 0);
+    (isMetric
+      ? parseFloat(meters) > 0
+      : parseFloat(feet) > 0 || parseFloat(inches) > 0);
 
   const canApply = mode === "common" || manualReady;
 
   function handleApply() {
     if (mode === "common") {
-      onApplyCommon(presetToFtPerPx(preset));
+      if (isMetric) {
+        onApplyCommon(presetToMPerPx(metricPreset.ratio));
+      } else {
+        onApplyCommon(presetToFtPerPx(imperialPreset));
+      }
     } else {
-      const ft = parseFloat(feet) || 0;
-      const ins = parseFloat(inches) || 0;
-      const totalFt = ft + ins / 12;
-      if (totalFt <= 0 || pixelLength === null) return;
-      onApplyManual(totalFt);
+      if (pixelLength === null) return;
+      if (isMetric) {
+        const m = parseFloat(meters);
+        if (m <= 0) return;
+        // Convert meters to feet for internal storage — canonical storage is always feet
+        onApplyManual(m / 0.3048);
+      } else {
+        const ft = parseFloat(feet) || 0;
+        const ins = parseFloat(inches) || 0;
+        const totalFt = ft + ins / 12;
+        if (totalFt <= 0) return;
+        onApplyManual(totalFt);
+      }
     }
   }
 
@@ -71,23 +107,41 @@ export function DrawingScalePanel({
 
       {mode === "common" && (
         <div className="ml-5 mb-3">
-          <select
-            value={preset.label}
-            onChange={(e) =>
-              setPreset(COMMON_SCALES.find((s) => s.label === e.target.value)!)
-            }
-            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {GROUPS.map((group) => (
-              <optgroup key={group} label={group}>
-                {COMMON_SCALES.filter((s) => s.group === group).map((s) => (
+          {isMetric ? (
+            <select
+              value={metricPreset.label}
+              onChange={(e) =>
+                setMetricPreset(METRIC_SCALES.find((s) => s.label === e.target.value)!)
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <optgroup label="Metric">
+                {METRIC_SCALES.map((s) => (
                   <option key={s.label} value={s.label}>
                     {s.label}
                   </option>
                 ))}
               </optgroup>
-            ))}
-          </select>
+            </select>
+          ) : (
+            <select
+              value={imperialPreset.label}
+              onChange={(e) =>
+                setImperialPreset(COMMON_SCALES.find((s) => s.label === e.target.value)!)
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {IMPERIAL_GROUPS.map((group) => (
+                <optgroup key={group} label={group}>
+                  {COMMON_SCALES.filter((s) => s.group === group).map((s) => (
+                    <option key={s.label} value={s.label}>
+                      {s.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
@@ -113,35 +167,53 @@ export function DrawingScalePanel({
               <p className="text-xs text-green-700 bg-green-50 border border-green-200 p-2 rounded-lg">
                 Line: <strong>{Math.round(pixelLength)} px</strong> — enter its real-world length
               </p>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label htmlFor="dsp-feet" className="block text-xs text-gray-700 mb-0.5">Feet</label>
+              {isMetric ? (
+                <div>
+                  <label htmlFor="dsp-meters" className="block text-xs text-gray-700 mb-0.5">
+                    Meters
+                  </label>
                   <input
-                    id="dsp-feet"
+                    id="dsp-meters"
                     type="number"
                     min="0"
-                    step="1"
-                    value={feet}
-                    onChange={(e) => setFeet(e.target.value)}
-                    placeholder="0"
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label htmlFor="dsp-inches" className="block text-xs text-gray-700 mb-0.5">Inches</label>
-                  <input
-                    id="dsp-inches"
-                    type="number"
-                    min="0"
-                    max="11.99"
                     step="0.01"
-                    value={inches}
-                    onChange={(e) => setInches(e.target.value)}
-                    placeholder="0"
+                    value={meters}
+                    onChange={(e) => setMeters(e.target.value)}
+                    placeholder="e.g. 5.0"
                     className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
                 </div>
-              </div>
+              ) : (
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label htmlFor="dsp-feet" className="block text-xs text-gray-700 mb-0.5">Feet</label>
+                    <input
+                      id="dsp-feet"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={feet}
+                      onChange={(e) => setFeet(e.target.value)}
+                      placeholder="0"
+                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label htmlFor="dsp-inches" className="block text-xs text-gray-700 mb-0.5">Inches</label>
+                    <input
+                      id="dsp-inches"
+                      type="number"
+                      min="0"
+                      max="11.99"
+                      step="0.01"
+                      value={inches}
+                      onChange={(e) => setInches(e.target.value)}
+                      placeholder="0"
+                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

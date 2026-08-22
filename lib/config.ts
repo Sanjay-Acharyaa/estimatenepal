@@ -39,6 +39,8 @@ export const CONFIG_DEFAULTS: Record<string, string> = {
   registration_enabled: "true",
   // Announcements
   site_announcement: "",
+  // Integration
+  bidding_url: "",
 };
 
 // Human-readable descriptions for the admin settings UI
@@ -75,6 +77,8 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   registration_enabled: "Allow new user registrations (true/false)",
   // Announcements
   site_announcement: "Banner shown to all logged-in users on every dashboard page (empty = hidden)",
+  // Integration
+  bidding_url: "Full URL of the Bidding platform (e.g. https://bidding.estimatenepal.com) — used for cross-app navigation and SSO handshake",
 };
 
 export async function getConfig(key: string): Promise<string> {

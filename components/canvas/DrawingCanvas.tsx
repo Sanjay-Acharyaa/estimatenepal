@@ -2266,6 +2266,7 @@ export function DrawingCanvas({ projectId, drawing, initialGroups, initialDiscip
             liveItemCounts={liveItemCounts}
             allPageGroupTotals={allPageGroupTotals}
             sidebarWidth={isMobile ? Math.min(sidebarWidth, 320) : sidebarWidth}
+            scaleUnit={currentPage?.scaleUnit ?? "ft"}
             onRefreshItems={() => { refreshItems(); refreshAllPageTotals(); refreshDisciplineTotals(); }}
             onItemsAppended={appendCopiedItems}
           />

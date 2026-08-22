@@ -86,6 +86,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const { fileName, fileKey, pageCount, fileSizeBytes, revisionNumber, parentDrawingId, folderId } = parsed.data;
 
+    // Derive scaleUnit from the project's unit system so new pages start correctly calibrated.
+    // Internal storage is always feet — this only sets the display/compute unit for each page.
+    const defaultScaleUnit = project.unitSystem === "METRIC" ? "m" : "ft";
+
     // Ensure fileKey belongs to this org/project to prevent cross-tenant file linking
     const expectedPrefix = `drawings/${project.orgId}/${params.id}/`;
     if (!fileKey.startsWith(expectedPrefix)) {
@@ -123,6 +127,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           create: Array.from({ length: pageCount }, (_, i) => ({
             pageNumber: i + 1,
             label: `Page ${i + 1}`,
+            scaleUnit: defaultScaleUnit,
           })),
         },
       };
@@ -153,6 +158,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             create: Array.from({ length: pageCount }, (_, i) => ({
               pageNumber: i + 1,
               label: `Page ${i + 1}`,
+              scaleUnit: defaultScaleUnit,
             })),
           },
         },

@@ -22,30 +22,32 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showResend, setShowResend] = useState(false);
-  const [resendEmail, setResendEmail] = useState("");
-  const [resendMsg, setResendMsg] = useState("");
-  const [resendLoading, setResendLoading] = useState(false);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
 
   const verified = params.get("verified");
   const couponRedeemed = params.get("coupon") === "redeemed";
   const rawCallback = params.get("callbackUrl") ?? "";
   const callbackUrl = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/dashboard";
 
-  async function handleResend(e: React.FormEvent) {
-    e.preventDefault();
-    setResendLoading(true);
-    await fetch("/api/auth/resend-verification", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: resendEmail }),
-    });
-    setResendLoading(false);
-    setResendMsg("If this email is registered and unverified, a new verification link has been sent.");
+  async function handleResend() {
+    setResendState("sending");
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      // best-effort
+    }
+    setResendState("sent");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setShowResend(false);
+    setResendState("idle");
     setLoading(true);
     try {
       const timeout = new Promise<never>((_, reject) =>
@@ -59,7 +61,6 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
         if (res.error === "EMAIL_NOT_VERIFIED") {
           setError("Please verify your email before signing in. Check your inbox or resend the link below.");
           setShowResend(true);
-          setResendEmail(email);
         } else {
           setError("Incorrect email or password. If you forgot your password, use the 'Forgot password?' link above.");
           setShowResend(false);
@@ -270,23 +271,20 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
               {error}
             </div>
           )}
-          {showResend && !resendMsg && (
+          {showResend && (
             <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-              <p className="text-amber-800 mb-1 font-medium">Just registered and never received a verification email?</p>
-              <p className="text-amber-700 mb-2 text-xs">If your email is already verified, use &ldquo;Forgot password?&rdquo; instead.</p>
-              <form onSubmit={handleResend} className="flex gap-2">
-                <input type="email" required value={resendEmail} onChange={e => setResendEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="flex-1 border border-amber-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
-                <button type="submit" disabled={resendLoading}
-                  className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700 disabled:opacity-50 font-medium">
-                  {resendLoading ? "Sending…" : "Resend"}
-                </button>
-              </form>
+              {resendState === "sent" ? (
+                <p className="text-green-700 font-medium">Verification email sent — check your inbox.</p>
+              ) : (
+                <>
+                  <p className="text-amber-800 mb-2 font-medium">Didn&apos;t receive a verification email?</p>
+                  <button type="button" onClick={handleResend} disabled={resendState === "sending"}
+                    className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700 disabled:opacity-50 font-medium">
+                    {resendState === "sending" ? "Sending…" : "Resend verification email"}
+                  </button>
+                </>
+              )}
             </div>
-          )}
-          {resendMsg && (
-            <div role="status" className="mb-5 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{resendMsg}</div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>

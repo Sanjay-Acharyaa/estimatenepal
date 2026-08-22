@@ -252,7 +252,7 @@ model DrawingPage {
   pageNumber      Int
   label           String?
   scale           Float?
-  scaleUnit       String           @default("m")
+  scaleUnit       String           @default("ft")
   canvasJson      Json?
   annotationsJson Json?
   hasAnnotations  Boolean          @default(false)

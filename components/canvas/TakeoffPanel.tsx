@@ -46,6 +46,7 @@ type Props = {
   liveItemCounts?: Record<string, number>;
   allPageGroupTotals?: Record<string, { rawQty: number; unit: string; count: number }>;
   sidebarWidth?: number;
+  scaleUnit?: string;
   onRefreshItems?: () => void;
   onItemsAppended?: (items: unknown[]) => void;
 };
@@ -152,7 +153,7 @@ function GripIcon() {
 export function TakeoffPanel({
   projectId, initialGroups, allDrawings, disciplines,
   selectedGroupId, activeDisciplineId, onSelectGroup, onGroupsChange,
-  groupTotals = {}, liveItemCounts = {}, allPageGroupTotals = {}, sidebarWidth = 224, onRefreshItems, onItemsAppended,
+  groupTotals = {}, liveItemCounts = {}, allPageGroupTotals = {}, sidebarWidth = 224, scaleUnit = "ft", onRefreshItems, onItemsAppended,
 }: Props) {
   const [groups, setGroups] = useState<TakeoffGroup[]>(initialGroups);
 
@@ -761,6 +762,7 @@ export function TakeoffPanel({
           refreshKey={liveItemCounts?.[detailGroup.id] ?? 0}
           thisPageTotal={groupTotals?.[detailGroup.id]}
           sidebarWidth={sidebarWidth}
+          scaleUnit={scaleUnit}
           onClose={() => setDetailGroup(null)}
           onGroupUpdated={updated => {
             updateGroups(groups.map(g => g.id === updated.id ? { ...g, ...updated } : g));

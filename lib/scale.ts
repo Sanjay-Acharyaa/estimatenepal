@@ -1,13 +1,20 @@
 /** pdfjs render scale used throughout — scale:2 means 72dpi × 2 = 144 px/inch */
 export const RENDER_DPI = 144;
 
-export type ScaleGroup = "Architectural" | "Civil";
+export type ScaleGroup = "Architectural" | "Civil" | "Metric";
 
 export type CommonScalePreset = {
   label: string;
-  group: ScaleGroup;
+  group: "Architectural" | "Civil";
   /** Real-world feet per drawing inch. e.g. "1/8\"=1'" → 1/(1/8)=8 */
   ftPerDrawingInch: number;
+};
+
+export type MetricScalePreset = {
+  label: string;
+  group: "Metric";
+  /** The N in 1:N — e.g. 100 for 1:100 */
+  ratio: number;
 };
 
 export const COMMON_SCALES: CommonScalePreset[] = [
@@ -42,6 +49,18 @@ export const COMMON_SCALES: CommonScalePreset[] = [
   { label: '1" = 1000\'',  group: "Civil", ftPerDrawingInch: 1000 },
 ];
 
+/** Standard metric drawing scales used on Nepal government drawings (A1/A0 sheets). */
+export const METRIC_SCALES: MetricScalePreset[] = [
+  { label: "1:20",   group: "Metric", ratio: 20 },
+  { label: "1:25",   group: "Metric", ratio: 25 },
+  { label: "1:50",   group: "Metric", ratio: 50 },
+  { label: "1:100",  group: "Metric", ratio: 100 },
+  { label: "1:200",  group: "Metric", ratio: 200 },
+  { label: "1:500",  group: "Metric", ratio: 500 },
+  { label: "1:1000", group: "Metric", ratio: 1000 },
+  { label: "1:2500", group: "Metric", ratio: 2500 },
+];
+
 /**
  * Convert a common scale preset to a stored scale value (ft/px).
  * At RENDER_DPI px/inch: 1 pixel = 1/RENDER_DPI drawing inches
@@ -51,13 +70,31 @@ export function presetToFtPerPx(preset: CommonScalePreset): number {
   return preset.ftPerDrawingInch / RENDER_DPI;
 }
 
-/** Return the common scale label for a stored ft/px scale, or null if none matches. */
+/**
+ * Convert a metric scale ratio (the N in 1:N) to a stored scale value (m/px).
+ * At RENDER_DPI=144: 1 px = 1/144 drawing inches = 25.4/144 mm
+ * For 1:N scale: 1 mm paper = N mm real = N/1000 m real
+ * scale_m_per_px = (N/1000) / (144/25.4) = N × 25.4 / (1000 × 144)
+ */
+export function presetToMPerPx(ratio: number): number {
+  return (ratio * 25.4) / (1000 * RENDER_DPI);
+}
+
+/** Return the scale label for a stored scale value, or null if none matches (±0.1% tolerance). */
 export function findPresetLabel(scale: number, scaleUnit: string): string | null {
-  if (scaleUnit !== "ft") return null;
-  const match = COMMON_SCALES.find(
-    (p) => Math.abs(presetToFtPerPx(p) - scale) < scale * 0.001
-  );
-  return match?.label ?? null;
+  if (scaleUnit === "ft") {
+    const match = COMMON_SCALES.find(
+      (p) => Math.abs(presetToFtPerPx(p) - scale) < scale * 0.001
+    );
+    return match?.label ?? null;
+  }
+  if (scaleUnit === "m") {
+    const match = METRIC_SCALES.find(
+      (p) => Math.abs(presetToMPerPx(p.ratio) - scale) < scale * 0.001
+    );
+    return match?.label ?? null;
+  }
+  return null;
 }
 
 /** Convert a pixel distance to a real-world measurement using the page scale. */

@@ -51,6 +51,8 @@ type Props = {
   refreshKey?: number;
   thisPageTotal?: { rawQty: number; unit: string; pageId?: string };
   sidebarWidth?: number;
+  /** Page scaleUnit — "m" for metric projects, "ft" for imperial. Drives input display. */
+  scaleUnit?: string;
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -63,7 +65,7 @@ function getNum(val: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onGroupUpdated, refreshKey, thisPageTotal, sidebarWidth = 224 }: Props) {
+export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onGroupUpdated, refreshKey, thisPageTotal, sidebarWidth = 224, scaleUnit = "ft" }: Props) {
   const [tab, setTab] = useState<"main" | "params" | "drawings">("main");
   const [detail, setDetail] = useState<Group | null>(null);
   const [saving, setSaving] = useState(false);
@@ -111,6 +113,21 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
   const initSpacing = (ap?.spacing as Record<string, unknown> | undefined) ?? {};
   const [spacingFt, setSpacingFt] = useState(String(getNum(initSpacing.ft)));
   const [spacingIn, setSpacingIn] = useState(String(getNum(initSpacing.in)));
+
+  // Metric decimal inputs — only rendered when scaleUnit === "m".
+  // Initialized by converting stored ft+in. Storage format stays { ft, in } always.
+  const [heightM, setHeightM] = useState(
+    () => ((getNum(initHeight.ft) + getNum(initHeight.in) / 12) * 0.3048).toFixed(3)
+  );
+  const [breadthM, setBreadthM] = useState(
+    () => ((getNum(initBreadth.ft) + getNum(initBreadth.in) / 12) * 0.3048).toFixed(3)
+  );
+  const [wallM, setWallM] = useState(
+    () => ((getNum(initWall.heightFt) + getNum(initWall.heightIn) / 12) * 0.3048).toFixed(3)
+  );
+  const [spacingM, setSpacingM] = useState(
+    () => ((getNum(initSpacing.ft) + getNum(initSpacing.in) / 12) * 0.3048).toFixed(3)
+  );
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/takeoff-groups/${group.id}`)
@@ -173,18 +190,36 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
 
     if (group.type === "VOLUME") {
       newParams.volumeMethod = volumeMethod;
-      newParams.height = { ft: parseFloat(heightFt) || 0, in: parseFloat(heightIn) || 0 };
-      if (volumeMethod === "lbh") {
-        newParams.breadth = { ft: parseFloat(breadthFt) || 0, in: parseFloat(breadthIn) || 0 };
+      if (isMetric) {
+        // Metric inputs: convert meters → feet for internal storage (canonical format is { ft, in })
+        newParams.height = { ft: (parseFloat(heightM) || 0) / 0.3048, in: 0 };
+        if (volumeMethod === "lbh") {
+          newParams.breadth = { ft: (parseFloat(breadthM) || 0) / 0.3048, in: 0 };
+        } else {
+          delete newParams.breadth;
+        }
       } else {
-        delete newParams.breadth;
+        newParams.height = { ft: parseFloat(heightFt) || 0, in: parseFloat(heightIn) || 0 };
+        if (volumeMethod === "lbh") {
+          newParams.breadth = { ft: parseFloat(breadthFt) || 0, in: parseFloat(breadthIn) || 0 };
+        } else {
+          delete newParams.breadth;
+        }
       }
     }
     if (group.type === "VERTICAL_WALL_AREA") {
-      newParams.wall = { enabled: true, heightFt: parseFloat(wallFt) || 0, heightIn: parseFloat(wallIn) || 0 };
+      if (isMetric) {
+        newParams.wall = { enabled: true, heightFt: (parseFloat(wallM) || 0) / 0.3048, heightIn: 0 };
+      } else {
+        newParams.wall = { enabled: true, heightFt: parseFloat(wallFt) || 0, heightIn: parseFloat(wallIn) || 0 };
+      }
     }
     if (group.type === "COUNT_BY_DISTANCE") {
-      newParams.spacing = { ft: parseFloat(spacingFt) || 0, in: parseFloat(spacingIn) || 0 };
+      if (isMetric) {
+        newParams.spacing = { ft: (parseFloat(spacingM) || 0) / 0.3048, in: 0 };
+      } else {
+        newParams.spacing = { ft: parseFloat(spacingFt) || 0, in: parseFloat(spacingIn) || 0 };
+      }
     }
 
     try {
@@ -221,10 +256,30 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
     return s + signed;
   }, 0) ?? 0;
   const currentMult = parseFloat(multiplier) || group.multiplier;
-  const currentH = (parseFloat(heightFt) || 0) + (parseFloat(heightIn) || 0) / 12;
-  const currentB = (parseFloat(breadthFt) || 0) + (parseFloat(breadthIn) || 0) / 12;
-  const currentSpacing = (parseFloat(spacingFt) || 0) + (parseFloat(spacingIn) || 0) / 12;
-  const currentWallH = (parseFloat(wallFt) || 0) + (parseFloat(wallIn) || 0) / 12;
+
+  const allPagesBaseUnit = detail?.items?.[0]?.unit
+    ?.replace(" (set height)", "").replace(" (set breadth+height)", "")
+    .replace(" (set spacing)", "").replace(" (set wall height)", "") ?? "";
+
+  // Unit labels for the drawing's native scale unit.
+  // When items exist, derive from the stored unit string. For empty groups fall back to scaleUnit prop.
+  const isDrawingFt = allPagesBaseUnit ? allPagesBaseUnit.includes("ft") : scaleUnit !== "m";
+  const isMetric = !isDrawingFt;
+
+  // All currentH/B/spacing/wallH values are in feet — formulas multiply by ftToUnit to get drawing unit.
+  // For metric inputs the user enters meters; divide by 0.3048 to get the equivalent feet for the formula.
+  const currentH = isMetric
+    ? (parseFloat(heightM) || 0) / 0.3048
+    : (parseFloat(heightFt) || 0) + (parseFloat(heightIn) || 0) / 12;
+  const currentB = isMetric
+    ? (parseFloat(breadthM) || 0) / 0.3048
+    : (parseFloat(breadthFt) || 0) + (parseFloat(breadthIn) || 0) / 12;
+  const currentSpacing = isMetric
+    ? (parseFloat(spacingM) || 0) / 0.3048
+    : (parseFloat(spacingFt) || 0) + (parseFloat(spacingIn) || 0) / 12;
+  const currentWallH = isMetric
+    ? (parseFloat(wallM) || 0) / 0.3048
+    : (parseFloat(wallFt) || 0) + (parseFloat(wallIn) || 0) / 12;
 
   function applyFormula(raw: number, baseUnit: string): { qty: number; unit: string } {
     // Params (height, breadth, spacing, wallH) are stored as ft+in; convert to drawing unit.
@@ -251,12 +306,6 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
     return { qty: raw * currentMult, unit: baseUnit };
   }
 
-  const allPagesBaseUnit = detail?.items?.[0]?.unit
-    ?.replace(" (set height)", "").replace(" (set breadth+height)", "")
-    .replace(" (set spacing)", "").replace(" (set wall height)", "") ?? "";
-
-  // Unit labels for the drawing's native scale unit (derived from first item).
-  const isDrawingFt = allPagesBaseUnit === "" || allPagesBaseUnit.includes("ft");
   const ftToUnit = isDrawingFt ? 1 : 0.3048;
   const lenUnit = isDrawingFt ? "ft" : "m";
   const sqUnit = isDrawingFt ? "sq ft" : "sq m";
@@ -613,18 +662,26 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     {volumeMethod === "lbh" ? "Height" : "Depth / Height"}
                   </label>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Feet</label>
-                      <input type="number" min="0" step="1" value={heightFt} onChange={e => setHeightFt(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                  {isMetric ? (
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Meters</label>
+                      <input type="number" min="0" step="0.01" value={heightM} onChange={e => setHeightM(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Inches</label>
-                      <input type="number" min="0" max="11" step="1" value={heightIn} onChange={e => setHeightIn(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Feet</label>
+                        <input type="number" min="0" step="1" value={heightFt} onChange={e => setHeightFt(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Inches</label>
+                        <input type="number" min="0" max="11" step="1" value={heightIn} onChange={e => setHeightIn(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {currentHInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentHInUnit.toFixed(3)} {lenUnit}</p>}
                 </div>
 
@@ -632,18 +689,26 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                 {volumeMethod === "lbh" && (
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Breadth / Width</label>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className="block text-xs text-gray-500 mb-1">Feet</label>
-                        <input type="number" min="0" step="1" value={breadthFt} onChange={e => setBreadthFt(e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                    {isMetric ? (
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Meters</label>
+                        <input type="number" min="0" step="0.01" value={breadthM} onChange={e => setBreadthM(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                       </div>
-                      <div className="flex-1">
-                        <label className="block text-xs text-gray-500 mb-1">Inches</label>
-                        <input type="number" min="0" max="11" step="1" value={breadthIn} onChange={e => setBreadthIn(e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                    ) : (
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">Feet</label>
+                          <input type="number" min="0" step="1" value={breadthFt} onChange={e => setBreadthFt(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">Inches</label>
+                          <input type="number" min="0" max="11" step="1" value={breadthIn} onChange={e => setBreadthIn(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                        </div>
                       </div>
-                    </div>
+                    )}
                     {currentBInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentBInUnit.toFixed(3)} {lenUnit}</p>}
                   </div>
                 )}
@@ -673,18 +738,26 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-2">Wall Height</label>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Feet</label>
-                      <input type="number" min="0" step="1" value={wallFt} onChange={e => setWallFt(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                  {isMetric ? (
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Meters</label>
+                      <input type="number" min="0" step="0.01" value={wallM} onChange={e => setWallM(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Inches</label>
-                      <input type="number" min="0" max="11" step="1" value={wallIn} onChange={e => setWallIn(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Feet</label>
+                        <input type="number" min="0" step="1" value={wallFt} onChange={e => setWallFt(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Inches</label>
+                        <input type="number" min="0" max="11" step="1" value={wallIn} onChange={e => setWallIn(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {currentWallHInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentWallHInUnit.toFixed(3)} {lenUnit}</p>}
                 </div>
                 {totalRaw > 0 && (
@@ -713,18 +786,26 @@ export function TakeoffGroupDetail({ group, projectId, allDrawings, onClose, onG
                     Item Spacing
                     <span className="text-gray-600 font-normal ml-1">(e.g. J-hooks every 4 ft)</span>
                   </label>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Feet</label>
-                      <input type="number" min="0" step="1" value={spacingFt} onChange={e => setSpacingFt(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                  {isMetric ? (
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Meters</label>
+                      <input type="number" min="0" step="0.01" value={spacingM} onChange={e => setSpacingM(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Inches</label>
-                      <input type="number" min="0" max="11" step="1" value={spacingIn} onChange={e => setSpacingIn(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Feet</label>
+                        <input type="number" min="0" step="1" value={spacingFt} onChange={e => setSpacingFt(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Inches</label>
+                        <input type="number" min="0" max="11" step="1" value={spacingIn} onChange={e => setSpacingIn(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {currentSpacingInUnit > 0 && <p className="text-xs text-blue-600 mt-1">= {currentSpacingInUnit.toFixed(3)} {lenUnit} per item</p>}
                 </div>
 
