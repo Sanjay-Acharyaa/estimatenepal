@@ -97,13 +97,17 @@ function volumeDisplay(group: TakeoffGroup, rawQty: number, rawUnit: string): { 
   return { qty: rawQty * h * group.multiplier, unit: scaleUnit === "ft" ? "cu ft" : "cu m" };
 }
 
-function countByDistanceDisplay(group: TakeoffGroup, rawLength: number, rawUnit: string): { qty: number; unit: string } {
+function countByDistanceDisplay(group: TakeoffGroup, rawLength: number, rawUnit: string, isMetricDisplay: boolean): { qty: number; unit: string } {
   // Server pre-computed per-item counts when spacing was configured (unit="each").
   // rawLength is already the count sum — just apply multiplier.
   if (rawUnit === "each" || rawUnit === "each|ft") {
     return { qty: rawLength * group.multiplier, unit: "each" };
   }
-  // Spacing not configured: rawLength is a raw length total; show hint until spacing is set.
+  // Spacing not configured: server normalises ft items to "m" to handle mixed-zone groups.
+  // For non-metric projects, convert back to ft so the hint reads correctly.
+  if (rawUnit === "m" && !isMetricDisplay) {
+    return { qty: (rawLength / 0.3048) * group.multiplier, unit: "ft (set spacing)" };
+  }
   const scaleUnit = rawUnit.includes("ft") ? "ft" : "m";
   return { qty: rawLength * group.multiplier, unit: `${scaleUnit} (set spacing)` };
 }
@@ -677,7 +681,7 @@ export function TakeoffPanel({
                               const computed = layer.type === "VOLUME"
                                 ? volumeDisplay(layer, raw, storedUnit)
                                 : layer.type === "COUNT_BY_DISTANCE"
-                                ? countByDistanceDisplay(layer, raw, storedUnit)
+                                ? countByDistanceDisplay(layer, raw, storedUnit, isMetricDisplay)
                                 : layer.type === "VERTICAL_WALL_AREA"
                                 ? wallAreaDisplay(layer, raw, storedUnit)
                                 : { qty: raw * layer.multiplier, unit: allPageGroupTotals[layer.id].unit.replace(" (set spacing)", "").replace(" (set height)", "").replace(" (set breadth+height)", "").replace(" (set wall height)", "") };
