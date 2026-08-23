@@ -116,7 +116,7 @@ function wallAreaDisplay(group: TakeoffGroup, rawPerim: number, rawUnit: string)
   // Normalise to metres for intermediate calculation, then convert back to match drawing unit.
   const perimM = isImperial ? rawPerim * 0.3048 : rawPerim;
   const wallHM = wallHFt * 0.3048;
-  if (!wallHM) return { qty: perimM * group.multiplier, unit: isImperial ? "ft (set wall height)" : "m (set wall height)" };
+  if (!wallHM) return { qty: rawPerim * group.multiplier, unit: isImperial ? "ft (set wall height)" : "m (set wall height)" };
   const areaSqM = perimM * wallHM * group.multiplier;
   if (isImperial) return { qty: areaSqM / (0.3048 * 0.3048), unit: "sq ft" };
   return { qty: areaSqM, unit: "sq m" };
