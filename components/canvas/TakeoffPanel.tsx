@@ -785,6 +785,7 @@ export function TakeoffPanel({
           onGroupUpdated={updated => {
             updateGroups(groups.map(g => g.id === updated.id ? { ...g, ...updated } : g));
             setDetailGroup(prev => prev?.id === updated.id ? { ...prev, ...updated } as TakeoffGroup : prev);
+            if (updated.type === "COUNT_BY_DISTANCE") onRefreshItems?.();
           }}
         />
       )}
