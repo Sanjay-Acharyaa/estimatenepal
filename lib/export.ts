@@ -435,7 +435,7 @@ export async function buildBOQExcel(
       const gm = grp.groupMultiplier;
       let totalQtyValue: number | { formula: string; result: number };
       if (firstItemRowNum !== null && lastItemRowNum !== null) {
-        totalQtyValue = { formula: groupQtyFormula(firstItemRowNum, lastItemRowNum, "G", gm, cf), result: safeTotal };
+        totalQtyValue = { formula: groupQtyFormula(firstItemRowNum, lastItemRowNum, "G", 1, cf), result: safeTotal };
       } else {
         totalQtyValue = safeTotal;
       }
@@ -594,7 +594,7 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
       const gmMB = grp.groupMultiplier;
       let mbQtyValue: number | { formula: string; result: number };
       if (mbFirstItemRow !== null && mbLastItemRow !== null) {
-        mbQtyValue = { formula: groupQtyFormula(mbFirstItemRow, mbLastItemRow, "G", gmMB, cfMB), result: safeTotalMB };
+        mbQtyValue = { formula: groupQtyFormula(mbFirstItemRow, mbLastItemRow, "G", 1, cfMB), result: safeTotalMB };
       } else {
         mbQtyValue = safeTotalMB;
       }
@@ -1011,7 +1011,7 @@ export async function buildGovtBOQExcel(boq: BOQDocument, meta: GovtBOQMeta): Pr
       const gmGovt = grp.groupMultiplier;
       let govtQtyValue: number | { formula: string; result: number };
       if (firstGovtItemRow !== null && lastGovtItemRow !== null) {
-        govtQtyValue = { formula: groupQtyFormula(firstGovtItemRow, lastGovtItemRow, "D", gmGovt, cfGovt), result: grp.totalQuantity };
+        govtQtyValue = { formula: groupQtyFormula(firstGovtItemRow, lastGovtItemRow, "D", 1, cfGovt), result: grp.totalQuantity };
       } else {
         // No items — originalQuantity already includes groupMultiplier; only cf remains
         govtQtyValue = cfGovt !== 1
