@@ -424,10 +424,19 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       if (!Number.isFinite(totalQuantity)) totalQuantity = 0;
       if (!Number.isFinite(originalQuantity)) originalQuantity = 0;
 
-      // VOLUME: items are displayed in ft in the MB rows (see items mapping above).
+      // VOLUME / VERTICAL_WALL_AREA: items are displayed in ft in the MB rows (see items mapping above).
       // Override conversionFactor so the Excel formula =SUM(G_items_ft)*cf converts correctly.
       // This does not change totalQuantity (already the correct final value); it only adjusts
       // originalQuantity and conversionFactor so the formula and Summary BOQ stay consistent.
+      if (layer.type === "VERTICAL_WALL_AREA" && rateItem && totalQuantity !== 0) {
+        const wH_ft = ap?.wall ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12 : 0;
+        const formulaUnit = wH_ft > 0 ? "sq ft" : "ft";
+        const ftCf = getConversionFactor(formulaUnit, rateItem.unit);
+        if (ftCf !== null && ftCf !== conversionFactor) {
+          conversionFactor = ftCf;
+          originalQuantity = ftCf !== 0 ? totalQuantity / ftCf : 0;
+        }
+      }
       if (layer.type === "VOLUME" && rateItem && totalQuantity !== 0) {
         const method = ap?.volumeMethod ?? "area_x_h";
         const hFt = ap?.height ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12 : 0;
@@ -496,14 +505,15 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             const wH_ft = ap?.wall != null
               ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12
               : null;
-            // Normalise perimeter and wall height to metres so MB row matches computeGroupTotal (H-01).
-            const toM = item.unit.includes("ft") ? 0.3048 : 1;
-            const wHM = wH_ft !== null ? wH_ft * 0.3048 : null;
-            mbLength = item.rawQuantity * toM; // unsigned perimeter in metres for L column
-            if (wHM !== null && wHM > 0) mbHeight = wHM;
-            // signedRaw carries deduction sign; MB multiplier sign is flipped at line 519
-            effectiveQty = wHM !== null ? signedRaw * toM * wHM * layer.multiplier : signedRaw * toM * layer.multiplier;
-            mbUnit = wHM !== null && wHM > 0 ? "sq m" : "m (set wall height)";
+            // Display perimeter and wall height in feet to match all other layer types.
+            // rawQuantity is in the drawing's scale unit; convert to feet when metric.
+            const isMetricItem = !item.unit.includes("ft");
+            const rawFt = isMetricItem ? item.rawQuantity / 0.3048 : item.rawQuantity;
+            mbLength = rawFt; // unsigned perimeter in feet for L column
+            if (wH_ft !== null && wH_ft > 0) mbHeight = wH_ft; // wall height already in feet
+            const signedRawFt = item.isNegative ? -rawFt : rawFt;
+            effectiveQty = wH_ft !== null ? signedRawFt * wH_ft * layer.multiplier : signedRawFt * layer.multiplier;
+            mbUnit = wH_ft !== null && wH_ft > 0 ? "sq ft" : "ft (set wall height)";
           } else if (layer.type === "VOLUME") {
             const method = ap?.volumeMethod ?? "area_x_h";
             // Always display L, B, H in feet so column headers match displayed values.
