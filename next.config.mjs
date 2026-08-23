@@ -1,4 +1,8 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -26,6 +30,10 @@ const nextConfig = {
       // marking it external forces Node.js native require() and fixes the hang.
       config.externals.push({ exceljs: "commonjs exceljs" });
     }
+    // Explicitly set @/ alias so it is always resolved correctly on both
+    // Windows (dev) and Linux (production) regardless of tsconfig auto-detection.
+    if (!config.resolve.alias) config.resolve.alias = {};
+    config.resolve.alias["@"] = path.resolve(__dirname);
     // pdf.js requires these to be aliased to false in non-browser environments
     config.resolve.alias.canvas = false;
     config.resolve.alias.encoding = false;
