@@ -420,9 +420,13 @@ export async function buildBOQExcel(
         iRow.getCell(6).numFmt = '#,##0.000';  // Height
         iRow.getCell(7).numFmt = '#,##0.000';  // Quantity
 
-        // Qty formula — C=No., D=Length, E=Breadth, F=Height; only factors present are included
+        // Qty formula — C=No., D=Length, E=Breadth, F=Height; only factors present are included.
+        // COUNT_BY_DISTANCE: col D holds the raw measured distance (traceability only) — the count
+        // in col G is pre-computed; =C*D would give distance, not count, so skip the formula.
         const rn = iRow.number;
-        const qtyFml = itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null);
+        const qtyFml = grp.type !== "COUNT_BY_DISTANCE"
+          ? itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null)
+          : null;
         if (qtyFml) iRow.getCell(7).value = { formula: qtyFml, result: item.quantity };
 
         if (firstItemRowNum === null) firstItemRowNum = rn;

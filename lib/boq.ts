@@ -577,11 +577,14 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             const spacingFt = sp ? safeNum(sp.ft) + safeNum(sp.in) / 12 : 0;
             const cbtFtToUnit = item.unit.includes("ft") ? 1 : 0.3048;
             const spacing = spacingFt * cbtFtToUnit;
+            const absRaw = Math.abs(signedRaw);
+            // Show the measured distance in col D for audit traceability.
+            mbLength = item.rawQuantity;
             if (spacing > 0) {
-              const count = signedRaw >= 0
-                ? Math.floor(signedRaw / spacing) + 1
-                : -(Math.floor(Math.abs(signedRaw) / spacing) + 1);
-              effectiveQty = count * layer.multiplier;
+              // Mirror the group-total formula: closed shapes don't add +1 (last post = first post).
+              const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
+              const cnt = Math.ceil(absRaw / spacing - 1e-9) + (closedShape ? 0 : 1);
+              effectiveQty = (signedRaw >= 0 ? cnt : -cnt) * layer.multiplier;
             } else {
               effectiveQty = signedRaw * layer.multiplier;
             }
@@ -601,7 +604,10 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             // the formula always produces a positive value and Excel recalculation flips
             // deductions to additions. COUNT/LINEAR/AREA items have no formula so the
             // negative sign lives in effectiveQty directly — their multiplier stays positive.
-            multiplier: (item.isNegative && mbLength !== null) ? -layer.multiplier : layer.multiplier,
+            // COUNT_BY_DISTANCE sets mbLength for display only — no =C*D formula is used, so the
+            // sign must stay in effectiveQty. All other dimension types use =C*D*… so negative
+            // deductions are carried through the multiplier (col C).
+            multiplier: (item.isNegative && mbLength !== null && layer.type !== "COUNT_BY_DISTANCE") ? -layer.multiplier : layer.multiplier,
             length: mbLength,
             breadth: mbBreadth,
             height: mbHeight,
