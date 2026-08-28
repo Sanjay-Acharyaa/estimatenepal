@@ -592,8 +592,14 @@ export async function buildMBExcel(boq: BOQDocument): Promise<Buffer> {
 
         // Qty formula: C=No., D=Length, E=Breadth, F=Height
         const rn = iRow.number;
-        const mbQtyFml = itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null);
-        if (mbQtyFml) iRow.getCell(7).value = { formula: mbQtyFml, result: item.quantity };
+        if (grp.type === "COUNT_BY_DISTANCE" && item.breadth != null) {
+          const offset = item.cbtOpenShape ? 1 : 0;
+          iRow.getCell(7).value = { formula: `=CEILING(D${rn}/E${rn}-0.000000001,1)+${offset}`, result: item.quantity };
+          iRow.getCell(5).note = "Spacing";
+        } else {
+          const mbQtyFml = itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null);
+          if (mbQtyFml) iRow.getCell(7).value = { formula: mbQtyFml, result: item.quantity };
+        }
 
         if (mbFirstItemRow === null) mbFirstItemRow = rn;
         mbLastItemRow = rn;
@@ -1584,8 +1590,14 @@ function addProcurementSheet(
         itemRow.getCell(8).alignment = { horizontal: "center", vertical: "middle" };
 
         // Qty formula: C=No., D=Length, E=Breadth, F=Height
-        const procItemFml = itemQtyFormula(rowNum, item.length != null, item.breadth != null, item.height != null);
-        if (procItemFml) itemRow.getCell(7).value = { formula: procItemFml, result: item.quantity };
+        if (grp.type === "COUNT_BY_DISTANCE" && item.breadth != null) {
+          const offset = item.cbtOpenShape ? 1 : 0;
+          itemRow.getCell(7).value = { formula: `=CEILING(D${rowNum}/E${rowNum}-0.000000001,1)+${offset}`, result: item.quantity };
+          itemRow.getCell(5).note = "Spacing";
+        } else {
+          const procItemFml = itemQtyFormula(rowNum, item.length != null, item.breadth != null, item.height != null);
+          if (procItemFml) itemRow.getCell(7).value = { formula: procItemFml, result: item.quantity };
+        }
 
         // Resource formulas — reference the Quantity cell (col G) in THIS row
         resources.forEach((res, i) => {
