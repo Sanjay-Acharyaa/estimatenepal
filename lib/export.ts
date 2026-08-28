@@ -421,13 +421,19 @@ export async function buildBOQExcel(
         iRow.getCell(7).numFmt = '#,##0.000';  // Quantity
 
         // Qty formula — C=No., D=Length, E=Breadth, F=Height; only factors present are included.
-        // COUNT_BY_DISTANCE: col D holds the raw measured distance (traceability only) — the count
-        // in col G is pre-computed; =C*D would give distance, not count, so skip the formula.
         const rn = iRow.number;
-        const qtyFml = grp.type !== "COUNT_BY_DISTANCE"
-          ? itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null)
-          : null;
-        if (qtyFml) iRow.getCell(7).value = { formula: qtyFml, result: item.quantity };
+        if (grp.type === "COUNT_BY_DISTANCE" && item.breadth != null) {
+          // Col D = measured distance, Col E = spacing.
+          // Formula: =CEILING(D/E - epsilon, 1) + {1 for open shapes, 0 for closed}.
+          // Matches the JS ceil(dist/spacing − 1e-9) + offset formula exactly.
+          const offset = item.cbtOpenShape ? 1 : 0;
+          const cbtFml = `=CEILING(D${rn}/E${rn}-0.000000001,1)+${offset}`;
+          iRow.getCell(7).value = { formula: cbtFml, result: item.quantity };
+          iRow.getCell(5).note = "Spacing";
+        } else {
+          const qtyFml = itemQtyFormula(rn, item.length != null, item.breadth != null, item.height != null);
+          if (qtyFml) iRow.getCell(7).value = { formula: qtyFml, result: item.quantity };
+        }
 
         if (firstItemRowNum === null) firstItemRowNum = rn;
         lastItemRowNum = rn;

@@ -15,6 +15,8 @@ export interface BOQItem {
   siteLocation: string | null;
   measuredDate: Date | null;
   notes: string | null;
+  /** COUNT_BY_DISTANCE only: true = open shape (line), false = closed (polygon/rectangle/circle). */
+  cbtOpenShape?: boolean;
 }
 
 export interface BOQGroup {
@@ -501,6 +503,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           let mbHeight: number | null = null;
           let effectiveQty: number;
           let mbUnit = item.unit; // overridden per branch when the stored unit is not the output unit
+          let cbtOpenShape: boolean | undefined;
           const signedRaw = item.isNegative ? -item.rawQuantity : item.rawQuantity;
 
           if (layer.type === "VERTICAL_WALL_AREA") {
@@ -578,11 +581,13 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             const cbtFtToUnit = item.unit.includes("ft") ? 1 : 0.3048;
             const spacing = spacingFt * cbtFtToUnit;
             const absRaw = Math.abs(signedRaw);
-            // Show the measured distance in col D for audit traceability.
+            // Col D = measured distance; col E = spacing — both shown for audit traceability.
             mbLength = item.rawQuantity;
             if (spacing > 0) {
+              mbBreadth = spacing;
               // Mirror the group-total formula: closed shapes don't add +1 (last post = first post).
               const closedShape = item.shapeType === "RECTANGLE" || item.shapeType === "POLYGON" || item.shapeType === "CIRCLE";
+              cbtOpenShape = !closedShape;
               const cnt = Math.ceil(absRaw / spacing - 1e-9) + (closedShape ? 0 : 1);
               effectiveQty = (signedRaw >= 0 ? cnt : -cnt) * layer.multiplier;
             } else {
@@ -616,6 +621,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             siteLocation: item.siteLocation,
             measuredDate: item.measuredDate,
             notes: item.notes,
+            cbtOpenShape,
           };
         }),
         totalQuantity,
