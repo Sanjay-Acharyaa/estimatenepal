@@ -424,11 +424,13 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
       if (!Number.isFinite(totalQuantity)) totalQuantity = 0;
       if (!Number.isFinite(originalQuantity)) originalQuantity = 0;
 
-      // VOLUME / VERTICAL_WALL_AREA: items are displayed in ft in the MB rows (see items mapping above).
+      // VOLUME / VERTICAL_WALL_AREA (imperial only): items are displayed in ft in the MB rows.
       // Override conversionFactor so the Excel formula =SUM(G_items_ft)*cf converts correctly.
+      // For metric groups the row G values are already in sq m / cu m so no override is needed.
       // This does not change totalQuantity (already the correct final value); it only adjusts
       // originalQuantity and conversionFactor so the formula and Summary BOQ stay consistent.
-      if (layer.type === "VERTICAL_WALL_AREA" && rateItem && totalQuantity !== 0) {
+      const hasImperialItems = layer.items.some(i => i.unit.includes("ft"));
+      if (layer.type === "VERTICAL_WALL_AREA" && rateItem && totalQuantity !== 0 && hasImperialItems) {
         const wH_ft = ap?.wall ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12 : 0;
         const formulaUnit = wH_ft > 0 ? "sq ft" : "ft";
         const ftCf = getConversionFactor(formulaUnit, rateItem.unit);
@@ -437,7 +439,7 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
           originalQuantity = ftCf !== 0 ? totalQuantity / ftCf : 0;
         }
       }
-      if (layer.type === "VOLUME" && rateItem && totalQuantity !== 0) {
+      if (layer.type === "VOLUME" && rateItem && totalQuantity !== 0 && hasImperialItems) {
         const method = ap?.volumeMethod ?? "area_x_h";
         const hFt = ap?.height ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12 : 0;
         const bFt = method === "lbh" && ap?.breadth ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12 : 0;
@@ -505,45 +507,70 @@ async function computeBOQ(projectId: string): Promise<BOQDocument> {
             const wH_ft = ap?.wall != null
               ? (ap.wall.heightFt ?? 0) + (ap.wall.heightIn ?? 0) / 12
               : null;
-            // Display perimeter and wall height in feet to match all other layer types.
-            // rawQuantity is in the drawing's scale unit; convert to feet when metric.
             const isMetricItem = !item.unit.includes("ft");
-            const rawFt = isMetricItem ? item.rawQuantity / 0.3048 : item.rawQuantity;
-            mbLength = rawFt; // unsigned perimeter in feet for L column
-            if (wH_ft !== null && wH_ft > 0) mbHeight = wH_ft; // wall height already in feet
-            const signedRawFt = item.isNegative ? -rawFt : rawFt;
-            effectiveQty = wH_ft !== null ? signedRawFt * wH_ft * layer.multiplier : signedRawFt * layer.multiplier;
-            mbUnit = wH_ft !== null && wH_ft > 0 ? "sq ft" : "ft (set wall height)";
+            if (isMetricItem) {
+              // Metric: perimeter is already in metres; convert wall height from ft+in to metres.
+              const wHM = wH_ft !== null ? wH_ft * 0.3048 : null;
+              mbLength = item.rawQuantity;
+              if (wHM !== null && wHM > 0) mbHeight = wHM;
+              const signedRawM = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+              effectiveQty = wHM !== null ? signedRawM * wHM * layer.multiplier : signedRawM * layer.multiplier;
+              mbUnit = wHM !== null && wHM > 0 ? "sq m" : "m (set wall height)";
+            } else {
+              // Imperial: perimeter and wall height both in feet.
+              mbLength = item.rawQuantity;
+              if (wH_ft !== null && wH_ft > 0) mbHeight = wH_ft;
+              const signedRawFt = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+              effectiveQty = wH_ft !== null ? signedRawFt * wH_ft * layer.multiplier : signedRawFt * layer.multiplier;
+              mbUnit = wH_ft !== null && wH_ft > 0 ? "sq ft" : "ft (set wall height)";
+            }
           } else if (layer.type === "VOLUME") {
             const method = ap?.volumeMethod ?? "area_x_h";
-            // Always display L, B, H in feet so column headers match displayed values.
-            // B and H params are stored as ft+in — use them directly without conversion.
-            // For metric drawings (item.unit doesn't include "ft"), rawQuantity is in metres;
-            // convert to ft for the MB row so the formula stays in one unit (sq ft or cu ft).
             const isMetricItem = !item.unit.includes("ft");
             const heightFtParam = ap?.height != null
               ? (ap.height.ft ?? 0) + (ap.height.in ?? 0) / 12
               : null;
-            if (heightFtParam !== null && heightFtParam > 0) mbHeight = heightFtParam;
-            if (method === "lbh") {
-              // rawQuantity = POLYLINE/ARC length in the drawing's unit; convert to ft.
-              const rawLenFt = isMetricItem ? item.rawQuantity / 0.3048 : item.rawQuantity;
-              const signedLenFt = item.isNegative ? -rawLenFt : rawLenFt;
-              mbLength = rawLenFt;
-              const breadthFtParam = ap?.breadth != null
-                ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12
-                : null;
-              if (breadthFtParam !== null && breadthFtParam > 0) mbBreadth = breadthFtParam;
-              effectiveQty = signedLenFt * (breadthFtParam ?? 1) * (heightFtParam ?? 1) * layer.multiplier;
-              mbUnit = (breadthFtParam !== null && breadthFtParam > 0) && (heightFtParam !== null && heightFtParam > 0)
-                ? "cu ft" : "sq ft";
+            if (isMetricItem) {
+              // Metric: rawQuantity is already in metres (length or area); convert height/breadth
+              // from the stored ft+in params to metres so all row values stay in metric units.
+              const heightMParam = heightFtParam !== null ? heightFtParam * 0.3048 : null;
+              if (heightMParam !== null && heightMParam > 0) mbHeight = heightMParam;
+              if (method === "lbh") {
+                mbLength = item.rawQuantity; // length in metres
+                const breadthFtParam = ap?.breadth != null
+                  ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12
+                  : null;
+                const breadthMParam = breadthFtParam !== null ? breadthFtParam * 0.3048 : null;
+                if (breadthMParam !== null && breadthMParam > 0) mbBreadth = breadthMParam;
+                const signedLenM = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+                effectiveQty = signedLenM * (breadthMParam ?? 1) * (heightMParam ?? 1) * layer.multiplier;
+                mbUnit = (breadthMParam !== null && breadthMParam > 0) && (heightMParam !== null && heightMParam > 0)
+                  ? "cu m" : "sq m";
+              } else {
+                mbLength = item.rawQuantity; // area in sq m
+                const signedAreaM = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+                effectiveQty = signedAreaM * (heightMParam ?? 1) * layer.multiplier;
+                mbUnit = heightMParam !== null && heightMParam > 0 ? "cu m" : "sq m";
+              }
             } else {
-              // area_x_h: rawQuantity is shape area (sq m for metric, sq ft for imperial).
-              const rawAreaFt = isMetricItem ? item.rawQuantity / (0.3048 * 0.3048) : item.rawQuantity;
-              const signedAreaFt = item.isNegative ? -rawAreaFt : rawAreaFt;
-              mbLength = rawAreaFt;
-              effectiveQty = signedAreaFt * (heightFtParam ?? 1) * layer.multiplier;
-              mbUnit = heightFtParam !== null && heightFtParam > 0 ? "cu ft" : "sq ft";
+              // Imperial: keep rawQuantity and all params in feet.
+              if (heightFtParam !== null && heightFtParam > 0) mbHeight = heightFtParam;
+              if (method === "lbh") {
+                mbLength = item.rawQuantity; // length in feet
+                const signedLenFt = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+                const breadthFtParam = ap?.breadth != null
+                  ? (ap.breadth.ft ?? 0) + (ap.breadth.in ?? 0) / 12
+                  : null;
+                if (breadthFtParam !== null && breadthFtParam > 0) mbBreadth = breadthFtParam;
+                effectiveQty = signedLenFt * (breadthFtParam ?? 1) * (heightFtParam ?? 1) * layer.multiplier;
+                mbUnit = (breadthFtParam !== null && breadthFtParam > 0) && (heightFtParam !== null && heightFtParam > 0)
+                  ? "cu ft" : "sq ft";
+              } else {
+                mbLength = item.rawQuantity; // area in sq ft
+                const signedAreaFt = item.isNegative ? -item.rawQuantity : item.rawQuantity;
+                effectiveQty = signedAreaFt * (heightFtParam ?? 1) * layer.multiplier;
+                mbUnit = heightFtParam !== null && heightFtParam > 0 ? "cu ft" : "sq ft";
+              }
             }
           } else if (layer.type === "COUNT_BY_DISTANCE") {
             const sp = ap?.spacing;
