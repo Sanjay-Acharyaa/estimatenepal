@@ -45,32 +45,76 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   {
-    icon: "📋",
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+        <rect x="8" y="3" width="8" height="4" rx="1" />
+        <line x1="9" y1="12" x2="15" y2="12" />
+        <line x1="9" y1="16" x2="13" y2="16" />
+      </svg>
+    ),
     title: "Automated BOQ Generation",
     desc: "Connect DUDBC rates to your takeoff measurements and generate a complete Bill of Quantities in seconds — no manual calculation.",
   },
   {
-    icon: "📐",
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="8" width="20" height="8" rx="1" />
+        <line x1="6" y1="8" x2="6" y2="11" />
+        <line x1="10" y1="8" x2="10" y2="11" />
+        <line x1="14" y1="8" x2="14" y2="11" />
+        <line x1="18" y1="8" x2="18" y2="11" />
+      </svg>
+    ),
     title: "Drawing Takeoff",
     desc: "Measure lengths, areas, volumes, and counts directly on PDF drawings. Set scale once and measure everything digitally.",
   },
   {
-    icon: "📊",
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+        <line x1="2" y1="20" x2="22" y2="20" />
+      </svg>
+    ),
     title: "DUDBC Rate Analysis",
     desc: "Full cost breakdown with labour, material, and equipment — aligned with official DUDBC fiscal-year rates for all 77 districts.",
   },
   {
-    icon: "📄",
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+        <line x1="10" y1="9" x2="8" y2="9" />
+      </svg>
+    ),
     title: "PDF & Excel Export",
     desc: "Export professional tender documents, MB books, and rate analysis sheets ready for client submission in one click.",
   },
   {
-    icon: "👥",
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 00-3-3.87" />
+        <path d="M16 3.13a4 4 0 010 7.75" />
+      </svg>
+    ),
     title: "Team Collaboration",
     desc: "Invite estimators and engineers, assign roles, and manage permissions. The whole team works in the same live project.",
   },
   {
-    icon: "📌",
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
     title: "Project Dashboard",
     desc: "Track all bids and projects in one place. Monitor status, deadlines, priorities, and bid values at a glance.",
   },
@@ -437,7 +481,7 @@ export default async function LandingPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f) => (
               <div key={f.title} className="bg-gray-50 border border-gray-100 rounded-2xl p-6 hover:border-blue-200 hover:bg-blue-50/30 transition">
-                <div className="text-3xl mb-4">{f.icon}</div>
+                <div className="mb-4 text-blue-600">{f.icon}</div>
                 <h3 className="font-bold text-gray-900 text-base mb-2">{f.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{f.desc}</p>
               </div>
@@ -463,6 +507,125 @@ export default async function LandingPage() {
                 <h3 className="font-bold text-gray-900 text-base mb-2">{s.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{s.desc}</p>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Procurement role cards ── */}
+      <section className="py-20 px-4 bg-white">
+        <div className="mx-auto max-w-5xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4">
+              Estimate, tender, and award on one platform
+            </h2>
+            <p className="text-gray-500 text-base max-w-xl mx-auto">
+              The same platform you use to estimate now handles the full procurement cycle. Clients post tenders with BOQ and drawings; contractors submit confidential bids.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-8">
+              <div className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+                  <rect x="8" y="3" width="8" height="4" rx="1" />
+                  <line x1="9" y1="12" x2="15" y2="12" />
+                  <line x1="9" y1="16" x2="13" y2="16" />
+                </svg>
+              </div>
+              <h3 className="mb-2 text-lg font-bold text-blue-900">For Clients</h3>
+              <p className="mb-6 text-sm text-blue-700 leading-relaxed">
+                Government bodies, private developers, and NGOs who need to procure construction work through a fair, auditable process.
+              </p>
+              <ul className="space-y-2.5 text-sm text-gray-700">
+                {[
+                  "Create detailed BOQ tenders with drawings and specifications",
+                  "Invite specific contractors or publish publicly across Nepal",
+                  "Compare bids with automatic scoring and outlier detection",
+                  "Negotiate, issue Letter of Award, and manage contracts end-to-end",
+                  "Full audit trail from publication to project completion",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="text-blue-500 mt-0.5 flex-shrink-0">&#10003;</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/register" className="mt-7 inline-block rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
+                Post a Tender
+              </Link>
+            </div>
+
+            <div className="rounded-2xl border border-green-100 bg-green-50 p-8">
+              <div className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-green-600">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                  <path d="M16 3.13a4 4 0 010 7.75" />
+                </svg>
+              </div>
+              <h3 className="mb-2 text-lg font-bold text-green-900">For Contractors</h3>
+              <p className="mb-6 text-sm text-green-700 leading-relaxed">
+                Construction companies and individuals who want to win more projects through a level playing field with confidential rates.
+              </p>
+              <ul className="space-y-2.5 text-sm text-gray-700">
+                {[
+                  "Discover public tenders across all 77 districts of Nepal",
+                  "Submit detailed BOQ bids with your rates, fully confidential",
+                  "Get scored fairly: price, quantity accuracy, ratings, and verification",
+                  "Negotiate discounts and submit a final revised bid",
+                  "Build your verified portfolio with completed projects",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="text-green-500 mt-0.5 flex-shrink-0">&#10003;</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/register" className="mt-7 inline-block rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition-colors">
+                Register as Contractor
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── How procurement works ── */}
+      <section className="py-20 px-4 bg-gray-50">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="mb-14 text-center text-3xl sm:text-4xl font-extrabold text-gray-900">How procurement works</h2>
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-4 text-center">
+            {[
+              { step: 1, title: "Create Tender", desc: "Client publishes a tender with BOQ, drawings, specifications, and bid deadline." },
+              { step: 2, title: "Invite or Publish", desc: "Invite specific contractors by email or open the tender to all registered bidders." },
+              { step: 3, title: "Compare Bids", desc: "System scores bids automatically. Client reviews, shortlists, and adds notes." },
+              { step: 4, title: "Award and Contract", desc: "Negotiate, issue the Letter of Award, and both parties sign the contract online." },
+            ].map(({ step, title, desc }) => (
+              <div key={step}>
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white shadow-md">
+                  {step}
+                </div>
+                <h3 className="mb-2 font-semibold text-gray-900">{title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Security note ── */}
+      <section className="border-y border-gray-100 bg-white py-14 px-4">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="mb-6 text-2xl font-bold text-gray-900">Confidential by design</h2>
+          <p className="mx-auto max-w-2xl text-sm text-gray-500 leading-relaxed mb-8">
+            No bidder can ever see another bidder&apos;s rates, quantities, or totals, enforced at the database level, not just the UI. Every action is recorded in an immutable audit log.
+          </p>
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-400">
+            {["Tenant-isolated data", "Sealed bid rates", "OTP contract signing", "Full audit trail", "Automatic scoring"].map((item) => (
+              <span key={item} className="flex items-center gap-2">
+                <span className="text-blue-400">&#10003;</span> {item}
+              </span>
             ))}
           </div>
         </div>
@@ -497,13 +660,15 @@ export default async function LandingPage() {
                     <div className="text-xs font-bold text-blue-100 bg-blue-500/40 rounded-full px-3 py-1 w-fit">
                       Most Popular
                     </div>
-                    <div className="text-xs font-semibold text-amber-300 bg-white/10 border border-amber-300/30 rounded-full px-3 py-1 w-fit">
-                      🔒 Founding Member Price
+                    <div className="text-xs font-semibold text-amber-300 bg-white/10 border border-amber-300/30 rounded-full px-3 py-1 w-fit inline-flex items-center gap-1">
+                      <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                      Founding Member Price
                     </div>
                   </div>
                 ) : !plan.isFree && plan.price !== null ? (
-                  <div className="text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1 w-fit mb-3">
-                    🔒 Founding Member Price
+                  <div className="text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1 w-fit mb-3 inline-flex items-center gap-1">
+                    <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    Founding Member Price
                   </div>
                 ) : (
                   <div className="mb-3 h-6" />
@@ -612,7 +777,6 @@ export default async function LandingPage() {
       <section className="py-20 px-4 bg-white">
         <div className="max-w-3xl mx-auto">
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl p-10 text-center text-white shadow-xl">
-            <div className="text-4xl mb-4">🚀</div>
             <h2 className="text-3xl font-extrabold mb-3">Start your free trial today</h2>
             <p className="text-blue-200 text-base mb-8 max-w-md mx-auto">
               {trialDays} days of full access — no credit card, no commitment. See how much

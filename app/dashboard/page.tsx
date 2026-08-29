@@ -35,6 +35,8 @@ export default async function DashboardPage() {
   const sevenDays = new Date(now.getTime() + 7 * 86400000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
 
+  const userId = session.user.id;
+
   const [
     org,
     allProjects,
@@ -46,6 +48,8 @@ export default async function DashboardPage() {
     takeoffCount,
     exportCount,
     lastWorkedProject,
+    userRecord,
+    verifDocsRaw,
   ] = await Promise.all([
     prisma.org.findUnique({ where: { id: orgId }, select: { plan: true, planTier: true } }),
     prisma.project.findMany({
@@ -89,6 +93,8 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: "desc" },
       select: { id: true, name: true, updatedAt: true, status: true, district: true, _count: { select: { drawings: true } } },
     }),
+    prisma.user.findUnique({ where: { id: userId }, select: { procurementRoles: true } }),
+    prisma.bidVerificationDocument.findMany({ where: { userId }, select: { status: true } }),
   ]);
 
   // Analytics calculations
@@ -138,6 +144,14 @@ export default async function DashboardPage() {
     if (!date) return null;
     return Math.ceil((new Date(date).getTime() - now.getTime()) / 86400000);
   }
+
+  // Procurement role awareness
+  const procurementRoles = userRecord?.procurementRoles ?? null;
+  const isContractor = !!procurementRoles?.includes("CONTRACTOR");
+  const isClient = !!procurementRoles?.includes("CLIENT");
+  const verifApproved = verifDocsRaw.filter(d => d.status === "APPROVED").length;
+  const verifPending = verifDocsRaw.filter(d => d.status === "PENDING").length;
+  const verifRejected = verifDocsRaw.filter(d => d.status === "REJECTED").length;
 
   // Per-project takeoff item counts for export readiness
   const recentProjectsWithReadiness = recentProjects.map(p => {
@@ -406,6 +420,16 @@ export default async function DashboardPage() {
               <Link href="/help" className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
                 <span>❓</span> Help & Guide
               </Link>
+              {isContractor && (
+                <Link href="/tenders" className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
+                  Browse Tenders
+                </Link>
+              )}
+              {isClient && (
+                <Link href="/tenders/new" className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800">
+                  Post a Tender
+                </Link>
+              )}
               {session?.user.isSuperAdmin && (
                 <Link href="/admin" className="flex items-center gap-2 text-sm text-red-600 hover:text-red-800">
                   <span>⚙️</span> Admin Panel
@@ -415,6 +439,65 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── PROCUREMENT WIDGET (shown only when procurementRoles is set) ── */}
+      {(isContractor || isClient) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          {isContractor && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-800">Contractor Verification</h2>
+                <Link href="/dashboard/settings" className="text-xs text-blue-600 hover:underline">
+                  Upload docs →
+                </Link>
+              </div>
+              {verifDocsRaw.length === 0 ? (
+                <p className="text-xs text-gray-400 mb-4">No verification documents uploaded yet.</p>
+              ) : (
+                <div className="space-y-1 mb-4">
+                  {verifApproved > 0 && (
+                    <p className="text-xs text-green-700">
+                      {verifApproved} document{verifApproved !== 1 ? "s" : ""} approved
+                    </p>
+                  )}
+                  {verifPending > 0 && (
+                    <p className="text-xs text-amber-700">
+                      {verifPending} document{verifPending !== 1 ? "s" : ""} pending review
+                    </p>
+                  )}
+                  {verifRejected > 0 && (
+                    <p className="text-xs text-red-700">
+                      {verifRejected} document{verifRejected !== 1 ? "s" : ""} rejected — action required
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                <p className="text-xs font-medium text-blue-800 mb-0.5">Tender Directory</p>
+                <p className="text-xs text-blue-600">Browse and bid on public tenders across all 77 districts of Nepal.</p>
+                <Link href="/tenders" className="mt-2 inline-block text-xs font-semibold text-blue-700 hover:underline">
+                  Browse Tenders →
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {isClient && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-800 mb-3">Procurement</h2>
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                <p className="text-xs font-medium text-blue-800 mb-0.5">Post a Tender</p>
+                <p className="text-xs text-blue-600">Create a tender with BOQ and drawings, invite contractors, and compare bids.</p>
+                <Link href="/tenders/new" className="mt-2 inline-block text-xs font-semibold text-blue-700 hover:underline">
+                  Create Tender →
+                </Link>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* ── RECENT PROJECTS with export readiness ── */}
       <div className="bg-white rounded-xl border border-gray-200">

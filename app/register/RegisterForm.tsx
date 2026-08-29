@@ -31,6 +31,23 @@ interface Props {
   subtext: string;
 }
 
+type ProcurementRole = "CLIENT" | "CONTRACTOR";
+
+const ROLE_CARDS: { value: ProcurementRole; title: string; desc: string; icon: string }[] = [
+  {
+    value: "CLIENT",
+    title: "Post tenders",
+    desc: "I hire contractors and manage construction procurement",
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
+  },
+  {
+    value: "CONTRACTOR",
+    title: "Bid on projects",
+    desc: "I find tenders and submit bids for construction work",
+    icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+  },
+];
+
 export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
   const [form, setForm] = useState({ name: "", email: "", password: "", orgName: "", phone: "" });
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -38,6 +55,20 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [procurementRoles, setProcurementRoles] = useState<ProcurementRole[]>([]);
+
+  function toggleRole(role: ProcurementRole) {
+    setProcurementRoles(prev =>
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
+  }
+
+  function buildProcurementRolesValue(): string | null {
+    if (procurementRoles.length === 0) return null;
+    return procurementRoles.includes("CLIENT") && procurementRoles.includes("CONTRACTOR")
+      ? "CLIENT,CONTRACTOR"
+      : procurementRoles[0];
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -62,7 +93,7 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, procurementRoles: buildProcurementRolesValue() }),
     });
     const data = await res.json();
     setLoading(false);
@@ -169,6 +200,42 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-label="Create account form">
+
+              {/* Procurement role selection — optional, can select both */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  What will you use this for? <span className="text-gray-400 font-normal">(optional, select all that apply)</span>
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROLE_CARDS.map((card) => {
+                    const selected = procurementRoles.includes(card.value);
+                    return (
+                      <button
+                        key={card.value}
+                        type="button"
+                        onClick={() => toggleRole(card.value)}
+                        aria-pressed={selected}
+                        className={`flex flex-col items-start gap-1.5 p-3 rounded-lg border text-left transition-colors ${
+                          selected
+                            ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${selected ? "bg-blue-600" : "bg-gray-100"}`}>
+                          <svg className={`w-4 h-4 ${selected ? "text-white" : "text-gray-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d={card.icon} />
+                          </svg>
+                        </div>
+                        <span className={`text-xs font-semibold leading-tight ${selected ? "text-blue-700" : "text-gray-800"}`}>
+                          {card.title}
+                        </span>
+                        <span className="text-xs text-gray-500 leading-tight">{card.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label htmlFor="reg-name" className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
                 <input id="reg-name" name="name" type="text" required autoComplete="name"

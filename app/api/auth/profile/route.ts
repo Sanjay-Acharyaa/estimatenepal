@@ -8,6 +8,10 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 
 const profileSchema = z.object({
   name: z.string().min(1).max(100).trim().optional(),
+  procurementRoles: z
+    .enum(["CLIENT", "CONTRACTOR", "CLIENT,CONTRACTOR"])
+    .nullable()
+    .optional(),
 });
 
 // GET /api/auth/profile
@@ -22,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: token.id as string },
-      select: { id: true, name: true, email: true, role: true, orgId: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, orgId: true, createdAt: true, procurementRoles: true },
     });
     if (!user) throw unauthorized();
 
@@ -49,7 +53,7 @@ export async function PUT(req: NextRequest) {
     const user = await prisma.user.update({
       where: { id: token.id as string },
       data: parsed.data,
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, role: true, procurementRoles: true },
     });
 
     appendAuditLog({

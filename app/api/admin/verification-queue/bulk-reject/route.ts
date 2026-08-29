@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { getToken } from "next-auth/jwt";
+import { prisma } from "@/lib/prisma";
+import { apiError, handleApiError } from "@/lib/errors";
+
+const bodySchema = z.object({
+  doc_ids: z.array(z.number().int().positive()).min(1).max(50),
+  reason: z.string().min(5).max(1000),
+});
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  try {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (!token || !token.isSuperAdmin) return apiError("UNAUTHORIZED", "Superadmin only.", 401);
+
+    const parsed = bodySchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return apiError("VALIDATION_ERROR", parsed.error.flatten(i => i.message).formErrors[0] ?? "Invalid input.", 400);
+    }
+
+    const { doc_ids, reason } = parsed.data;
+
+    const docs = await prisma.bidVerificationDocument.findMany({
+      where: { id: { in: doc_ids }, status: "PENDING" },
+      select: { id: true },
+    });
+
+    const foundIds = new Set(docs.map((d) => d.id));
+    const errors: { doc_id: number; message: string }[] = [];
+
+    if (docs.length > 0) {
+      await prisma.bidVerificationDocument.updateMany({
+        where: { id: { in: docs.map((d) => d.id) } },
+        data: {
+          status: "REJECTED",
+          reviewedByAdminId: token.id as string,
+          reviewedAt: new Date(),
+          rejectionReason: reason,
+        },
+      });
+    }
+
+    for (const id of doc_ids) {
+      if (!foundIds.has(id)) {
+        errors.push({ doc_id: id, message: "Document not found or not pending." });
+      }
+    }
+
+    return NextResponse.json({ rejected: docs.map((d) => d.id), errors });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}

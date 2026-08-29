@@ -41,5 +41,9 @@ export async function invalidateRatesCache(orgId?: string): Promise<void> {
 
 // Invalidates both caches in one call.
 export async function invalidateDudbcCaches(): Promise<void> {
-  await Promise.all([invalidateLatestFYCache(), invalidateRatesCache()]);
+  await Promise.all([
+    invalidateLatestFYCache(),
+    invalidateRatesCache(),
+    redis.del("dudbc:fiscal-years").catch(() => {}),
+  ]);
 }

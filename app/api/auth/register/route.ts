@@ -8,6 +8,8 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { apiError, handleApiError, conflict } from "@/lib/errors";
 import { getConfigNum, getConfigBool } from "@/lib/config";
 
+const VALID_PROCUREMENT_ROLES = ["CLIENT", "CONTRACTOR", "CLIENT,CONTRACTOR"] as const;
+
 const schema = z.object({
   name: z.string().min(2).max(100).trim(),
   email: z.string().email().toLowerCase().trim(),
@@ -25,6 +27,11 @@ const schema = z.object({
       "Password must contain at least one uppercase letter and one number."
     ),
   orgName: z.string().min(2).max(100).trim(),
+  procurementRoles: z
+    .enum(["CLIENT", "CONTRACTOR", "CLIENT,CONTRACTOR"])
+    .nullable()
+    .optional()
+    .default(null),
 });
 
 export async function POST(req: NextRequest) {
@@ -39,7 +46,7 @@ export async function POST(req: NextRequest) {
       return apiError("VALIDATION_ERROR", "Invalid input.", 400, parsed.error.flatten(i => i.message));
     }
 
-    const { name, email, phone, password, orgName } = parsed.data;
+    const { name, email, phone, password, orgName, procurementRoles } = parsed.data;
 
     // Check registration gate before touching the DB
     const registrationEnabled = await getConfigBool("registration_enabled");
@@ -71,6 +78,7 @@ export async function POST(req: NextRequest) {
           referralSource:   utmSource,
           referralMedium:   utmMedium,
           referralCampaign: utmCampaign,
+          procurementRoles: procurementRoles ?? null,
         },
       });
       return { org, user };

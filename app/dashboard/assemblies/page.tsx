@@ -25,6 +25,8 @@ type Assembly = {
 };
 
 type RateSuggestion = { id: string; code: string; description: string; unit: string };
+type ProjectItem = { id: string; name: string; status: string };
+type DisciplineItem = { id: string; name: string };
 
 const TOOL_TYPES = [
   { value: "LINEAR",             label: "Linear (length)" },
@@ -88,6 +90,106 @@ function RateCodePicker({ value, onChange }: { value: string; onChange: (code: s
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Apply-to-project modal ────────────────────────────────────────────────────
+function ApplyModal({ assembly, onClose }: { assembly: Assembly; onClose: () => void }) {
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [disciplines, setDisciplines] = useState<DisciplineItem[]>([]);
+  const [disciplineId, setDisciplineId] = useState("");
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingDisc, setLoadingDisc] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/projects?limit=100&sort=name&dir=asc")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setProjects(d.data ?? []); setLoadingProjects(false); });
+  }, []);
+
+  useEffect(() => {
+    if (!projectId) { setDisciplines([]); setDisciplineId(""); return; }
+    setLoadingDisc(true);
+    fetch(`/api/projects/${projectId}/disciplines`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setDisciplines(Array.isArray(d) ? d : []); setDisciplineId(d[0]?.id ?? ""); setLoadingDisc(false); });
+  }, [projectId]);
+
+  async function apply() {
+    if (!projectId || !disciplineId) return;
+    setApplying(true);
+    const res = await fetch(`/api/assemblies/${assembly.id}/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, disciplineId }),
+    });
+    setApplying(false);
+    if (res.ok) {
+      const d = await res.json();
+      const proj = projects.find(p => p.id === projectId);
+      toast.success(`Applied ${d.created} group${d.created !== 1 ? "s" : ""} to "${proj?.name ?? "project"}".`);
+      onClose();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      toast.error(d?.error?.message ?? "Failed to apply assembly.");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-800">Apply Assembly to Project</h3>
+          <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Applying <span className="font-medium text-gray-800">{assembly.name}</span> will create {assembly._count.groups} group{assembly._count.groups !== 1 ? "s" : ""} in the selected discipline.
+        </p>
+
+        <div className="space-y-3 mb-6">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
+            {loadingProjects ? (
+              <div className="h-9 bg-gray-100 rounded-lg animate-pulse" />
+            ) : (
+              <select value={projectId} onChange={e => setProjectId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">Select a project…</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
+          </div>
+
+          {projectId && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Discipline</label>
+              {loadingDisc ? (
+                <div className="h-9 bg-gray-100 rounded-lg animate-pulse" />
+              ) : (
+                <select value={disciplineId} onChange={e => setDisciplineId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                  <option value="">Select a discipline…</option>
+                  {disciplines.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              )}
+              {!loadingDisc && disciplines.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">No disciplines found — create one in the project first.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="text-sm px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+          <button onClick={apply} disabled={!projectId || !disciplineId || applying}
+            className="text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition">
+            {applying ? "Applying…" : "Apply Assembly"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -294,6 +396,7 @@ export default function AssembliesPage() {
   const [preview, setPreview] = useState<Assembly | null>(null);
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [applyAssembly, setApplyAssembly] = useState<Assembly | null>(null);
 
   async function load() {
     setLoading(true);
@@ -385,6 +488,7 @@ export default function AssembliesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {confirmDialog}
+      {applyAssembly && <ApplyModal assembly={applyAssembly} onClose={() => setApplyAssembly(null)} />}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-800">Assembly Library</h1>
@@ -534,13 +638,19 @@ export default function AssembliesPage() {
                 )}
               </div>
 
-              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-                <p className="text-xs text-gray-500 text-center">
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 flex items-center justify-between gap-3">
+                <p className="text-xs text-gray-500">
                   {isOrg(preview)
-                    ? "Edit layers above · Apply from Takeoff tab → Apply Assembly"
-                    : <>Platform template — <button onClick={() => handleDuplicate(preview.id)} className="text-blue-600 hover:underline">Duplicate to My Org</button> to edit it</>
+                    ? "Edit layers above — or apply this assembly to a project."
+                    : <>Platform template — <button onClick={() => handleDuplicate(preview.id)} className="text-blue-600 hover:underline">Duplicate to My Org</button> to edit it.</>
                   }
                 </p>
+                <button
+                  onClick={() => setApplyAssembly(preview)}
+                  className="flex-shrink-0 text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                >
+                  Apply to Project
+                </button>
               </div>
             </div>
           )}

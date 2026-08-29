@@ -9,7 +9,7 @@ import { ResourceLineAnalysis } from "./ResourceLineAnalysis";
 import { RateSettingsPanel } from "./RateSettingsPanel";
 import { fmtNum } from "@/lib/format";
 import { adToBS } from "@/lib/bs-date";
-import { ASSEMBLY_CATEGORIES } from "@/lib/nepal-constants";
+import { ASSEMBLY_CATEGORIES, NEPAL_DISTRICTS } from "@/lib/nepal-constants";
 import { PAGE_SIZE, DEFAULT_ASSEMBLY_COLOUR, MAX_IMPORT_FILE_BYTES } from "@/lib/cache-constants";
 
 type CatalogTab = "rates" | "resources" | "settings";
@@ -77,6 +77,9 @@ export function RateCatalog({ isAdmin }: Props) {
   const [unbatchedCount, setUnbatchedCount] = useState(0);
   const [renamingBatchId, setRenamingBatchId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [fiscalYear, setFiscalYear] = useState("");
+  const [district, setDistrict] = useState("");
+  const [fiscalYears, setFiscalYears] = useState<string[]>([]);
 
   // Save as Assembly state — Map<id, RateItem> so the full object is available across page navigations
   const [selectedRateIds, setSelectedRateIds] = useState<Map<string, RateItem>>(new Map());
@@ -121,7 +124,14 @@ export function RateCatalog({ isAdmin }: Props) {
     } catch { setUnbatchedCount(0); }
   }, []);
 
-  useEffect(() => { loadBatches(); loadUnbatchedCount(); }, [loadBatches, loadUnbatchedCount]);
+  useEffect(() => {
+    loadBatches();
+    loadUnbatchedCount();
+    fetch("/api/rates/fiscal-years")
+      .then(r => r.ok ? r.json() : [])
+      .then((ys: string[]) => setFiscalYears(ys))
+      .catch(() => {});
+  }, [loadBatches, loadUnbatchedCount]);
 
   const loadRates = useCallback(async () => {
     setLoading(true);
@@ -130,6 +140,8 @@ export function RateCatalog({ isAdmin }: Props) {
       const sp = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (search) sp.set("search", search);
       if (selectedBatchId !== "all") sp.set("batchId", selectedBatchId);
+      if (fiscalYear) sp.set("fiscalYear", fiscalYear);
+      if (district) sp.set("district", district);
       const res = await fetch(`/api/rates?${sp}`);
       if (!res.ok) { setLoadError(true); setRates([]); return; }
       const data = await res.json();
@@ -137,7 +149,7 @@ export function RateCatalog({ isAdmin }: Props) {
       setPagination(data.pagination ?? null);
     } catch { setLoadError(true); setRates([]); }
     finally { setLoading(false); }
-  }, [page, search, selectedBatchId]);
+  }, [page, search, selectedBatchId, fiscalYear, district]);
 
   useEffect(() => { loadRates(); }, [loadRates]);
 
@@ -690,8 +702,8 @@ export function RateCatalog({ isAdmin }: Props) {
 
       {/* ── Right: Rates table ── */}
       <div className="flex-1 min-w-0 space-y-3">
-        {/* Search + info */}
-        <div className="flex items-center gap-3">
+        {/* Search + filters */}
+        <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="rate-catalog-search" className="sr-only">Search rates by code or description</label>
           <input
             id="rate-catalog-search"
@@ -700,8 +712,32 @@ export function RateCatalog({ isAdmin }: Props) {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             aria-label="Search rates by code or description"
-            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          {fiscalYears.length > 0 && (
+            <select
+              value={fiscalYear}
+              onChange={e => { setFiscalYear(e.target.value); setPage(1); }}
+              aria-label="Filter by fiscal year"
+              className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All FYs</option>
+              {fiscalYears.map(fy => (
+                <option key={fy} value={fy}>FY {fy}</option>
+              ))}
+            </select>
+          )}
+          <select
+            value={district}
+            onChange={e => { setDistrict(e.target.value); setPage(1); }}
+            aria-label="Filter by district"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Districts</option>
+            {(NEPAL_DISTRICTS as string[]).map(d => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
           {selectedBatchId !== "all" && (
             <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" title="Total in this book (search may show fewer)">
               {totalRates} rates in this book{search ? ` (${pagination?.total ?? 0} matching)` : ""}

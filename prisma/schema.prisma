@@ -41,6 +41,8 @@ model User {
   npsScore               Int?
   emailUnsubscribedAt    DateTime?
   emailBouncedAt         DateTime?
+  procurementRoles          String?
+  bidVerificationDocuments  BidVerificationDocument[]
   createdAt              DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -67,14 +69,15 @@ model Org {
   churnFeedback    String?     @db.Text
   churnFeedbackAt  DateTime?
   dataWipedAt      DateTime?
-  users            User[]
-  projects         Project[]
-  invites          OrgInvite[]
-  rateBatches      RateBatch[]
-  assemblies       Assembly[]
-  resources        OrgResource[]
-  rateSettings     OrgRateSettings?
-  createdAt        DateTime    @default(now())
+  users                     User[]
+  projects                  Project[]
+  invites                   OrgInvite[]
+  rateBatches               RateBatch[]
+  assemblies                Assembly[]
+  resources                 OrgResource[]
+  rateSettings              OrgRateSettings?
+  bidVerificationDocuments  BidVerificationDocument[]
+  createdAt                 DateTime    @default(now())
 }
 
 // A named collection of rates uploaded together (one per import)
@@ -1020,4 +1023,25 @@ model AnalyticsEvent {
   @@index([event, createdAt(sort: Desc)])
   @@index([orgId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+}
+
+model BidVerificationDocument {
+  id                Int       @id @default(autoincrement())
+  userId            String
+  orgId             String?
+  documentType      String
+  fileUrl           String    @db.Text
+  fileSizeBytes     BigInt    @default(0)
+  status            String    @default("PENDING")
+  rejectionReason   String?   @db.Text
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org               Org?      @relation(fields: [orgId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@map("bid_verification_documents")
 }

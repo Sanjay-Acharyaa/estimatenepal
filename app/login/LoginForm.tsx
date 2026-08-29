@@ -67,6 +67,7 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
         }
       } else {
         router.push(callbackUrl);
+        router.refresh();
       }
     } catch (err: any) {
       if (err?.message === "timeout") {

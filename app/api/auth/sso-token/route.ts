@@ -17,6 +17,10 @@ function makeSSOToken(
   return `${header}.${body}.${sig}`;
 }
 
+// Only relative Bidding paths are allowed in return_to to prevent open-redirect abuse.
+// The value is embedded in a signed JWT so it cannot be tampered with in transit.
+const RETURN_TO_RE = /^\/[a-zA-Z0-9/_?=&%+.-]*$/;
+
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const session = await getSession();
   if (!session?.user) {
@@ -34,17 +38,25 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const biddingUrl =
     (await getConfig("bidding_url")) || "http://localhost:3001";
 
+  const rawReturnTo = req.nextUrl.searchParams.get("return_to") ?? "";
+  const returnTo =
+    rawReturnTo.length > 0 &&
+    rawReturnTo.length <= 300 &&
+    RETURN_TO_RE.test(rawReturnTo)
+      ? rawReturnTo
+      : null;
+
   const now = Math.floor(Date.now() / 1000);
-  const token = makeSSOToken(
-    {
-      type: "sso",
-      email: session.user.email,
-      name: session.user.name ?? session.user.email,
-      iat: now,
-      exp: now + 60,
-    },
-    ssoSecret
-  );
+  const payload: Record<string, unknown> = {
+    type: "sso",
+    email: session.user.email,
+    name: session.user.name ?? session.user.email,
+    iat: now,
+    exp: now + 60,
+  };
+  if (returnTo) payload.return_to = returnTo;
+
+  const token = makeSSOToken(payload, ssoSecret);
 
   const dest = new URL("/api/auth/sso", biddingUrl);
   dest.searchParams.set("token", token);

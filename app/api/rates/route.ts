@@ -10,6 +10,7 @@ import { parsePagination, paginatedResponse } from "@/lib/pagination";
 import { handleApiError, apiError, unauthorized, forbidden } from "@/lib/errors";
 import { CACHE_TTL, RATES_MAX_CACHED_ROWS, UNIT_RATE_MAX } from "@/lib/cache-constants";
 import { invalidateRatesCache } from "@/lib/rates";
+import { NEPAL_DISTRICTS } from "@/lib/nepal-constants";
 
 const BATCH_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -44,12 +45,20 @@ export async function GET(req: NextRequest) {
       ? rawBatchId
       : "";
 
+    const FY_RE = /^\d{4}\/\d{2}$/;
+    const rawFy = sp.get("fiscalYear") ?? "";
+    const fiscalYear = FY_RE.test(rawFy) ? rawFy : "";
+
+    const rawDistrict = sp.get("district") ?? "";
+    const district = (NEPAL_DISTRICTS as readonly string[]).includes(rawDistrict) ? rawDistrict : "";
+
     const where = {
       AND: [
         // Org sees its own CUSTOM rates + global DUDBC rates
         { OR: [{ orgId: token.orgId as string }, { orgId: null }] },
         ...(source ? [{ source }] : []),
         ...(batchId === "none" ? [{ batchId: null }] : batchId ? [{ batchId }] : []),
+        ...(fiscalYear ? [{ fiscalYear }] : []),
         ...(search
           ? [{
               OR: [
@@ -62,7 +71,7 @@ export async function GET(req: NextRequest) {
     };
 
     // Cache key encodes all filter dimensions. Use full search string to prevent key collisions.
-    const cacheKey = `rates:${token.orgId}:${source}:${batchId}:${search}`;
+    const cacheKey = `rates:${token.orgId}:${source}:${batchId}:${search}:${fiscalYear}:${district}`;
     try {
       const hit = await redis.get(cacheKey);
       if (hit) {
@@ -76,12 +85,25 @@ export async function GET(req: NextRequest) {
 
     // Natural sort: numeric codes sort as numbers (1,2,3,10,100) not strings (1,10,100,2)
     // Cap at 5000 rows to prevent unbounded memory use at scale.
-    const [allData, total] = await Promise.all([
-      prisma.rateItem.findMany({ where, take: RATES_MAX_CACHED_ROWS }),
+    const [rawData, total] = await Promise.all([
+      prisma.rateItem.findMany({
+        where,
+        take: RATES_MAX_CACHED_ROWS,
+        ...(district ? { include: { districtRates: { where: { district }, take: 1 } } } : {}),
+      }),
       prisma.rateItem.count({ where }),
     ]);
 
-    allData.sort((a, b) => {
+    // Merge district rate override into baseRate when district filter is active.
+    const allData = district
+      ? rawData.map((r: any) => {
+          const dr = r.districtRates?.[0];
+          const { districtRates: _dr, ...base } = r;
+          return dr ? { ...base, baseRate: dr.rate, source: "DISTRICT" as const } : base;
+        })
+      : rawData;
+
+    allData.sort((a: any, b: any) => {
       // DUDBC standard rates before CUSTOM — reverse alphabetical so D comes before C
       if (a.source !== b.source) return b.source.localeCompare(a.source);
       // Natural sort on code: if both fully numeric, compare as numbers

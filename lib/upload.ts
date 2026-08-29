@@ -38,3 +38,8 @@ export async function uploadBuffer(key: string, buffer: Buffer, contentType: str
 export function keyFromUrl(fileUrl: string): string {
   return fileUrl;
 }
+
+export function verificationDocKey(userId: string, uuid: string): string {
+  const env = process.env.NODE_ENV ?? "development";
+  return `${env}/users/${userId}/verification/${uuid}.pdf`;
+}

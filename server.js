@@ -202,10 +202,15 @@ app.prepare().then(async () => {
         }
       }
     }
-    // Fallback: client-supplied identity (used only for presence display, not auth)
-    if (!socket.data.userId && socket.handshake.auth?.userId) {
-      socket.data.userId = socket.handshake.auth.userId;
-      socket.data.userName = socket.handshake.auth.userName ?? "Unknown";
+    // Require a valid JWT-derived orgId — no orgId means the socket is either
+    // unauthenticated or belongs to a user without an org. Both are rejected here
+    // because the tenant guard in join:room relies on socket.data.orgId being set.
+    // This also eliminates the previous client-supplied identity fallback, which
+    // set userId without orgId and allowed unauthenticated sockets to bypass the
+    // tenant check entirely.
+    if (!socket.data.orgId) {
+      next(new Error("Unauthorized"));
+      return;
     }
     next();
   });
@@ -308,6 +313,7 @@ app.prepare().then(async () => {
     socket.on("cursor:move", ({ roomId, x, y }) => {
       if (!allow("cursor", 20)) return;
       if (typeof roomId !== "string" || typeof x !== "number" || typeof y !== "number") return;
+      if (!joinedRooms.has(roomId)) return;
       socket.to(roomId).emit("cursor:move", {
         socketId: socket.id,
         userId: socket.data.userId,
@@ -340,6 +346,7 @@ app.prepare().then(async () => {
     });
 
     socket.on("shape:heartbeat", async ({ roomId, itemId }) => {
+      if (!allow("shape:hb", 5)) return;
       if (typeof roomId !== "string" || typeof itemId !== "string") return;
       if (!joinedRooms.has(roomId)) return;
       if (!redisState) return;

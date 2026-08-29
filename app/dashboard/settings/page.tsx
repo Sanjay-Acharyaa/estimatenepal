@@ -3,7 +3,29 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Profile = { id: string; name: string; email: string; role: string };
+type ProcurementRole = "CLIENT" | "CONTRACTOR";
+
+const PROCUREMENT_ROLE_CARDS: { value: ProcurementRole; title: string; desc: string; icon: string }[] = [
+  {
+    value: "CLIENT",
+    title: "Post tenders",
+    desc: "Hire contractors and manage procurement",
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
+  },
+  {
+    value: "CONTRACTOR",
+    title: "Bid on projects",
+    desc: "Find tenders and submit bids",
+    icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+  },
+];
+
+function parseProcurementRoles(val: string | null): ProcurementRole[] {
+  if (!val) return [];
+  return val.split(",").filter((r): r is ProcurementRole => r === "CLIENT" || r === "CONTRACTOR");
+}
+
+type Profile = { id: string; name: string; email: string; role: string; procurementRoles: string | null };
 type Org = { id: string; name: string; panNumber: string | null; logoUrl: string | null; address: string | null; phone: string | null; plan: string; storageUsedBytes: number | string };
 type Member = { id: string; name: string; email: string; role: string; emailVerified: boolean; lastLoginAt: string | null };
 type Invite = { id: string; email: string; role: string; createdAt: string; expiresAt: string };
@@ -13,7 +35,21 @@ const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm foc
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [org, setOrg] = useState<Org | null>(null);
-  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password" | "review" | "billing" | "team">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "org" | "password" | "review" | "billing" | "team" | "verification">("profile");
+  const [procurementRoles, setProcurementRoles] = useState<ProcurementRole[]>([]);
+
+  function toggleProcurementRole(role: ProcurementRole) {
+    setProcurementRoles(prev =>
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
+  }
+
+  function buildProcurementRolesValue(): string | null {
+    if (procurementRoles.length === 0) return null;
+    return procurementRoles.includes("CLIENT") && procurementRoles.includes("CONTRACTOR")
+      ? "CLIENT,CONTRACTOR"
+      : procurementRoles[0];
+  }
 
   // Review form state
   const [review, setReview] = useState({ content: "", authorRole: "", company: "", rating: 5 });
@@ -51,6 +87,23 @@ export default function SettingsPage() {
   const [inviteMsg, setInviteMsg] = useState("");
   const [inviteError, setInviteError] = useState("");
 
+  // Verification documents (contractors only)
+  type VerifDoc = { id: number; documentType: string; status: string; rejectionReason: string | null; createdAt: string };
+  const [verifDocs, setVerifDocs] = useState<VerifDoc[]>([]);
+  const [verifLoaded, setVerifLoaded] = useState(false);
+  const [verifDocType, setVerifDocType] = useState("COMPANY_REGISTRATION");
+  const [verifFile, setVerifFile] = useState<File | null>(null);
+  const [verifUploading, setVerifUploading] = useState(false);
+  const [verifUploadError, setVerifUploadError] = useState("");
+  const [verifUploadMsg, setVerifUploadMsg] = useState("");
+  const VERIF_DOC_LABELS: Record<string, string> = {
+    COMPANY_REGISTRATION: "Company Registration",
+    PAN: "PAN Certificate",
+    CONTRACTOR_LICENSE: "Contractor License",
+    LAND_OWNERSHIP: "Land Ownership",
+    OTHER: "Other",
+  };
+
   // Coupon redemption
   const [couponCode, setCouponCode] = useState("");
   const [couponSaving, setCouponSaving] = useState(false);
@@ -58,7 +111,11 @@ export default function SettingsPage() {
   const [couponError, setCouponError] = useState("");
 
   useEffect(() => {
-    fetch("/api/auth/profile").then(r => r.json()).then(d => { setProfile(d); setName(d.name ?? ""); });
+    fetch("/api/auth/profile").then(r => r.json()).then(d => {
+      setProfile(d);
+      setName(d.name ?? "");
+      setProcurementRoles(parseProcurementRoles(d.procurementRoles ?? null));
+    });
     fetch("/api/orgs/me").then(r => r.ok ? r.json() : null).then(d => {
       if (d) { setOrg(d); setOrgForm({ name: d.name ?? "", panNumber: d.panNumber ?? "", logoUrl: d.logoUrl ?? "", address: d.address ?? "", phone: d.phone ?? "" }); }
     });
@@ -69,7 +126,7 @@ export default function SettingsPage() {
     setProfileSaving(true); setProfileMsg("");
     const res = await fetch("/api/auth/profile", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, procurementRoles: buildProcurementRolesValue() }),
     });
     setProfileSaving(false);
     if (res.ok) { setProfileMsg("Profile updated."); setProfile(p => p ? { ...p, name } : p); }
@@ -133,6 +190,28 @@ export default function SettingsPage() {
     else setCouponError(d?.error?.message ?? "Failed to redeem coupon.");
   }
 
+  async function loadVerifDocs() {
+    if (verifLoaded) return;
+    const r = await fetch("/api/profile/verification-documents");
+    if (r.ok) { const d = await r.json(); setVerifDocs(d.documents ?? []); }
+    setVerifLoaded(true);
+  }
+
+  async function uploadVerifDoc(e: React.FormEvent) {
+    e.preventDefault();
+    if (!verifFile) { setVerifUploadError("Please select a PDF file."); return; }
+    setVerifUploading(true); setVerifUploadError(""); setVerifUploadMsg("");
+    const fd = new FormData();
+    fd.append("document_type", verifDocType);
+    fd.append("file", verifFile);
+    const res = await fetch("/api/profile/verification-documents", { method: "POST", body: fd });
+    const data = await res.json();
+    setVerifUploading(false);
+    if (!res.ok) { setVerifUploadError(data?.error?.message ?? "Upload failed."); return; }
+    setVerifDocs(prev => [{ ...data.document, rejectionReason: null }, ...prev]);
+    setVerifFile(null); setVerifUploadMsg("Document uploaded. It will be reviewed within 2 business days.");
+  }
+
   function loadTeam() {
     setTeamLoading(true);
     fetch("/api/orgs/members")
@@ -177,6 +256,7 @@ export default function SettingsPage() {
     ...(["OWNER", "ADMIN"].includes(profile?.role ?? "") ? [{ id: "team", label: "Team" }] : []),
     { id: "billing", label: "Billing" },
     { id: "review", label: "Leave a Review" },
+    ...(profile?.procurementRoles?.includes("CONTRACTOR") ? [{ id: "verification" as const, label: "Verification" }] : []),
   ] as { id: typeof activeTab; label: string }[];
 
   return (
@@ -236,6 +316,52 @@ export default function SettingsPage() {
                 <label htmlFor="sp-role" className="block text-sm text-gray-700 mb-1">Role</label>
                 <input id="sp-role" value={profile?.role ?? ""} disabled className={`${inputCls} bg-gray-50 text-gray-600`} />
               </div>
+
+              {/* Procurement access */}
+              <div className="pt-3 border-t border-gray-100">
+                <p className="text-sm font-medium text-gray-700 mb-1">Procurement access</p>
+                <p className="text-xs text-gray-400 mb-3">Select the activities you want to do on this platform. You can hold both roles.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {PROCUREMENT_ROLE_CARDS.map((card) => {
+                    const selected = procurementRoles.includes(card.value);
+                    return (
+                      <button
+                        key={card.value}
+                        type="button"
+                        onClick={() => toggleProcurementRole(card.value)}
+                        aria-pressed={selected}
+                        className={`flex flex-col items-start gap-1.5 p-3 rounded-lg border text-left transition-colors ${
+                          selected
+                            ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${selected ? "bg-blue-600" : "bg-gray-100"}`}>
+                          <svg className={`w-4 h-4 ${selected ? "text-white" : "text-gray-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d={card.icon} />
+                          </svg>
+                        </div>
+                        <span className={`text-xs font-semibold leading-tight ${selected ? "text-blue-700" : "text-gray-800"}`}>
+                          {card.title}
+                        </span>
+                        <span className="text-xs text-gray-500 leading-tight">{card.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2FA placeholder */}
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Two-factor authentication</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Adds a second layer of security at login.</p>
+                  </div>
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-md">Planned</span>
+                </div>
+              </div>
+
               {profileMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{profileMsg}</p>}
               <button type="submit" disabled={profileSaving}
                 className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
@@ -528,6 +654,69 @@ export default function SettingsPage() {
                   {inviteMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{inviteMsg}</p>}
                 </form>
               )}
+            </div>
+          )}
+
+          {/* Verification tab — contractors only */}
+          {activeTab === "verification" && (
+            <div id="tab-panel-verification" role="tabpanel" aria-labelledby="tab-verification" className="space-y-5"
+              ref={(el) => { if (el && !verifLoaded) loadVerifDocs(); }}>
+              <h2 className="font-semibold text-gray-800">Verification Documents</h2>
+              <p className="text-sm text-gray-500">
+                Upload your company registration, PAN certificate, and contractor license. Documents are reviewed within 2 business days.
+              </p>
+
+              {verifDocs.length === 0 && verifLoaded && (
+                <p className="text-sm text-gray-400">No documents uploaded yet.</p>
+              )}
+
+              {verifDocs.length > 0 && (
+                <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+                  {verifDocs.map((doc) => (
+                    <li key={doc.id} className="flex items-start justify-between gap-4 px-4 py-3 bg-white">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{VERIF_DOC_LABELS[doc.documentType] ?? doc.documentType}</p>
+                        <p className="text-xs text-gray-400">Uploaded {new Date(doc.createdAt).toLocaleDateString()}</p>
+                        {doc.rejectionReason && (
+                          <p className="text-xs text-red-600 mt-0.5">Rejected: {doc.rejectionReason}</p>
+                        )}
+                      </div>
+                      <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        doc.status === "APPROVED" ? "bg-green-100 text-green-700"
+                        : doc.status === "REJECTED" ? "bg-red-100 text-red-700"
+                        : "bg-amber-100 text-amber-700"
+                      }`}>{doc.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <form onSubmit={uploadVerifDoc} className="pt-4 border-t border-gray-100 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800">Upload a document</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="vd-type" className="block text-sm text-gray-700 mb-1">Document type</label>
+                    <select id="vd-type" value={verifDocType} onChange={e => setVerifDocType(e.target.value)}
+                      className={inputCls}>
+                      {Object.entries(VERIF_DOC_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="vd-file" className="block text-sm text-gray-700 mb-1">PDF file (max 10 MB)</label>
+                    <input id="vd-file" type="file" accept="application/pdf"
+                      onChange={e => { setVerifFile(e.target.files?.[0] ?? null); setVerifUploadError(""); setVerifUploadMsg(""); }}
+                      className="w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-gray-200" />
+                  </div>
+                </div>
+                {verifUploadError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{verifUploadError}</p>}
+                {verifUploadMsg && <p role="status" className="text-sm text-green-700 bg-green-50 rounded px-3 py-2">{verifUploadMsg}</p>}
+                <button type="submit" disabled={verifUploading || !verifFile}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  {verifUploading ? "Uploading…" : "Upload document"}
+                </button>
+              </form>
             </div>
           )}
 
