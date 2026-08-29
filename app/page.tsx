@@ -131,7 +131,7 @@ export default async function LandingPage() {
   const session = await getSession();
   if (session?.user) redirect("/dashboard");
 
-  const [cfg, testimonials] = await Promise.all([
+  const [cfg, testimonials, publicStats, openTenders] = await Promise.all([
     getAllConfigs(),
     prisma.testimonial.findMany({
       where: { isApproved: true },
@@ -139,6 +139,23 @@ export default async function LandingPage() {
       take: 6,
       select: { id: true, authorName: true, authorRole: true, company: true, content: true, rating: true },
     }),
+    // BL-022: stats strip
+    Promise.all([
+      prisma.tender.count({ where: { status: "PUBLISHED" } }).catch(() => 0),
+      prisma.bidUser.count({ where: { role: "CONTRACTOR", status: "ACTIVE" } }).catch(() => 0),
+      prisma.tender.findMany({ where: { status: "PUBLISHED" }, select: { district: true }, distinct: ["district"] }).catch(() => []),
+    ]).then(([pt, rc, d]) => ({ published_tenders: pt, registered_contractors: rc, districts_covered: d.length })),
+    // BL-023: open tenders preview
+    prisma.tender.findMany({
+      where: { status: "PUBLISHED", bid_deadline: { gt: new Date() } },
+      orderBy: { bid_deadline: "asc" },
+      take: 3,
+      select: {
+        id: true, title: true, reference_number: true, district: true,
+        tender_type: true, bid_deadline: true,
+        estimated_value: true, show_estimated_value_on_card: true,
+      },
+    }).catch(() => []),
   ]);
 
   // Compute aggregate rating — only include if we have at least 3 reviews
@@ -465,6 +482,69 @@ export default async function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── Stats strip (BL-022) ── */}
+      {(publicStats.published_tenders > 0 || publicStats.registered_contractors > 0) && (
+        <section className="bg-blue-50 border-y border-blue-100 py-8 px-4">
+          <div className="max-w-4xl mx-auto grid grid-cols-3 gap-6 text-center">
+            <div>
+              <p className="text-3xl font-extrabold text-blue-700">{publicStats.published_tenders}</p>
+              <p className="text-sm text-gray-600 mt-1">Open Tenders</p>
+            </div>
+            <div>
+              <p className="text-3xl font-extrabold text-blue-700">{publicStats.registered_contractors}</p>
+              <p className="text-sm text-gray-600 mt-1">Registered Contractors</p>
+            </div>
+            <div>
+              <p className="text-3xl font-extrabold text-blue-700">{publicStats.districts_covered}</p>
+              <p className="text-sm text-gray-600 mt-1">Districts Covered</p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Open Tenders preview (BL-023) ── */}
+      {openTenders.length > 0 && (
+        <section className="py-16 px-4 bg-white">
+          <div className="max-w-5xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-2xl font-extrabold text-gray-900">Open Tenders</h2>
+                <p className="text-gray-500 text-sm mt-1">Live bids on the platform right now</p>
+              </div>
+              <Link href="/tenders" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                Browse all →
+              </Link>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {openTenders.map((t) => {
+                const daysLeft = Math.ceil((new Date(t.bid_deadline).getTime() - Date.now()) / 86400000);
+                return (
+                  <Link
+                    key={t.id}
+                    href={`/tenders/${t.id}`}
+                    className="rounded-xl border border-gray-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-xs text-gray-400">{t.reference_number}</span>
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${daysLeft <= 3 ? "bg-red-100 text-red-700" : daysLeft <= 7 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                        {daysLeft}d left
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-2">{t.title}</h3>
+                    <div className="text-xs text-gray-500">{t.district} · {t.tender_type === "PUBLIC" ? "Public" : "Invitation"}</div>
+                    {t.show_estimated_value_on_card && t.estimated_value != null && (
+                      <div className="text-xs font-medium text-blue-700 mt-1">
+                        NPR {Number(t.estimated_value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                      </div>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Features ── */}
       <section className="py-20 px-4 bg-white">

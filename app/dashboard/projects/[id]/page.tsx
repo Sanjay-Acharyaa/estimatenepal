@@ -105,12 +105,14 @@ export default async function ProjectDetailPage({
             >
               BOQ
             </Link>
-            <a
-              href={`/api/auth/sso-token?return_to=${encodeURIComponent(`/tenders/new?estimationProjectId=${project.id}`)}`}
-              className="text-sm px-3 py-1.5 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition font-medium"
-            >
-              Create Tender
-            </a>
+            {((session.user as any).procurementRoles as string[] | undefined)?.includes("CLIENT") && (
+              <Link
+                href={`/client/tenders/new?projectId=${project.id}`}
+                className="text-sm px-3 py-1.5 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition font-medium"
+              >
+                Create Tender
+              </Link>
+            )}
             {isAdmin && <SaveAsAssemblyButton projectId={project.id} />}
           </div>
         </div>

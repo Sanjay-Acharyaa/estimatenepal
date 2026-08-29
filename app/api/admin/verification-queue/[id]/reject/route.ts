@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
 import { getClientIp } from "@/lib/security";
+import { dispatchUserNotification } from "@/lib/notifications";
 
 const schema = z.object({
   reason: z.string().min(5).max(1000),
@@ -33,7 +34,7 @@ export async function POST(
 
     const doc = await prisma.bidVerificationDocument.findUnique({
       where: { id: docId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, userId: true },
     });
 
     if (!doc) return apiError("NOT_FOUND", "Document not found.", 404);
@@ -56,6 +57,11 @@ export async function POST(
       resourceId: String(docId),
       meta: { reason: parsed.data.reason } as any,
       ipAddress: getClientIp(req),
+    });
+
+    dispatchUserNotification(doc.userId, "doc_rejected", {
+      reason: parsed.data.reason,
+      message: `Your verification document was rejected. Reason: ${parsed.data.reason}`,
     });
 
     return NextResponse.json({ success: true });

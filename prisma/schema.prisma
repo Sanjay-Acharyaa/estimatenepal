@@ -43,6 +43,7 @@ model User {
   emailBouncedAt         DateTime?
   procurementRoles          String?
   bidVerificationDocuments  BidVerificationDocument[]
+  notificationPreferences   NotificationPreference[]
   createdAt              DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -574,6 +575,34 @@ model Notification {
   @@index([createdAt(sort: Desc)])
 }
 
+// Read-only declaration — table owned and written by the Bidding platform
+model BidNotificationTemplate {
+  id              Int      @id @default(autoincrement())
+  eventKey        String   @unique @map("event_key")
+  displayName     String   @map("display_name")
+  emailSubject    String   @map("email_subject")
+  emailBody       String   @db.Text @map("email_body")
+  channelPriority String   @default("MEDIUM") @map("channel_priority")
+  isDisableable   Boolean  @default(true) @map("is_disableable")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("bid_notification_templates")
+}
+
+model NotificationPreference {
+  id           String  @id @default(cuid())
+  userId       String
+  eventKey     String
+  emailEnabled Boolean @default(true)
+  inAppEnabled Boolean @default(true)
+  user         User    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, eventKey])
+  @@index([userId])
+  @@map("notification_preferences")
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   orgId      String
@@ -1044,4 +1073,292 @@ model BidVerificationDocument {
   @@index([userId])
   @@index([status])
   @@map("bid_verification_documents")
+}
+
+// ─── Bid Platform Declaration Models (read-only from shared DB) ──────────────
+
+model BidUser {
+  id            Int      @id @default(autoincrement())
+  email         String   @unique @db.VarChar(191)
+  password_hash String   @db.VarChar(255)
+  full_name     String   @db.VarChar(191)
+  role          String   @db.VarChar(50)
+  account_type  String   @default("INDIVIDUAL") @db.VarChar(50)
+  status        String   @default("ACTIVE") @db.VarChar(50)
+  org_id        Int?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  tenders        Tender[]
+  submissions    BidSubmission[]
+  requestsToBid  BidTenderRequestToBid[]
+  invitations    BidTenderInvitation[]
+  watchlistItems BidTenderWatchlist[]
+  qandaQuestions BidQandAQuestion[] @relation("QandAAsker")
+  qandaAnswers   BidQandAAnswer[]   @relation("QandAAnswerer")
+  portfolioProjects BidPortfolioProject[]
+  organization   BidOrganization?   @relation(fields: [org_id], references: [id])
+
+  @@index([org_id])
+  @@map("bid_users")
+}
+
+model BidPlatformSetting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique @db.VarChar(100)
+  value String @db.Text
+
+  @@map("bid_platform_settings")
+}
+
+model Tender {
+  id                             Int             @id @default(autoincrement())
+  reference_number               String          @unique @db.VarChar(50)
+  title                          String          @db.VarChar(300)
+  description                    String          @db.Text
+  district                       String          @db.VarChar(100)
+  location_detail                String?         @db.VarChar(500)
+  tender_type                    String          @db.VarChar(50)
+  status                         String          @default("DRAFT") @db.VarChar(50)
+  bid_deadline                   DateTime
+  qanda_deadline                 DateTime?
+  estimated_value                Decimal?        @db.Decimal(15, 2)
+  site_visit_required            Boolean         @default(false)
+  site_visit_scheduled_at        DateTime?
+  site_visit_location            String?         @db.VarChar(500)
+  quantity_visibility            String          @default("HIDDEN") @db.VarChar(50)
+  show_bidder_count              Boolean         @default(false)
+  show_estimated_value_on_card   Boolean         @default(false)
+  show_client_identity_on_card   Boolean         @default(true)
+  bid_security_required          Boolean         @default(false)
+  bid_security_percentage        Decimal         @default(0) @db.Decimal(5, 2)
+  require_rtb_approval           Boolean         @default(false)
+  vat_percentage                 Decimal         @db.Decimal(5, 2)
+  contingency_percentage_default Decimal         @db.Decimal(5, 2)
+  instructions_to_bidders        String?         @db.Text
+  estimation_project_id          String?         @db.VarChar(191)
+  awarded_bidder_id              Int?
+  awarded_amount_npr             Decimal?        @db.Decimal(15, 2)
+  awarded_at                     DateTime?
+  client_user_id                 Int
+  client_org_id                  Int?
+  created_at                     DateTime        @default(now())
+  updated_at                     DateTime        @updatedAt
+  client                         BidUser                 @relation(fields: [client_user_id], references: [id])
+  boqChapters                    BidBoqChapter[]
+  submissions                    BidSubmission[]
+  requestsToBid                  BidTenderRequestToBid[]
+  invitations                    BidTenderInvitation[]
+  watchlistItems                 BidTenderWatchlist[]
+  qandaQuestions                 BidQandAQuestion[]
+
+  @@index([client_user_id])
+  @@index([status])
+  @@map("bid_tenders")
+}
+
+model BidBoqChapter {
+  id                Int           @id @default(autoincrement())
+  tender_id         Int
+  parent_chapter_id Int?
+  title             String        @db.VarChar(300)
+  description       String?       @db.Text
+  level             Int           @default(1)
+  sort_order        Int           @default(0)
+  tender            Tender        @relation(fields: [tender_id], references: [id], onDelete: Cascade)
+  parent            BidBoqChapter?  @relation("ChapterChildren", fields: [parent_chapter_id], references: [id])
+  children          BidBoqChapter[] @relation("ChapterChildren")
+  items             BidBoqItem[]
+
+  @@index([tender_id])
+  @@index([parent_chapter_id])
+  @@map("bid_boq_chapters")
+}
+
+model BidBoqItem {
+  id              Int           @id @default(autoincrement())
+  tender_id       Int
+  chapter_id      Int
+  item_code       String?       @db.VarChar(191)
+  description     String        @db.VarChar(2000)
+  unit            String        @db.VarChar(50)
+  client_quantity Decimal?      @db.Decimal(15, 4)
+  sort_order      Int           @default(0)
+  is_alternative  Boolean       @default(false)
+  chapter         BidBoqChapter         @relation(fields: [chapter_id], references: [id], onDelete: Cascade)
+  lineItems       BidSubmissionLineItem[]
+
+  @@index([chapter_id])
+  @@index([tender_id])
+  @@map("bid_boq_items")
+}
+
+model BidSubmission {
+  id                     Int                    @id @default(autoincrement())
+  tender_id              Int
+  bidder_user_id         Int
+  status                 String                 @default("DRAFT") @db.VarChar(50)
+  version                Int                    @default(1)
+  grand_total_npr        Decimal?               @db.Decimal(15, 2)
+  vat_amount_npr         Decimal?               @db.Decimal(15, 2)
+  contingency_amount_npr Decimal?               @db.Decimal(15, 2)
+  contingency_percentage Decimal?               @db.Decimal(5, 2)
+  total_with_vat_npr     Decimal?               @db.Decimal(15, 2)
+  notes_to_client        String?                @db.Text
+  submitted_at           DateTime?
+  withdrawn_at           DateTime?
+  withdrawal_reason      String?                @db.Text
+  withdrawal_count       Int                    @default(0)
+  flagged_for_withdrawal Boolean                @default(false)
+  price_score            Decimal?               @db.Decimal(5, 2)
+  quantity_score         Decimal?               @db.Decimal(5, 2)
+  rating_score           Decimal?               @db.Decimal(5, 2)
+  verified_score         Decimal?               @db.Decimal(5, 2)
+  system_score           Decimal?               @db.Decimal(5, 2)
+  outlier_flagged        Boolean                @default(false)
+  is_former_consultant   Boolean                @default(false)
+  client_note            String?                @db.Text
+  manual_rank            Int?
+  created_at             DateTime               @default(now())
+  updated_at             DateTime               @updatedAt
+  tender                 Tender                 @relation(fields: [tender_id], references: [id])
+  bidder                 BidUser                @relation(fields: [bidder_user_id], references: [id])
+  lineItems              BidSubmissionLineItem[]
+
+  @@index([tender_id])
+  @@index([bidder_user_id])
+  @@map("bid_submissions")
+}
+
+model BidSubmissionLineItem {
+  id                     Int           @id @default(autoincrement())
+  bid_id                 Int
+  boq_item_id            Int
+  bidder_quantity        Decimal?      @db.Decimal(15, 4)
+  bidder_rate_npr        Decimal       @db.Decimal(15, 2)
+  amount_npr             Decimal       @db.Decimal(15, 2)
+  quantity_justification String?       @db.Text
+  item_notes             String?       @db.Text
+  created_at             DateTime      @default(now())
+  updated_at             DateTime      @updatedAt
+  bid                    BidSubmission @relation(fields: [bid_id], references: [id])
+  boqItem                BidBoqItem    @relation(fields: [boq_item_id], references: [id])
+
+  @@index([bid_id])
+  @@index([boq_item_id])
+  @@map("bid_line_items")
+}
+
+model BidTenderRequestToBid {
+  id                 Int       @id @default(autoincrement())
+  tender_id          Int
+  contractor_user_id Int
+  message            String?   @db.Text
+  status             String    @default("PENDING") @db.VarChar(50)
+  client_response_at DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  tender             Tender    @relation(fields: [tender_id], references: [id])
+  contractor         BidUser   @relation(fields: [contractor_user_id], references: [id])
+
+  @@index([tender_id])
+  @@index([contractor_user_id])
+  @@map("bid_tender_request_to_bid")
+}
+
+model BidTenderInvitation {
+  id                 Int       @id @default(autoincrement())
+  tender_id          Int
+  contractor_user_id Int?
+  contractor_email   String    @db.VarChar(255)
+  status             String    @default("PENDING") @db.VarChar(50)
+  invited_at         DateTime  @default(now())
+  responded_at       DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  tender             Tender    @relation(fields: [tender_id], references: [id])
+  contractor         BidUser?  @relation(fields: [contractor_user_id], references: [id])
+
+  @@index([tender_id])
+  @@index([contractor_user_id])
+  @@map("bid_tender_invitations")
+}
+
+model BidTenderWatchlist {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  tender_id  Int
+  created_at DateTime @default(now())
+  user       BidUser  @relation(fields: [user_id], references: [id])
+  tender     Tender   @relation(fields: [tender_id], references: [id])
+
+  @@unique([user_id, tender_id])
+  @@index([user_id])
+  @@map("bid_tender_watchlist")
+}
+
+model BidQandAQuestion {
+  id               Int              @id @default(autoincrement())
+  tender_id        Int
+  asked_by_user_id Int
+  question_text    String?          @db.Text
+  drawing_id       Int?
+  attachment_url   String?          @db.VarChar(500)
+  attachment_type  String           @default("TEXT") @db.VarChar(30)
+  status           String           @default("PENDING") @db.VarChar(20)
+  is_public        Boolean          @default(false)
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @updatedAt
+  tender           Tender           @relation(fields: [tender_id], references: [id])
+  askedBy          BidUser          @relation("QandAAsker", fields: [asked_by_user_id], references: [id])
+  answers          BidQandAAnswer[]
+
+  @@index([tender_id])
+  @@index([status])
+  @@map("bid_qanda_questions")
+}
+
+model BidQandAAnswer {
+  id                  Int              @id @default(autoincrement())
+  question_id         Int
+  answered_by_user_id Int
+  answer_text         String           @db.Text
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
+  question            BidQandAQuestion @relation(fields: [question_id], references: [id])
+  answeredBy          BidUser          @relation("QandAAnswerer", fields: [answered_by_user_id], references: [id])
+
+  @@index([question_id])
+  @@map("bid_qanda_answers")
+}
+
+model BidOrganization {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(200)
+  district  String   @db.VarChar(100)
+  verified  Boolean  @default(false)
+  class     String   @default("UNCLASSIFIED") @db.VarChar(50)
+  created_at DateTime @default(now())
+  users     BidUser[]
+
+  @@map("bid_organizations")
+}
+
+model BidPortfolioProject {
+  id                   Int      @id @default(autoincrement())
+  user_id              Int
+  project_name         String   @db.VarChar(200)
+  client_type          String   @db.VarChar(50)
+  contract_value_range String   @db.VarChar(50)
+  year_of_completion   Int
+  role                 String   @db.VarChar(50)
+  description          String?  @db.Text
+  photo_urls           Json     @default("[]")
+  source               String   @default("SELF_REPORTED") @db.VarChar(50)
+  related_tender_id    Int?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  user                 BidUser  @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@map("bid_portfolio_projects")
 }

@@ -7,6 +7,7 @@ import { sendEmail, verificationEmailHtml } from "@/lib/email";
 import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { apiError, handleApiError, conflict } from "@/lib/errors";
 import { getConfigNum, getConfigBool } from "@/lib/config";
+import { dispatchUserNotification } from "@/lib/notifications";
 
 const VALID_PROCUREMENT_ROLES = ["CLIENT", "CONTRACTOR", "CLIENT,CONTRACTOR"] as const;
 
@@ -88,6 +89,12 @@ export async function POST(req: NextRequest) {
     await redis.set(`verify:${verifyToken}`, user.id, "EX", 86400);
 
     const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${verifyToken}`;
+
+    // Fire-and-forget welcome notification (in-app).
+    dispatchUserNotification(user.id, "user_welcome", {
+      name,
+      message: `Welcome to Estimate Nepal, ${name}! Your account has been created. Please verify your email to get started.`,
+    });
 
     // Fire-and-forget — SMTP latency must not block the registration response.
     // The verify token is already committed to Redis; the user can request a resend if email fails.

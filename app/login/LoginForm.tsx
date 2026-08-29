@@ -66,6 +66,17 @@ export function LoginForm({ siteName, logoUrl, headline, subtext }: Props) {
           setShowResend(false);
         }
       } else {
+        // BL-018: if user has procurement role, land on /tenders
+        try {
+          const sessionRes = await fetch("/api/auth/session");
+          const sessionData = await sessionRes.json();
+          const procurementRoles: string[] = sessionData?.user?.procurementRoles ?? [];
+          if (procurementRoles.includes("CLIENT") || procurementRoles.includes("CONTRACTOR")) {
+            router.push("/tenders");
+            router.refresh();
+            return;
+          }
+        } catch { /* ignore — fall through to callbackUrl */ }
         router.push(callbackUrl);
         router.refresh();
       }

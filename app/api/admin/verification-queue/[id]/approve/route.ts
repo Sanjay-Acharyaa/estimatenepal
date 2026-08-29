@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
 import { appendAuditLog } from "@/lib/audit";
 import { getClientIp } from "@/lib/security";
+import { dispatchUserNotification } from "@/lib/notifications";
 
 export async function POST(
   req: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
 
     const doc = await prisma.bidVerificationDocument.findUnique({
       where: { id: docId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, userId: true },
     });
 
     if (!doc) return apiError("NOT_FOUND", "Document not found.", 404);
@@ -40,6 +41,10 @@ export async function POST(
       resourceId: String(docId),
       meta: {} as any,
       ipAddress: getClientIp(req),
+    });
+
+    dispatchUserNotification(doc.userId, "doc_approved", {
+      message: "Your verification document has been approved.",
     });
 
     return NextResponse.json({ success: true });

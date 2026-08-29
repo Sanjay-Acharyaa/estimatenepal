@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
+import { dispatchUserNotification } from "@/lib/notifications";
 
 const bodySchema = z.object({
   doc_ids: z.array(z.number().int().positive()).min(1).max(50),
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const docs = await prisma.bidVerificationDocument.findMany({
       where: { id: { in: doc_ids }, status: "PENDING" },
-      select: { id: true },
+      select: { id: true, userId: true },
     });
 
     const foundIds = new Set(docs.map((d) => d.id));
@@ -45,6 +46,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!foundIds.has(id)) {
         errors.push({ doc_id: id, message: "Document not found or not pending." });
       }
+    }
+
+    for (const d of docs) {
+      dispatchUserNotification(d.userId, "doc_rejected", {
+        reason,
+        message: `Your verification document was rejected. Reason: ${reason}`,
+      });
     }
 
     return NextResponse.json({ rejected: docs.map((d) => d.id), errors });

@@ -93,6 +93,13 @@ export const authOptions: NextAuthOptions = {
         prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
         trackEvent("user_login", { userId: user.id, orgId: user.orgId });
 
+        // Look up procurement role from shared bid_users table (if any)
+        const bidUser = await prisma.bidUser.findUnique({
+          where: { email: user.email },
+          select: { role: true },
+        }).catch(() => null);
+        const procurementRoles: string[] = bidUser ? [bidUser.role] : [];
+
         return {
           id: user.id,
           name: user.name,
@@ -100,6 +107,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           isSuperAdmin: user.isSuperAdmin,
           orgId: user.orgId,
+          procurementRoles,
         };
       },
     }),
@@ -111,6 +119,7 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.isSuperAdmin = (user as any).isSuperAdmin;
         token.orgId = (user as any).orgId;
+        token.procurementRoles = (user as any).procurementRoles ?? [];
         token.passwordChangedAt = (user as any).passwordChangedAt?.toISOString() ?? null;
         if ((user as any).orgId) {
           const org = await prisma.org.findUnique({
@@ -160,6 +169,7 @@ export const authOptions: NextAuthOptions = {
         session.user.isSuperAdmin = token.isSuperAdmin as boolean;
         session.user.orgId = token.orgId as string | null;
         session.user.trialEndsAt = token.trialEndsAt as string | null;
+        (session.user as any).procurementRoles = (token.procurementRoles as string[] | undefined) ?? [];
       }
       return session;
     },

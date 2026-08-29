@@ -11,11 +11,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await getSession();
   if (!session?.user) redirect("/");
 
-  const [siteAnnouncement, siteName, logoUrl, biddingUrl] = await Promise.all([
+  const [siteAnnouncement, siteName, logoUrl] = await Promise.all([
     getConfig("site_announcement"),
     getConfig("site_name"),
     getConfig("site_logo_url"),
-    getConfig("bidding_url"),
   ]);
 
   // Trial banner: show when <= 5 days remain and trial hasn't yet expired
@@ -49,6 +48,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <Link href="/dashboard/bid-board" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Bid Board</Link>
         <Link href="/dashboard/rates" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Rate Catalog</Link>
         <Link href="/dashboard/assemblies" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Assembly Library</Link>
+        <Link href="/dashboard/notifications" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Notifications</Link>
         {["OWNER", "ADMIN"].includes((session.user as any).role) && (
           <Link href="/dashboard/team" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">Team</Link>
         )}
@@ -56,19 +56,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/admin" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 font-medium">Super Admin</Link>
         )}
 
-        {/* Bidding Platform — SSO handshake then redirect to Bidding */}
+        {/* Tenders — integrated within Estimation (BL-015) */}
         <div className="pt-2 mt-2 border-t border-gray-100">
-          <a
-            href="/api/auth/sso-token"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/tenders"
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-medium transition"
           >
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Bidding Platform
-          </a>
+            Tenders
+          </Link>
         </div>
       </nav>
       <div className="p-4 border-t border-gray-100">
