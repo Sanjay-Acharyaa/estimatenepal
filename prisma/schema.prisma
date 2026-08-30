@@ -1097,6 +1097,14 @@ model BidUser {
   qandaAnswers   BidQandAAnswer[]   @relation("QandAAnswerer")
   portfolioProjects BidPortfolioProject[]
   organization   BidOrganization?   @relation(fields: [org_id], references: [id])
+  negotiations        BidNegotiation[]
+  negotiationMessages BidNegotiationMessage[]
+  contractComments    BidContractComment[]
+  contractRevisions   BidContractRevision[]
+  snagItems           BidSnagItem[]           @relation("SnagAddedBy")
+  completionRequests  BidCompletionRequest[]
+  ratingsGiven        BidRating[]             @relation("BidRater")
+  ratingsReceived     BidRating[]             @relation("BidRated")
 
   @@index([org_id])
   @@map("bid_users")
@@ -1150,6 +1158,12 @@ model Tender {
   invitations                    BidTenderInvitation[]
   watchlistItems                 BidTenderWatchlist[]
   qandaQuestions                 BidQandAQuestion[]
+  negotiations                   BidNegotiation[]
+  loa                            BidLetterOfAward?
+  contract                       BidContract?
+  snagItems                      BidSnagItem[]
+  completionRequests             BidCompletionRequest[]
+  ratings                        BidRating[]
 
   @@index([client_user_id])
   @@index([status])
@@ -1223,6 +1237,8 @@ model BidSubmission {
   tender                 Tender                 @relation(fields: [tender_id], references: [id])
   bidder                 BidUser                @relation(fields: [bidder_user_id], references: [id])
   lineItems              BidSubmissionLineItem[]
+  loa                    BidLetterOfAward?      @relation("LoABid")
+  contract               BidContract?           @relation("ContractBid")
 
   @@index([tender_id])
   @@index([bidder_user_id])
@@ -1343,6 +1359,42 @@ model BidOrganization {
   @@map("bid_organizations")
 }
 
+model BidNegotiation {
+  id                           Int      @id @default(autoincrement())
+  tender_id                    Int
+  bidder_user_id               Int
+  status                       String   @default("ACTIVE") @db.VarChar(50)
+  deadline                     DateTime
+  original_grand_total_npr     Decimal  @db.Decimal(15, 2)
+  current_proposed_total_npr   Decimal  @db.Decimal(15, 2)
+  proposed_discount_percentage Decimal  @db.Decimal(5, 2)
+  initiated_at                 DateTime @default(now())
+  closed_at                    DateTime?
+  created_at                   DateTime @default(now())
+  updated_at                   DateTime @updatedAt
+  tender                       Tender   @relation(fields: [tender_id], references: [id])
+  bidder                       BidUser  @relation(fields: [bidder_user_id], references: [id])
+  messages                     BidNegotiationMessage[]
+
+  @@index([tender_id])
+  @@index([bidder_user_id])
+  @@map("bid_negotiations")
+}
+
+model BidNegotiationMessage {
+  id              Int            @id @default(autoincrement())
+  negotiation_id  Int
+  sender_user_id  Int
+  message_type    String         @default("TEXT") @db.VarChar(50)
+  message_text    String         @db.Text
+  created_at      DateTime       @default(now())
+  negotiation     BidNegotiation @relation(fields: [negotiation_id], references: [id])
+  sender          BidUser        @relation(fields: [sender_user_id], references: [id])
+
+  @@index([negotiation_id])
+  @@map("bid_negotiation_messages")
+}
+
 model BidPortfolioProject {
   id                   Int      @id @default(autoincrement())
   user_id              Int
@@ -1361,4 +1413,158 @@ model BidPortfolioProject {
 
   @@index([user_id])
   @@map("bid_portfolio_projects")
+}
+
+model BidLetterOfAward {
+  id             Int           @id @default(autoincrement())
+  tender_id      Int           @unique
+  winning_bid_id Int           @unique
+  issued_at      DateTime      @default(now())
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  tender         Tender        @relation(fields: [tender_id], references: [id])
+  winning_bid    BidSubmission @relation("LoABid", fields: [winning_bid_id], references: [id])
+  contract       BidContract?
+
+  @@map("bid_loas")
+}
+
+model BidContract {
+  id                                  Int                  @id @default(autoincrement())
+  tender_id                           Int                  @unique
+  loa_id                              Int                  @unique
+  winning_bid_id                      Int                  @unique
+  contract_text                       String               @db.LongText
+  price_escalation_type               String               @default("FIXED") @db.VarChar(50)
+  price_escalation_trigger_percentage Decimal?             @db.Decimal(5, 2)
+  completion_start_date               DateTime?
+  completion_end_date                 DateTime?
+  mobilization_advance_percentage     Decimal?             @db.Decimal(5, 2)
+  retention_percentage                Decimal?             @db.Decimal(5, 2)
+  dlp_months                          Int?
+  dlp_start_date                      DateTime?
+  dlp_end_date                        DateTime?
+  retention_status                    String               @default("HELD") @db.VarChar(50)
+  status                              String               @default("DRAFT") @db.VarChar(50)
+  contractor_otp_hash                 String?              @db.VarChar(255)
+  contractor_otp_expires_at           DateTime?
+  contractor_signed_at                DateTime?
+  client_otp_hash                     String?              @db.VarChar(255)
+  client_otp_expires_at               DateTime?
+  client_signed_at                    DateTime?
+  hardcopy_upload_url                 String?              @db.VarChar(1000)
+  hardcopy_marked_at                  DateTime?
+  pdf_url                             String?              @db.VarChar(1000)
+  pdf_generated_at                    DateTime?
+  file_size_bytes                     Int?
+  current_draft_version               Int                  @default(1)
+  created_at                          DateTime             @default(now())
+  updated_at                          DateTime             @updatedAt
+  tender                              Tender               @relation(fields: [tender_id], references: [id])
+  loa                                 BidLetterOfAward     @relation(fields: [loa_id], references: [id])
+  winning_bid                         BidSubmission        @relation("ContractBid", fields: [winning_bid_id], references: [id])
+  revisions                           BidContractRevision[]
+  comments                            BidContractComment[]
+
+  @@map("bid_contracts")
+}
+
+model BidContractRevision {
+  id                   Int         @id @default(autoincrement())
+  contract_id          Int
+  revision_number      Int
+  content              String      @db.LongText
+  submitted_by_user_id Int
+  submitted_at         DateTime    @default(now())
+  contract             BidContract @relation(fields: [contract_id], references: [id])
+  submittedBy          BidUser     @relation(fields: [submitted_by_user_id], references: [id])
+
+  @@index([contract_id])
+  @@map("bid_contract_revisions")
+}
+
+model BidContractComment {
+  id                Int         @id @default(autoincrement())
+  contract_id       Int
+  clause_reference  String?     @db.VarChar(200)
+  comment_text      String      @db.Text
+  commenter_user_id Int
+  status            String      @default("OPEN") @db.VarChar(50)
+  resolved_at       DateTime?
+  created_at        DateTime    @default(now())
+  contract          BidContract @relation(fields: [contract_id], references: [id])
+  commenter         BidUser     @relation(fields: [commenter_user_id], references: [id])
+
+  @@index([contract_id])
+  @@map("bid_contract_comments")
+}
+
+model BidSnagItem {
+  id                 Int      @id @default(autoincrement())
+  tender_id          Int
+  added_by_user_id   Int
+  item_number        Int
+  description        String   @db.Text
+  location_reference String?  @db.VarChar(300)
+  priority           String   @default("MEDIUM") @db.VarChar(50)
+  status             String   @default("OPEN") @db.VarChar(50)
+  fixed_notes        String?  @db.Text
+  rejection_reason   String?  @db.Text
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  tender             Tender   @relation(fields: [tender_id], references: [id])
+  addedBy            BidUser  @relation("SnagAddedBy", fields: [added_by_user_id], references: [id])
+
+  @@index([tender_id])
+  @@map("bid_snag_items")
+}
+
+model BidCompletionRequest {
+  id                   Int       @id @default(autoincrement())
+  tender_id            Int
+  attempt_number       Int       @default(1)
+  submitted_by_user_id Int
+  completion_notes     String?   @db.Text
+  status               String    @default("PENDING") @db.VarChar(50)
+  approved_at          DateTime?
+  rejected_at          DateTime?
+  rejection_reason     String?   @db.Text
+  expired_at           DateTime?
+  escalated_at         DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  tender               Tender    @relation(fields: [tender_id], references: [id])
+  submittedBy          BidUser   @relation(fields: [submitted_by_user_id], references: [id])
+
+  @@index([tender_id])
+  @@map("bid_completion_requests")
+}
+
+model BidRating {
+  id               Int       @id @default(autoincrement())
+  tender_id        Int
+  rater_user_id    Int
+  rated_user_id    Int
+  rating_direction String    @db.VarChar(50)
+  score_1          Int
+  score_2          Int
+  score_3          Int
+  score_4          Int
+  score_5          Int
+  average_score    Decimal   @db.Decimal(3, 2)
+  review_text      String?   @db.Text
+  is_anonymous     Boolean   @default(false)
+  submitted_at     DateTime  @default(now())
+  window_opened_at DateTime  @default(now())
+  window_closes_at DateTime?
+  is_visible       Boolean   @default(false)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  tender           Tender    @relation(fields: [tender_id], references: [id])
+  rater            BidUser   @relation("BidRater", fields: [rater_user_id], references: [id])
+  rated            BidUser   @relation("BidRated", fields: [rated_user_id], references: [id])
+
+  @@unique([tender_id, rater_user_id])
+  @@index([tender_id])
+  @@map("bid_ratings")
 }

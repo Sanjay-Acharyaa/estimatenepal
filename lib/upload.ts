@@ -43,3 +43,18 @@ export function verificationDocKey(userId: string, uuid: string): string {
   const env = process.env.NODE_ENV ?? "development";
   return `${env}/users/${userId}/verification/${uuid}.pdf`;
 }
+
+export function contractHardcopyKey(tenderId: number): string {
+  const env = process.env.NODE_ENV ?? "development";
+  return `${env}/tenders/${tenderId}/contract/hardcopy.pdf`;
+}
+
+export function contractPdfKey(tenderId: number): string {
+  const env = process.env.NODE_ENV ?? "development";
+  return `${env}/tenders/${tenderId}/contract/contract.pdf`;
+}
+
+export function completionCertKey(tenderId: number): string {
+  const env = process.env.NODE_ENV ?? "development";
+  return `${env}/tenders/${tenderId}/completion/certificate.pdf`;
+}

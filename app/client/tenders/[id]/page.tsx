@@ -10,7 +10,8 @@ type Params = { params: Promise<{ id: string }> };
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft", PUBLISHED: "Published", UNDER_REVIEW: "Under Review",
-  NEGOTIATION: "Negotiation", AWARDED: "Awarded", COMPLETED: "Completed", CANCELLED: "Cancelled",
+  NEGOTIATION: "Negotiation", AWARDED: "Awarded", CONTRACT_SIGNED: "Contract Signed",
+  COMPLETED: "Completed", CANCELLED: "Cancelled",
 };
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -127,6 +128,7 @@ export default async function ClientTenderDetailPage({ params }: Params) {
               <>
                 <Link href={`/client/tenders/${tender.id}/bids`} className="text-sm text-blue-600 hover:text-blue-700 underline">Bids</Link>
                 <Link href={`/client/tenders/${tender.id}/score`} className="text-sm text-blue-600 hover:text-blue-700 underline">Score</Link>
+                <Link href={`/client/tenders/${tender.id}/negotiate`} className="text-sm text-orange-600 hover:text-orange-700 underline">Negotiate</Link>
                 <Link href={`/client/tenders/${tender.id}/award`} className="text-sm text-green-700 hover:text-green-800 underline">Award</Link>
               </>
             )}
@@ -135,6 +137,14 @@ export default async function ClientTenderDetailPage({ params }: Params) {
                 <Link href={`/client/tenders/${tender.id}/bids`} className="text-sm text-blue-600 hover:text-blue-700 underline">Bids</Link>
                 <Link href={`/client/tenders/${tender.id}/score`} className="text-sm text-blue-600 hover:text-blue-700 underline">Score</Link>
                 <Link href={`/client/tenders/${tender.id}/award`} className="text-sm text-green-700 hover:text-green-800 underline font-semibold">Awarded ✓</Link>
+                <Link href={`/client/tenders/${tender.id}/contract`} className="text-sm text-indigo-600 hover:text-indigo-700 underline">Contract</Link>
+              </>
+            )}
+            {["CONTRACT_SIGNED", "COMPLETED"].includes(tender.status) && (
+              <>
+                <Link href={`/client/tenders/${tender.id}/contract`} className="text-sm text-indigo-600 hover:text-indigo-700 underline">Contract</Link>
+                <Link href={`/client/tenders/${tender.id}/snags`} className="text-sm text-blue-600 hover:text-blue-700 underline">Snags</Link>
+                <Link href={`/client/tenders/${tender.id}/completion`} className="text-sm text-green-700 hover:text-green-800 underline">Completion</Link>
               </>
             )}
             {tender.status === "DRAFT" && (

@@ -40,6 +40,7 @@ const STATUS_LABELS: Record<string, string> = {
   UNDER_REVIEW: "Under Review",
   NEGOTIATION: "Negotiation",
   AWARDED: "Awarded",
+  CONTRACT_SIGNED: "Contract Signed",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 };
@@ -68,6 +69,8 @@ export default async function TenderDetailPage({ params }: Params) {
   let existingBidId: number | null = null;
   let existingBidStatus: string | null = null;
   let isWatching = false;
+  let hasNegotiationThread = false;
+  let isAwardedContractor = false;
 
   const tender = await prisma.tender.findUnique({
     where: { id: tenderId },
@@ -156,6 +159,27 @@ export default async function TenderDetailPage({ params }: Params) {
     isWatching = watch !== null;
   }
 
+  // Check if contractor has a negotiation thread for NEGOTIATION/AWARDED tenders
+  if (isContractor && ["NEGOTIATION", "AWARDED", "CONTRACT_SIGNED", "COMPLETED"].includes(tender.status) && session?.user) {
+    const bidUser = await getOrCreateBidUser(
+      session.user.email as string,
+      session.user.name as string,
+      procurementRoles
+    );
+    const [neg, awardedBid] = await Promise.all([
+      prisma.bidNegotiation.findFirst({
+        where: { tender_id: tenderId, bidder_user_id: bidUser.id },
+        select: { id: true },
+      }),
+      prisma.bidSubmission.findFirst({
+        where: { tender_id: tenderId, bidder_user_id: bidUser.id, status: "AWARDED" },
+        select: { id: true },
+      }),
+    ]);
+    hasNegotiationThread = neg !== null;
+    isAwardedContractor = awardedBid !== null;
+  }
+
   const statusLabel = STATUS_LABELS[tender.status] ?? tender.status;
   const statusColour = STATUS_COLOURS[tender.status] ?? "bg-gray-100 text-gray-700";
   const showBOQQuantities = tender.quantity_visibility === "VISIBLE";
@@ -170,6 +194,28 @@ export default async function TenderDetailPage({ params }: Params) {
           <div className="flex items-center gap-3">
             {isContractor && tender.status === "PUBLISHED" && !existingBidId && (
               <WatchButton tenderId={tenderId} initialWatching={isWatching} />
+            )}
+            {isContractor && hasNegotiationThread && (
+              <Link
+                href={`/tenders/${tenderId}/negotiation`}
+                className="text-sm font-medium text-orange-600 hover:text-orange-700 underline"
+              >
+                View Negotiation
+              </Link>
+            )}
+            {isAwardedContractor && ["AWARDED", "CONTRACT_SIGNED", "COMPLETED"].includes(tender.status) && (
+              <>
+                <Link href={`/tenders/${tenderId}/contract`} className="text-sm text-indigo-600 hover:text-indigo-700 underline">Contract</Link>
+                {["CONTRACT_SIGNED", "COMPLETED"].includes(tender.status) && (
+                  <>
+                    <Link href={`/tenders/${tenderId}/snags`} className="text-sm text-blue-600 hover:text-blue-700 underline">Snags</Link>
+                    <Link href={`/tenders/${tenderId}/completion`} className="text-sm text-green-700 hover:text-green-800 underline">Completion</Link>
+                  </>
+                )}
+                {tender.status === "COMPLETED" && (
+                  <Link href={`/tenders/${tenderId}/ratings`} className="text-sm text-amber-600 hover:text-amber-700 underline">Ratings</Link>
+                )}
+              </>
             )}
             <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusColour}`}>
               {statusLabel}
