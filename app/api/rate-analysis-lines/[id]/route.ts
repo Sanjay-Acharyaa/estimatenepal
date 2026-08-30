@@ -9,7 +9,10 @@ import { checkApiRateLimit, getClientIp } from "@/lib/security";
 import { handleApiError, apiError, unauthorized, forbidden, notFound } from "@/lib/errors";
 import { LINE_TYPES } from "@/lib/line-types";
 import { QTY_PER_UNIT_MAX } from "@/lib/cache-constants";
-import { ck } from "../route";
+
+function ck(orgId: string, rateItemId: string) {
+  return `analysis-lines:${orgId}:${rateItemId}`;
+}
 
 const LINE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 

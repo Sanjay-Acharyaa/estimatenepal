@@ -21,7 +21,7 @@ const createSchema = z.object({
   notes: z.string().max(500).trim().optional().nullable(),
 });
 
-export function ck(orgId: string, rateItemId: string) {
+function ck(orgId: string, rateItemId: string) {
   return `analysis-lines:${orgId}:${rateItemId}`;
 }
 
