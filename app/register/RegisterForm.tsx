@@ -209,7 +209,7 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
                 <p className="text-sm font-medium text-gray-700 mb-1">
                   What will you use this for?
                 </p>
-                <p className="text-xs text-gray-400 mb-2">Select at least one — you can select both if needed.</p>
+                <p className="text-xs text-gray-400 mb-2">Select at least one. You can select both if needed.</p>
                 <div className="grid grid-cols-2 gap-2">
                   {ROLE_CARDS.map((card) => {
                     const selected = procurementRoles.includes(card.value);
