@@ -56,11 +56,13 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [procurementRoles, setProcurementRoles] = useState<ProcurementRole[]>([]);
+  const [roleError, setRoleError] = useState(false);
 
   function toggleRole(role: ProcurementRole) {
     setProcurementRoles(prev =>
       prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
     );
+    setRoleError(false);
   }
 
   function buildProcurementRolesValue(): string | null {
@@ -88,6 +90,7 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setTouched({ name: true, orgName: true, email: true, password: true, phone: true });
+    if (procurementRoles.length === 0) { setRoleError(true); return; }
     if (!Object.values(validations).every(Boolean)) return;
     setError(""); setSuccess(""); setLoading(true);
     const res = await fetch("/api/auth/register", {
@@ -201,11 +204,12 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-label="Create account form">
 
-              {/* Procurement role selection — optional, can select both */}
+              {/* Procurement role selection */}
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">
-                  What will you use this for? <span className="text-gray-400 font-normal">(optional, select all that apply)</span>
+                <p className="text-sm font-medium text-gray-700 mb-1">
+                  What will you use this for?
                 </p>
+                <p className="text-xs text-gray-400 mb-2">Select at least one — you can select both if needed.</p>
                 <div className="grid grid-cols-2 gap-2">
                   {ROLE_CARDS.map((card) => {
                     const selected = procurementRoles.includes(card.value);
@@ -218,6 +222,8 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
                         className={`flex flex-col items-start gap-1.5 p-3 rounded-lg border text-left transition-colors ${
                           selected
                             ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
+                            : roleError
+                            ? "border-red-300 bg-white hover:border-red-400"
                             : "border-gray-200 bg-white hover:border-gray-300"
                         }`}
                       >
@@ -234,6 +240,9 @@ export function RegisterForm({ siteName, logoUrl, headline, subtext }: Props) {
                     );
                   })}
                 </div>
+                {roleError && (
+                  <p className="text-xs text-red-500 mt-1.5" role="alert">Please select at least one option to continue.</p>
+                )}
               </div>
 
               <div>
