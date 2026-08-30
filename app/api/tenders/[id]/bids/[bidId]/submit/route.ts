@@ -3,6 +3,8 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
 import { getOrCreateBidUser } from "@/lib/bid-user";
+import { emitProcurementNotification } from "@/lib/procurement-notify";
+import { dispatchWebhook } from "@/lib/webhook-dispatch";
 
 type Params = { params: Promise<{ id: string; bidId: string }> };
 
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       }),
       prisma.tender.findFirst({
         where: { id: tenderId, status: "PUBLISHED", bid_deadline: { gt: new Date() } },
-        select: { id: true, quantity_visibility: true },
+        select: { id: true, quantity_visibility: true, client_user_id: true },
       }),
     ]);
 
@@ -94,6 +96,26 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
         contingency_amount_npr: true, total_with_vat_npr: true, submitted_at: true, updated_at: true,
       },
     });
+
+    // Fire-and-forget: notify client + dispatch webhook
+    ;(async () => {
+      try {
+        const clientBidUser = await prisma.bidUser.findUnique({
+          where: { id: tender.client_user_id },
+          select: { email: true },
+        });
+        if (!clientBidUser) return;
+        const clientEstUser = await prisma.user.findUnique({
+          where: { email: clientBidUser.email },
+          select: { id: true, orgId: true },
+        });
+        if (!clientEstUser) return;
+        emitProcurementNotification(clientEstUser.id, "bid.received", { tender_id: tenderId, bid_id: bidIdInt });
+        dispatchWebhook({ orgId: clientEstUser.orgId, event: "bid.submitted", data: { tender_id: tenderId, bid_id: bidIdInt } });
+      } catch (err) {
+        console.error("[submit-notify]", err instanceof Error ? err.message : err);
+      }
+    })();
 
     return NextResponse.json({ bid: submitted });
   } catch (err) {

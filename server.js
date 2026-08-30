@@ -20,6 +20,7 @@ const REQUIRED_ENV = [
   "CRON_SECRET",
   "REDIS_URL",
   "RESEND_WEBHOOK_SECRET",
+  "WEBHOOK_ENCRYPTION_KEY",
 ];
 const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missingEnv.length > 0) {
@@ -174,6 +175,49 @@ app.prepare().then(async () => {
     // Dedicated client for application state (presence + locks)
     redisState = new Redis(process.env.REDIS_URL);
   }
+
+  // ─── /procurement namespace — per-user push notifications ────────────────────
+  // Separate from the default canvas namespace. Auth requires userId only (no orgId)
+  // so individual contractors without an Estimation org can still connect.
+  const procurementNsp = io.of("/procurement");
+  global.__procurementNsp = procurementNsp;
+
+  procurementNsp.use(async (socket, next) => {
+    if (decode && process.env.NEXTAUTH_SECRET) {
+      const cookieHeader = socket.handshake.headers.cookie ?? "";
+      const tokenName =
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token";
+      const match = cookieHeader.match(new RegExp(`(?:^|; )${tokenName}=([^;]+)`));
+      if (match) {
+        try {
+          const token = await decode({
+            token: decodeURIComponent(match[1]),
+            secret: process.env.NEXTAUTH_SECRET,
+          });
+          if (token) {
+            socket.data.userId = token.sub ?? token.id;
+          }
+        } catch {
+          // Invalid token
+        }
+      }
+    }
+    if (!socket.data.userId) {
+      next(new Error("Unauthorized"));
+      return;
+    }
+    next();
+  });
+
+  procurementNsp.on("connection", (socket) => {
+    const room = `user:${socket.data.userId}`;
+    socket.join(room);
+    socket.on("disconnect", () => {
+      socket.leave(room);
+    });
+  });
 
   // ─── Auth middleware — extract session from cookie ───────────────────────────
   io.use(async (socket, next) => {

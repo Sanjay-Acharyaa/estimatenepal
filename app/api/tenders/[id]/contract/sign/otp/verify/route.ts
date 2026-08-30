@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
 import { getOrCreateBidUser } from "@/lib/bid-user";
 import { sendEmail } from "@/lib/email";
+import { emitProcurementNotification } from "@/lib/procurement-notify";
+import { dispatchWebhook } from "@/lib/webhook-dispatch";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -128,6 +130,24 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       ].forEach(({ to, name }) => {
         sendEmail({ to, subject, html: html(name) }).catch((err: unknown) => console.error("[otp-verify-email]", err));
       });
+
+      // Real-time notifications + webhook (fire-and-forget)
+      ;(async () => {
+        try {
+          const emails = [clientEmail, contractorEmail].filter(Boolean) as string[];
+          const estUsers = await prisma.user.findMany({
+            where: { email: { in: emails } },
+            select: { id: true, email: true, orgId: true },
+          });
+          for (const u of estUsers) {
+            emitProcurementNotification(u.id, "contract.signed", { tender_id: tenderId });
+          }
+          const clientEstUser = estUsers.find((u) => u.email === clientEmail);
+          dispatchWebhook({ orgId: clientEstUser?.orgId, event: "contract.signed", data: { tender_id: tenderId } });
+        } catch (err) {
+          console.error("[otp-verify-notify]", err instanceof Error ? err.message : err);
+        }
+      })();
     }
 
     return NextResponse.json({ contract: updated });

@@ -52,6 +52,10 @@
 | ~~BL-021~~ | ~~2026-08-29~~ | ~~dispatchUserNotification missing in bulk-approve/reject.~~ | ~~I-4~~ ✅ Resolved — lib/notifications.ts created; dispatch wired in bulk-approve, bulk-reject, single approve, single reject, and register. |
 | ~~BL-022~~ | ~~2026-08-29~~ | ~~Landing page stats strip not yet live.~~ | ~~I-5~~ ✅ Resolved — /api/public/stats built; stats strip (published tenders, contractors, districts) added to app/page.tsx. |
 | ~~BL-023~~ | ~~2026-08-29~~ | ~~Landing page open tenders preview not yet live.~~ | ~~I-5~~ ✅ Resolved — /tenders route built; 3 tender preview cards added to app/page.tsx. |
+| ~~BL-026~~ | ~~2026-08-29~~ | ~~Scoring factors admin UI not built.~~ | ~~I-7~~ ✅ Resolved — GET+PATCH /api/admin/scoring-factors (sum=100 validation, Zod, isSuperAdmin guard, $transaction upsert); app/admin/scoring-factors/page.tsx (server, direct Prisma); scoring-factors-panel.tsx (client, live sum display, save guard). Built I-7 S3 2026-08-30. |
+| ~~BL-027~~ | ~~2026-08-29~~ | ~~Negotiation thread deferred from I-7.~~ | ~~I-7 S2~~ ✅ Resolved — full negotiation thread built in I-7 Session 2. BidNegotiation + BidNegotiationMessage declaration models. 6 API routes. Client hub + thread view. Contractor thread view. tsc 0 errors. |
+| ~~BL-028~~ | ~~2026-08-29~~ | ~~LOA PDF not attached to winner's email.~~ | ~~I-7~~ ✅ Resolved — lib/loa.ts extracted (buildLoaHtml + generateLoaPdf); lib/email.ts EmailAttachment type + attachments param; award/route.ts fire-and-forget IIFE generates PDF buffer and sends via sendEmail with attachments. Built I-7 S3 2026-08-30. |
+| ~~BL-029~~ | ~~2026-08-29~~ | ~~Confidential admin view deferred from I-7.~~ | ~~I-7~~ ✅ Resolved — POST /api/admin/tenders/[id]/bids/confidential (passphrase bcrypt.compare, rate-limit, audit log fire-and-forget); app/admin/tenders/[id]/confidential/page.tsx (two-step: passphrase form, bid table grouped by chapter); POST /api/admin/auth/set-passphrase (isSuperAdmin, bcrypt.hash cost 12, secondaryPassphraseHash on User); app/admin/security/page.tsx (set-passphrase form); admin dashboard links added. Audit log deviation fixed I-7 S3 2026-08-30. |
 
 ---
 

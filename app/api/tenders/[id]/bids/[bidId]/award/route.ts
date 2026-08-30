@@ -5,6 +5,8 @@ import { apiError, handleApiError } from "@/lib/errors";
 import { getOrCreateBidUser } from "@/lib/bid-user";
 import { sendEmail } from "@/lib/email";
 import { buildLoaHtml, generateLoaPdf } from "@/lib/loa";
+import { emitProcurementNotification } from "@/lib/procurement-notify";
+import { dispatchWebhook } from "@/lib/webhook-dispatch";
 
 type Params = { params: Promise<{ id: string; bidId: string }> };
 
@@ -106,6 +108,23 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
 <p><a href="${appUrl}/tenders/${tenderId}">View tender details</a></p>`,
           attachments: [{ filename: `LOA-${tender.reference_number ?? tenderId}.pdf`, content: pdfBuffer }],
         })
+        // Emit real-time notification to contractor
+        const bidderEstUser = await prisma.user.findUnique({
+          where: { email: bid.bidder.email },
+          select: { id: true },
+        });
+        if (bidderEstUser) {
+          emitProcurementNotification(bidderEstUser.id, "tender.awarded", { tender_id: tenderId, bid_id: bidIdInt });
+        }
+        // Dispatch webhook to client's org (client is the JWT caller)
+        const clientEmail = token?.email as string | undefined;
+        if (clientEmail) {
+          const clientEstUser = await prisma.user.findUnique({
+            where: { email: clientEmail },
+            select: { orgId: true },
+          });
+          dispatchWebhook({ orgId: clientEstUser?.orgId, event: "tender.awarded", data: { tender_id: tenderId, bid_id: bidIdInt } });
+        }
       } catch (err) {
         console.error("[award-loa-email]", err instanceof Error ? err.message : err)
       }

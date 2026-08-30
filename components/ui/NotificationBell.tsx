@@ -99,6 +99,18 @@ export function NotificationBell() {
     return () => clearInterval(interval);
   }, []);
 
+  // Procurement real-time push via Socket.io /procurement namespace
+  useEffect(() => {
+    let cleanup: (() => void) | null = null;
+    import("socket.io-client").then(({ io }) => {
+      const socket = io("/procurement", { withCredentials: true });
+      socket.on("notification:new", () => { fetchNotifications(); });
+      cleanup = () => { socket.disconnect(); };
+    }).catch(() => undefined);
+    return () => { cleanup?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Close on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {

@@ -3,6 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
 import { getOrCreateBidUser } from "@/lib/bid-user";
+import { emitProcurementNotification } from "@/lib/procurement-notify";
 
 type Params = { params: Promise<{ id: string; bidId: string }> };
 
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       }),
       prisma.bidSubmission.findFirst({
         where: { id: bidIdInt, tender_id: tenderId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, bidder_user_id: true },
       }),
     ]);
 
@@ -47,6 +48,23 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       data: { status: "REJECTED" },
       select: { id: true, status: true, updated_at: true },
     });
+
+    ;(async () => {
+      try {
+        const bidderBidUser = await prisma.bidUser.findUnique({
+          where: { id: bid.bidder_user_id },
+          select: { email: true },
+        });
+        if (!bidderBidUser) return;
+        const bidderEstUser = await prisma.user.findUnique({
+          where: { email: bidderBidUser.email },
+          select: { id: true },
+        });
+        if (bidderEstUser) emitProcurementNotification(bidderEstUser.id, "bid.rejected", { tender_id: tenderId, bid_id: bidIdInt });
+      } catch (err) {
+        console.error("[reject-notify]", err instanceof Error ? err.message : err);
+      }
+    })();
 
     return NextResponse.json({ bid: updated });
   } catch (err) {

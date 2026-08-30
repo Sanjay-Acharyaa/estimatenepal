@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
 import { getOrCreateBidUser } from "@/lib/bid-user";
 import { sendEmail } from "@/lib/email";
+import { emitProcurementNotification } from "@/lib/procurement-notify";
+import { dispatchWebhook } from "@/lib/webhook-dispatch";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -138,6 +140,29 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
 <p>विवरण: ${snag.description}</p>
 <p><a href="${appUrl}/tenders/${tenderId}/snags">Snag list हेर्नुहोस्</a></p>`,
       }).catch((err: unknown) => console.error("[snag-add-email]", err));
+
+      // Real-time notification + webhook (fire-and-forget)
+      ;(async () => {
+        try {
+          const contractorEstUser = await prisma.user.findUnique({
+            where: { email: contractor.email },
+            select: { id: true },
+          });
+          if (contractorEstUser) {
+            emitProcurementNotification(contractorEstUser.id, "snag.raised", { tender_id: tenderId, snag_id: snag.id });
+          }
+          const clientEmail = token?.email as string | undefined;
+          if (clientEmail) {
+            const clientEstUser = await prisma.user.findUnique({
+              where: { email: clientEmail },
+              select: { orgId: true },
+            });
+            dispatchWebhook({ orgId: clientEstUser?.orgId, event: "snag.raised", data: { tender_id: tenderId, snag_id: snag.id } });
+          }
+        } catch (err) {
+          console.error("[snag-notify]", err instanceof Error ? err.message : err);
+        }
+      })();
     }
 
     return NextResponse.json({ snag }, { status: 201 });

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
 
   const adminUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { secondaryPassphraseHash: true },
+    select: { secondaryPassphraseHash: true, orgId: true },
   });
 
   if (!adminUser?.secondaryPassphraseHash) {
@@ -49,6 +49,18 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
   if (!match) {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "Incorrect passphrase." } }, { status: 403 });
   }
+
+  // Log every access in audit log (DoD requirement)
+  prisma.auditLog.create({
+    data: {
+      orgId: adminUser.orgId ?? "",
+      userId: session.user.id,
+      event: "admin.confidential_bid_view",
+      resourceId: String(tenderId),
+      meta: { tender_id: tenderId },
+      ipAddress: ip,
+    },
+  }).catch((err: Error) => console.error("[confidential] AuditLog failed:", err.message));
 
   const submissions = await prisma.bidSubmission.findMany({
     where: {

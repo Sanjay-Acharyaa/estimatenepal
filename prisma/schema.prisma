@@ -1569,3 +1569,39 @@ model BidRating {
   @@index([tender_id])
   @@map("bid_ratings")
 }
+
+// Procurement Webhooks
+model BidWebhookEndpoint {
+  id                Int                  @id @default(autoincrement())
+  org_id            String               @db.VarChar(191)
+  url               String               @db.VarChar(2048)
+  secret            String               @db.VarChar(191)
+  events            String               @db.VarChar(255)
+  enabled           Boolean              @default(true)
+  label             String               @db.VarChar(100)
+  created_by_user_id String             @db.VarChar(191)
+  created_at        DateTime             @default(now()) @db.DateTime(3)
+  deliveries        BidWebhookDelivery[]
+
+  @@index([org_id])
+  @@map("bid_webhook_endpoints")
+}
+
+model BidWebhookDelivery {
+  id                Int                @id @default(autoincrement())
+  endpoint_id       Int
+  event_type        String             @db.VarChar(50)
+  payload           String             @db.LongText
+  status            String             @default("PENDING") @db.VarChar(20)
+  attempt_count     Int                @default(0)
+  last_attempted_at DateTime?          @db.DateTime(3)
+  next_retry_at     DateTime?          @db.DateTime(3)
+  response_status   Int?
+  response_body     String?            @db.Text
+  created_at        DateTime           @default(now()) @db.DateTime(3)
+  endpoint          BidWebhookEndpoint @relation(fields: [endpoint_id], references: [id], onDelete: Cascade)
+
+  @@index([endpoint_id])
+  @@index([status])
+  @@map("bid_webhook_deliveries")
+}
