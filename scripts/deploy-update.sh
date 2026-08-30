@@ -1,15 +1,15 @@
 #!/bin/bash
 # Run this every time you want to deploy a new version.
-# Usage: bash /var/www/estimatenepal/scripts/deploy-update.sh
+# Usage: bash /var/www/nepaliestimate/scripts/deploy-update.sh
 set -e
 
-cd /var/www/estimatenepal
+cd /var/www/nepaliestimate
 
 echo "=== [1/4] Pulling latest code ==="
 git pull origin main
 
 echo "=== [2/4] Installing dependencies ==="
-npm ci --legacy-peer-deps
+PUPPETEER_SKIP_DOWNLOAD=true npm ci --legacy-peer-deps
 
 echo "=== [3/4] Generating Prisma client & building ==="
 npx prisma generate
