@@ -24,14 +24,21 @@ function safeUrl(url: string): string {
   }
 }
 
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+};
+
 export async function sendEmail({
   to,
   subject,
   html,
+  attachments,
 }: {
   to: string;
   subject: string;
   html: string;
+  attachments?: EmailAttachment[];
 }): Promise<string | null> {
   const from = process.env.EMAIL_FROM;
   if (!from) throw new Error("EMAIL_FROM env var is not set");
@@ -39,7 +46,7 @@ export async function sendEmail({
   const resend = new Resend(process.env.RESEND_API_KEY);
 
   // Timeout after 10 seconds — prevents a slow Resend API from stalling the cron
-  const sendPromise = resend.emails.send({ from, to, subject, html });
+  const sendPromise = resend.emails.send({ from, to, subject, html, attachments });
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error("Resend API timeout after 10s")), 10000)
   );

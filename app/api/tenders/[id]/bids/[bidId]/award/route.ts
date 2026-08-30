@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, handleApiError } from "@/lib/errors";
 import { getOrCreateBidUser } from "@/lib/bid-user";
 import { sendEmail } from "@/lib/email";
+import { buildLoaHtml, generateLoaPdf } from "@/lib/loa";
 
 type Params = { params: Promise<{ id: string; bidId: string }> };
 
@@ -29,11 +30,18 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
     const [tender, bid] = await Promise.all([
       prisma.tender.findFirst({
         where: { id: tenderId, client_user_id: bidUser.id },
-        select: { id: true, title: true, reference_number: true },
+        select: { id: true, title: true, reference_number: true, client: { select: { full_name: true } } },
       }),
       prisma.bidSubmission.findFirst({
         where: { id: bidIdInt, tender_id: tenderId },
-        select: { id: true, status: true, bidder_user_id: true, total_with_vat_npr: true, grand_total_npr: true, bidder: { select: { full_name: true, email: true } } },
+        select: {
+          id: true,
+          status: true,
+          bidder_user_id: true,
+          total_with_vat_npr: true,
+          grand_total_npr: true,
+          bidder: { select: { full_name: true, email: true } },
+        },
       }),
     ]);
 
@@ -71,15 +79,37 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
     const amountFormatted = awardedAmount
       ? `NPR ${Number(awardedAmount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
-      : "";
+      : "As per bid submission";
 
-    sendEmail({
-      to: bid.bidder.email,
-      subject: `You have been awarded: ${tender.title}`,
-      html: `<p>Dear ${bid.bidder.full_name},</p>
-<p>Congratulations! Your bid for <strong>${tender.title}</strong> (${tender.reference_number}) has been awarded${amountFormatted ? ` at <strong>${amountFormatted}</strong>` : ""}.</p>
+    const awardedAtFormatted = awardedAt.toLocaleDateString("en-GB", {
+      day: "2-digit", month: "long", year: "numeric",
+    });
+
+    // Fire-and-forget: generate LOA PDF and email as attachment
+    ;(async () => {
+      try {
+        const html = buildLoaHtml({
+          tenderTitle: tender.title,
+          referenceNumber: tender.reference_number ?? `TDR-${tenderId}`,
+          bidderName: bid.bidder.full_name,
+          awardedAmount: amountFormatted || "As per bid submission",
+          awardedAt: awardedAtFormatted,
+          clientOrgName: tender.client.full_name,
+        })
+        const pdfBuffer = await generateLoaPdf(html)
+        await sendEmail({
+          to: bid.bidder.email,
+          subject: `Letter of Award: ${tender.title}`,
+          html: `<p>Dear ${bid.bidder.full_name},</p>
+<p>Congratulations! Your bid for <strong>${tender.title}</strong> (${tender.reference_number ?? ""}) has been awarded${amountFormatted ? ` at <strong>${amountFormatted}</strong>` : ""}.</p>
+<p>Please find the Letter of Award attached to this email.</p>
 <p><a href="${appUrl}/tenders/${tenderId}">View tender details</a></p>`,
-    }).catch((err: unknown) => console.error("[award-email]", err instanceof Error ? err.message : err));
+          attachments: [{ filename: `LOA-${tender.reference_number ?? tenderId}.pdf`, content: pdfBuffer }],
+        })
+      } catch (err) {
+        console.error("[award-loa-email]", err instanceof Error ? err.message : err)
+      }
+    })()
 
     return NextResponse.json({ bid: awardedBid, tender: updatedTender });
   } catch (err) {

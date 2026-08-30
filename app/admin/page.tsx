@@ -106,7 +106,15 @@ export default async function SuperAdminPage() {
           </Link>
           <Link href="/admin/audit"
             className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
-            📋 Audit Log
+            Audit Log
+          </Link>
+          <Link href="/admin/scoring-factors"
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+            Scoring Factors
+          </Link>
+          <Link href="/admin/security"
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+            Admin Security
           </Link>
           <Link href="/admin/emails"
             className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-300 rounded-lg px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 shadow-sm">
