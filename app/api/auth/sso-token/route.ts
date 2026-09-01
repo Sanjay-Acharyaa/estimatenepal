@@ -58,7 +58,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const token = makeSSOToken(payload, ssoSecret);
 
-  const dest = new URL("/api/auth/sso", biddingUrl);
+  const dest = new URL("/bid/api/auth/sso", biddingUrl);
   dest.searchParams.set("token", token);
   return NextResponse.redirect(dest.toString());
 }
